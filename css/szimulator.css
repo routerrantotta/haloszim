@@ -1,0 +1,121 @@
+/* =====================================================
+   Haloszim – a szimulátor saját stílusa
+   Csak .hsz- kezdetű osztályok, hogy ne ütközzön a weboldal stílusával.
+   A színek a weboldal :root változóiból jönnek (--yellow, --black …);
+   ha azok hiányoznak, a zárójeles alapértéket használja.
+   ===================================================== */
+
+.hsz {
+  --hsz-sarga: var(--yellow, #FEC804);
+  --hsz-yolk: var(--yolk, #F59E00);
+  --hsz-fekete: var(--black, #000);
+  --hsz-tinta: var(--ink, #1c1a12);
+  --hsz-feher: var(--white, #fffdf4);
+  --hsz-betu: var(--font, "Trebuchet MS", "Segoe UI", Roboto, Helvetica, Arial, sans-serif);
+  --hsz-cimbetu: var(--display, "Arial Black", "Helvetica Neue", Impact, Arial, sans-serif);
+  --hsz-mono: Consolas, "Courier New", monospace;
+  font-family: var(--hsz-betu);
+  color: var(--hsz-fekete);
+  max-width: 100%;
+}
+.hsz *, .hsz *::before, .hsz *::after { box-sizing: border-box; }
+
+.hsz-racs { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); }
+
+.hsz-kiskepernyo { display: none; margin: 0 0 .75rem; font-size: .95rem; }
+@media (max-width: 700px) { .hsz-kiskepernyo { display: block; } }
+
+/* ---------- topológia ---------- */
+.hsz-topologia {
+  background: var(--hsz-feher);
+  border: 2px solid var(--hsz-fekete);
+  border-radius: 1rem;
+  padding: .5rem;
+}
+.hsz-topologia__rajz { display: block; width: 100%; height: auto; max-height: 210px; }
+.hsz-eszkoz { cursor: pointer; }
+.hsz-eszkoz:focus { outline: none; }
+.hsz-eszkoz:focus-visible .hsz-eszkoz__haz { stroke: var(--hsz-yolk); stroke-width: 4; }
+.hsz-eszkoz:hover .hsz-eszkoz__haz { stroke: var(--hsz-yolk); }
+.hsz-eszkoz__haz { fill: var(--hsz-tinta); stroke: var(--hsz-fekete); stroke-width: 2; }
+.hsz-eszkoz__elolap { fill: #2c2918; }
+.hsz-eszkoz__apro { fill: #cfc8ae; font: 9px var(--hsz-betu); }
+.hsz-eszkoz__nev { fill: var(--hsz-fekete); font: 900 20px var(--hsz-cimbetu); }
+.hsz-eszkoz__tipus { fill: var(--hsz-tinta); font: 13px var(--hsz-betu); }
+.hsz-kozep { text-anchor: middle; }
+.hsz-port__aljzat { fill: #0d0c07; stroke: #6b6650; stroke-width: 1; }
+.hsz-port__nyelv { fill: #3b3826; }
+.hsz-led { fill: #45412f; }
+.hsz-led--be { fill: #3ccf4e; }
+.hsz-port--lekapcsolva .hsz-port__aljzat { stroke: var(--hsz-yolk); stroke-width: 2; }
+
+/* ---------- terminál ---------- */
+.hsz-terminal {
+  background: var(--hsz-fekete);
+  color: var(--hsz-feher);
+  border-radius: 1rem;
+  overflow: hidden;
+  border: 2px solid var(--hsz-fekete);
+}
+.hsz-terminal__fej {
+  display: flex; align-items: center; gap: .6rem;
+  padding: .45rem .9rem;
+  background: var(--hsz-tinta);
+  font: 900 .9rem var(--hsz-cimbetu);
+  color: var(--hsz-sarga);
+}
+.hsz-terminal__pottyok {
+  width: .7rem; height: .7rem; border-radius: 50%;
+  background: var(--hsz-sarga);
+  box-shadow: 1.1rem 0 0 var(--hsz-yolk), 2.2rem 0 0 #6b6650;
+  margin-right: 2.4rem;
+}
+.hsz-terminal__kepernyo {
+  height: min(62vh, 32rem);
+  overflow: auto;
+  padding: .75rem 1rem;
+  font: 14px/1.35 var(--hsz-mono);
+  cursor: text;
+  outline: none;
+  overscroll-behavior: contain;
+}
+.hsz-terminal__kisor { white-space: pre; min-height: 1.35em; }
+.hsz-terminal__prompt { color: var(--hsz-sarga); white-space: pre; }
+.hsz-terminal__megjegyzes { color: #bdb69c; font-style: italic; white-space: pre-wrap; }
+.hsz-terminal__more { color: var(--hsz-sarga); }
+.hsz-terminal__sor { display: flex; align-items: baseline; }
+.hsz-terminal__sor[hidden] { display: none; }
+.hsz-terminal__bevitel {
+  flex: 1; min-width: 4ch;
+  margin: 0; padding: 0; border: 0; outline: none;
+  background: transparent; color: var(--hsz-feher);
+  font: inherit; caret-color: var(--hsz-sarga);
+}
+.hsz-terminal__gombok {
+  display: flex; flex-wrap: wrap; gap: .4rem;
+  padding: .5rem .9rem .7rem;
+  border-top: 1px solid #2c2918;
+}
+.hsz-terminal__gomb {
+  font: .85rem var(--hsz-mono);
+  color: var(--hsz-sarga);
+  background: transparent;
+  border: 1.5px solid var(--hsz-sarga);
+  border-radius: 999px;
+  padding: .25rem .8rem;
+  cursor: pointer;
+}
+.hsz-terminal__gomb:hover:not(:disabled) { background: var(--hsz-sarga); color: var(--hsz-fekete); }
+.hsz-terminal__gomb:disabled { opacity: .4; cursor: default; }
+.hsz-terminal__gomb[hidden] { display: none; }
+.hsz-terminal__gomb:focus-visible { outline: 3px solid var(--hsz-feher); outline-offset: 2px; }
+@media (max-width: 700px) {
+  .hsz-terminal__kepernyo { font-size: 12px; padding: .6rem .7rem; height: 60vh; }
+}
+
+/* ---------- lábléc ---------- */
+.hsz-lab {
+  display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem 1rem;
+  margin-top: .6rem; font-size: .9rem;
+}
+.hsz-jelzo { color: inherit; font-weight: bold; }

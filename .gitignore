@@ -1,0 +1,26 @@
+# Node / npm
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm/
+*.tgz
+
+# Tesztlefedettség, ideiglenes fájlok
+coverage/
+.nyc_output/
+*.tmp
+tmp/
+
+# Környezeti változók
+.env
+.env.*
+
+# Szerkesztők, operációs rendszer
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# FONTOS: a dist/ mappa SZÁNDÉKOSAN a repóban van (ez kerül a weboldalra), ezért itt nincs kizárva.

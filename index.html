@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Haloszim – kipróbáló oldal</title>
+<meta name="description" content="Böngészőben futó hálózati szimulátor a routerrantotta.hu-hoz – fejlesztői kipróbáló oldal.">
+<meta name="robots" content="noindex">
+<style>
+  /* A weboldal (routerrantotta.hu) css/style.css :root változóinak másolata.
+     A valódi oldalon ezeket a weboldal stílusa adja, itt csak a kipróbáláshoz kellenek. */
+  :root{
+    --yellow:#FEC804;
+    --yolk:#F59E00;
+    --black:#000;
+    --ink:#1c1a12;
+    --white:#fffdf4;
+    --font:"Trebuchet MS","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --display:"Arial Black","Helvetica Neue",Impact,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--font);color:var(--black);background:var(--yellow);line-height:1.6;font-size:1.0625rem}
+  .wrap{max-width:62rem;margin:0 auto;padding:0 1.25rem}
+  header{padding:1.25rem 0 .5rem}
+  h1{font-family:var(--display);font-size:clamp(2rem,8vw,3.4rem);line-height:1;letter-spacing:-.02em;margin:0 0 .5rem}
+  .alcim{margin:0 0 1rem;font-size:1.1rem}
+  .figyelem{background:var(--black);color:var(--yellow);display:inline-block;padding:.15rem .7rem;border-radius:999px;font-family:var(--display);font-size:.85rem}
+  main{padding-bottom:2.5rem}
+  h2{font-family:var(--display);font-size:1.4rem;margin:2rem 0 .5rem}
+  code{font-family:Consolas,"Courier New",monospace;background:var(--white);padding:0 .3rem;border-radius:.3rem;white-space:nowrap}
+  .probak{columns:2 18rem;padding-left:1.2rem;margin:.5rem 0}
+  .probak li{break-inside:avoid;margin-bottom:.3rem}
+  footer{border-top:2px solid var(--black);padding:1rem 0 2rem;font-size:.9rem}
+  a{color:inherit}
+</style>
+<link rel="stylesheet" href="dist/szimulator.css">
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>Haloszim</h1>
+    <p class="alcim">Hálózati szimulátor a routerrantotta.hu-hoz – <span class="figyelem">fejlesztői kipróbáló oldal</span></p>
+    <p>Ez még csak a váz: egy switch és egy IOS-szerű parancssor néhány paranccsal. Kattints a terminálba, és gépelj!</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <div id="hsz"><noscript>A szimulátorhoz be kell kapcsolni a JavaScriptet.</noscript></div>
+
+  <h2>Mit próbálj ki?</h2>
+  <ul class="probak">
+    <li><code>enable</code> vagy röviden <code>en</code></li>
+    <li><code>configure terminal</code> = <code>conf t</code></li>
+    <li><code>hostname SW1</code></li>
+    <li><code>vlan 10</code>, majd <code>name IRODA</code></li>
+    <li><code>do show vlan brief</code> = <code>do sh vl br</code></li>
+    <li><code>interface fa0/1</code>, <code>shutdown</code>, <code>no shutdown</code></li>
+    <li><code>interface range fa0/1 - 4</code></li>
+    <li><code>end</code> vagy Ctrl+Z, utána <code>show running-config</code></li>
+    <li><code>?</code> bárhol (pl. <code>show ?</code> vagy <code>sh?</code>)</li>
+    <li>Tab: <code>conf</code> + Tab → <code>configure</code></li>
+    <li>↑ / ↓: az előző parancsok</li>
+    <li>Hibák: <code>s</code>, <code>hostname</code>, <code>vlan 5000</code>, <code>asdf</code></li>
+  </ul>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>IOS-szerű parancssor: a parancsok és a kimenetek formáját utánozza, gyártói szoftvert és dokumentációt nem tartalmaz.
+       A súgószövegek saját magyar megfogalmazások. © Horváth Gábor EV – routerrantotta.hu</p>
+  </div>
+</footer>
+
+<script src="dist/szimulator.js"></script>
+<script>Haloszim.indit(document.getElementById('hsz'));</script>
+</body>
+</html>

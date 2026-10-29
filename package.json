@@ -1,0 +1,16 @@
+{
+  "name": "haloszim",
+  "version": "0.1.0",
+  "description": "Böngészőben futó, feladat-alapú hálózati szimulátor a routerrantotta.hu-hoz",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node eszkozok/epites.mjs",
+    "test": "node --test \"tesztek/**/*.test.js\""
+  },
+  "author": "Horváth Gábor EV (routerrantotta.hu)",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "esbuild": "^0.25.12"
+  }
+}
