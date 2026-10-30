@@ -2,6 +2,18 @@
 
 A legújabb van felül.
 
+## v0.7 – 2026-10-30 – Beépíthető a weboldalba
+
+- **Védőréteg a stílusban:** a befogadó oldal általános szabályai (`button`, `form`, `label`, `input`, `.light h2`,
+  `button:hover`) nem torzítják el a szimulátort. A `:where()` miatt a védőréteg csak egy osztálynyi erős, így a
+  szimulátor saját `.hsz-…` szabályai továbbra is felülírják. A routerrantotta.hu stílusával ellenőrizve: a gombok,
+  fülek, címek, űrlapok mérete, betűje, színe pontosan ugyanaz, mint a kipróbáló oldalon.
+- **`hibajelento` beállítás** az `indit`-ban: a „Hibás a kimenet? Jelezd!” link célja megadható (a weboldalon
+  `../otlet.html`, így a helyi tesztváltozatban is a helyi ötletküldőre visz). A link mindig tartalmaz `parancs=`
+  paramétert (üresen is) – ebből tudja az ötletküldő, hogy a szimulátorból jöttek.
+- README: „Beépítés egy weboldalba” rész.
+- A weboldal tesztváltozatába (teszt/v0.11/szimulator) beépítve – a weboldal repójába nem került fel.
+
 ## v0.6 – 2026-10-30 – Bemutató buborékokkal, állítható sebesség
 
 - **Bemutató (oktató mód):** buborékok vezetnek végig a feladaton lépésről lépésre: a rajzon az eszközre, a terminál

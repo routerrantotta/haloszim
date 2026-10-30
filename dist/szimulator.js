@@ -1,4 +1,4 @@
-/* Haloszim v0.6.0 – routerrantotta.hu – minden jog fenntartva. */
+/* Haloszim v0.7.0 – routerrantotta.hu – minden jog fenntartva. */
 (() => {
   // src/mag/ido.js
   var Ora = class {
@@ -4006,7 +4006,7 @@
   }
 
   // src/fo.js
-  var VERZIO = true ? "0.6.0" : "fejlesztői";
+  var VERZIO = true ? "0.7.0" : "fejlesztői";
   var HIBAJELENTO = "https://routerrantotta.hu/otlet.html";
   var ANIM_KESLELTETES = 260;
   var SEBESSEGEK = [
@@ -4049,6 +4049,7 @@
     const sebessegKezelo = { kap: () => sebesseg, allit: (x) => {
       sebesseg = x;
     } };
+    const hibajelento = typeof beallitasok.hibajelento === "string" && beallitasok.hibajelento ? beallitasok.hibajelento : HIBAJELENTO;
     const kisKepernyo = elem5("p", "hsz-kiskepernyo", "Tipp: nagyobb képernyőn kényelmesebb a gyakorlás.");
     const tartalom = elem5("div", "hsz-tartalom");
     gyoker.append(kisKepernyo);
@@ -4075,7 +4076,7 @@
       mod = ujMod;
       if (mod === "oktato" || !feladat.valtozok) mag = null;
       else mag = ujMagErtek !== void 0 && ujMagErtek !== null ? ujMagErtek : ujMag();
-      fut = feladatInditas(tartalom, feladatValtozat(feladat, mag), mod, valtozatLink, sebessegKezelo);
+      fut = feladatInditas(tartalom, feladatValtozat(feladat, mag), mod, valtozatLink, sebessegKezelo, hibajelento);
       if (valaszto) valaszto.igazit(feladat, mod);
       try {
         window.history.replaceState(null, "", valtozatLink());
@@ -4388,7 +4389,7 @@
     sor2.append(cim, csoport);
     return sor2;
   }
-  function feladatInditas(gyoker, feladat, mod, valtozatLink, sebesseg) {
+  function feladatInditas(gyoker, feladat, mod, valtozatLink, sebesseg, hibajelento = HIBAJELENTO) {
     const ora = new Ora();
     let elozo = performance.now();
     const idozito = setInterval(() => {
@@ -4424,8 +4425,8 @@
     jelzo.rel = "noopener";
     const jelzoFrissit = (parancs) => {
       const p = new URLSearchParams({ oldal: "szimulator/index.html" });
-      if (parancs) p.set("parancs", parancs.slice(0, 200));
-      jelzo.href = `${HIBAJELENTO}?${p}`;
+      p.set("parancs", (parancs || "").slice(0, 200));
+      jelzo.href = `${hibajelento}?${p}`;
     };
     jelzoFrissit("");
     const fulek = elem5("div", "hsz-fulek");

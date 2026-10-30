@@ -32,6 +32,7 @@ import { feladatValtozat, ujMag, ervenyesMag } from './feladat/veletlen.js';
 export const VERZIO = typeof __VERZIO__ !== 'undefined' ? __VERZIO__ : 'fejlesztői';
 
 /** A hibajelentő oldal (a weboldal ötletküldője). */
+/** Az ötletküldő oldal alapértelmezett címe (a weboldalba építve relatív cím adható: indit(..., {hibajelento})). */
 const HIBAJELENTO = 'https://routerrantotta.hu/otlet.html';
 
 /** Ennyi (szimulált) ms alatt ér át egy keret egy kábelen. */
@@ -72,7 +73,9 @@ function tipusa(f) {
 /**
  * Elindítja a szimulátort a megadott elemben.
  * @param {HTMLElement} gyoker
- * @param {{feladat?: string, mod?: 'oktato'|'gyakorlo'|'vizsga', mag?: number}} [beallitasok]
+ * @param {{feladat?: string, mod?: 'oktato'|'gyakorlo'|'vizsga', mag?: number, sebesseg?: number,
+ *          hibajelento?: string}} [beallitasok]
+ *   hibajelento: a „Hibás a kimenet? Jelezd!” link célja (pl. '../otlet.html'); alapból a routerrantotta.hu ötletküldője
  */
 export function indit(gyoker, beallitasok = {}) {
   gyoker.classList.add('hsz');
@@ -94,6 +97,7 @@ export function indit(gyoker, beallitasok = {}) {
   /** A csomagok sebessége (feladatváltáskor is megmarad, a böngészőben nem tároljuk el). */
   let sebesseg = SEBESSEGEK.some((x) => x.szorzo === beallitasok.sebesseg) ? beallitasok.sebesseg : 1;
   const sebessegKezelo = { kap: () => sebesseg, allit: (x) => { sebesseg = x; } };
+  const hibajelento = typeof beallitasok.hibajelento === 'string' && beallitasok.hibajelento ? beallitasok.hibajelento : HIBAJELENTO;
 
   const kisKepernyo = elem('p', 'hsz-kiskepernyo', 'Tipp: nagyobb képernyőn kényelmesebb a gyakorlás.');
   const tartalom = elem('div', 'hsz-tartalom');
@@ -130,7 +134,7 @@ export function indit(gyoker, beallitasok = {}) {
     mod = ujMod;
     if (mod === 'oktato' || !feladat.valtozok) mag = null;
     else mag = ujMagErtek !== undefined && ujMagErtek !== null ? ujMagErtek : ujMag();
-    fut = feladatInditas(tartalom, feladatValtozat(feladat, mag), mod, valtozatLink, sebessegKezelo);
+    fut = feladatInditas(tartalom, feladatValtozat(feladat, mag), mod, valtozatLink, sebessegKezelo, hibajelento);
     if (valaszto) valaszto.igazit(feladat, mod);
     try {
       window.history.replaceState(null, '', valtozatLink());
@@ -462,7 +466,7 @@ function sebessegValaszto(sebesseg) {
  * Egy feladat felépítése a megadott elemben (topológia, panel, eszközök, lábléc).
  * @returns {Object} – a futó feladat adatai és egy leallit() függvény
  */
-function feladatInditas(gyoker, feladat, mod, valtozatLink, sebesseg) {
+function feladatInditas(gyoker, feladat, mod, valtozatLink, sebesseg, hibajelento = HIBAJELENTO) {
   // A szimulált óra a valódi idővel halad, a választott sebességgel szorozva.
   const ora = new Ora();
   let elozo = performance.now();
@@ -508,8 +512,9 @@ function feladatInditas(gyoker, feladat, mod, valtozatLink, sebesseg) {
   jelzo.rel = 'noopener';
   const jelzoFrissit = (parancs) => {
     const p = new URLSearchParams({ oldal: 'szimulator/index.html' });
-    if (parancs) p.set('parancs', parancs.slice(0, 200));
-    jelzo.href = `${HIBAJELENTO}?${p}`;
+    // Mindig van „parancs” (üres is lehet): ebből tudja az ötletküldő, hogy a szimulátor hibajelzője hívta.
+    p.set('parancs', (parancs || '').slice(0, 200));
+    jelzo.href = `${hibajelento}?${p}`;
   };
   jelzoFrissit('');
 

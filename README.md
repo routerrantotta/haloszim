@@ -53,3 +53,25 @@ dist/             a kész, beépíthető fájlok
 docs/             forrásjegyzék
 tesztek/          automatikus tesztek
 ```
+
+## Beépítés egy weboldalba
+
+A `dist/szimulator.js`, a `dist/szimulator.css` és a `feladatok/*.js` kell hozzá:
+
+```html
+<link rel="stylesheet" href="haloszim/szimulator.css">
+<div id="haloszim"></div>
+<script src="haloszim/szimulator.js"></script>
+<script src="haloszim/feladatok/vlan-1.js"></script>
+<script src="haloszim/feladatok/vtp-1.js"></script>
+<script>Haloszim.indit(document.getElementById('haloszim'), { feladat: 'vlan-1', hibajelento: '../otlet.html' });</script>
+```
+
+- Az `indit` beállításai: `feladat`, `mod` (`oktato` / `gyakorlo` / `vizsga`), `mag` (változatszám), `sebesseg`,
+  `hibajelento` (a „Hibás a kimenet? Jelezd!” link célja; alapból a routerrantotta.hu ötletküldője). A címsor
+  `?feladat=…&mod=…&mag=…` paraméterei felülírják az első hármat.
+- A színeket és betűket az oldal `:root` változóiból veszi (`--yellow`, `--black`, `--font`, `--display` …).
+- A stílus védőréteget tartalmaz: a befogadó oldal általános `button`, `form`, `label`, `input`, `h2` szabályai nem
+  torzítják el a szimulátort.
+- A jelző link: `…/otlet.html?oldal=szimulator/index.html&parancs=<az utolsó parancs>`.
+

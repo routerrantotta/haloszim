@@ -20,6 +20,22 @@
 }
 .hsz *, .hsz *::before, .hsz *::after { box-sizing: border-box; }
 
+/* ---------- védőréteg a befogadó oldal általános szabályai ellen ----------
+   A weboldal stílusa elemekre is ad szabályt (button, form, label, input, .light h2 …).
+   A :where() miatt ezek a sorok csak egy osztálynyi erősek, így a lenti .hsz-… szabályok
+   felülírják őket, a weboldal puszta elemszabályait viszont ezek írják felül. */
+.hsz :where(button, input, select, textarea) {
+  font-family: inherit; font-size: inherit; font-weight: inherit; line-height: normal; letter-spacing: normal;
+  margin: 0; border-radius: 0; width: auto; min-height: 0; box-shadow: none; text-transform: none;
+}
+.hsz :where(button) { padding: 0; border: 0; background: transparent; color: inherit; }
+.hsz :where(form) { display: block; gap: 0; padding: 0; margin: 0; background: transparent; color: inherit; border-radius: 0; }
+.hsz :where(label) { display: block; gap: 0; font-weight: inherit; }
+.hsz :where(h1, h2, h3, h4) { letter-spacing: normal; text-transform: none; }  /* a .light h2 erősebb: a címek osztályai külön is beállítják */
+.hsz :where(p, ul, ol) { max-width: none; }
+/* A letiltott gombra ne hasson a weboldal button:hover szabálya (pl. sötét háttér). */
+.hsz button:disabled { pointer-events: none; }
+
 .hsz-racs { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); }
 
 .hsz-kiskepernyo { display: none; margin: 0 0 .75rem; font-size: .95rem; }
@@ -129,10 +145,10 @@
   font-size: .95rem; line-height: 1.45;
 }
 .hsz-panel__fej { display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem .6rem; }
-.hsz-panel__cim { font: 900 1.15rem/1.2 var(--hsz-cimbetu); margin: 0; }
+.hsz .hsz-panel__cim { letter-spacing: normal; font: 900 1.15rem/1.2 var(--hsz-cimbetu); margin: 0; }
 .hsz-panel__szint { font-size: .75rem; background: var(--hsz-sarga); border: 1.5px solid var(--hsz-fekete); border-radius: 999px; padding: 0 .55rem; }
 .hsz-panel__szoveg { margin: .5rem 0; }
-.hsz-panel__alcim { font: 900 .95rem var(--hsz-cimbetu); margin: .9rem 0 .3rem; }
+.hsz .hsz-panel__alcim { letter-spacing: normal; font: 900 .95rem var(--hsz-cimbetu); margin: .9rem 0 .3rem; }
 .hsz-panel__lepesek { margin: 0; padding-left: 1.3rem; }
 .hsz-panel__lepesek li { margin-bottom: .25rem; }
 .hsz-panel__tablahely { overflow-x: auto; }
@@ -168,7 +184,7 @@
 .hsz-magyarazat__cim { cursor: pointer; font: 900 .95rem var(--hsz-cimbetu); padding: .55rem .8rem; list-style-position: inside; }
 .hsz-magyarazat__cim:focus-visible { outline: 3px solid var(--hsz-yolk); outline-offset: 2px; border-radius: .6rem; }
 .hsz-magyarazat[open] .hsz-magyarazat__cim { border-bottom: 1.5px solid var(--hsz-fekete); }
-.hsz-magyarazat__alcim { font: 900 .9rem var(--hsz-cimbetu); margin: .8rem .8rem .25rem; }
+.hsz .hsz-magyarazat__alcim { letter-spacing: normal; font: 900 .9rem var(--hsz-cimbetu); margin: .8rem .8rem .25rem; }
 .hsz-magyarazat__szoveg { margin: .3rem .8rem .5rem; }
 .hsz-magyarazat__lista { margin: .3rem .8rem .6rem; padding-left: 1.2rem; }
 .hsz-magyarazat__lista li { margin-bottom: .3rem; }
@@ -210,7 +226,7 @@
 .hsz-panel__modleiras { margin: .3rem 0 .4rem; font-size: .85rem; color: #57513c; }
 .hsz-panel__valtozat { margin: 0 0 .5rem; font-size: .88rem; }
 .hsz-panel__valtozat .hsz-tippgomb { margin-top: 0; }
-.hsz-panel__link { display: block; width: 100%; margin-top: .3rem; font: .8rem var(--hsz-mono); padding: .25rem .4rem; border: 1.5px solid var(--hsz-fekete); border-radius: .4rem; }
+.hsz-panel__link { display: block; background: #fff; color: var(--hsz-fekete); width: 100%; margin-top: .3rem; font: .8rem var(--hsz-mono); padding: .25rem .4rem; border: 1.5px solid var(--hsz-fekete); border-radius: .4rem; }
 .hsz-panel__link[hidden] { display: none; }
 .hsz-panel__ora { margin: .2rem 0 .5rem; font: 700 .95rem var(--hsz-mono); }
 .hsz-panel__zarva { margin: 1rem 0 0; padding: .55rem .8rem; border: 2px dashed #a39c80; border-radius: .75rem; font-size: .88rem; color: #57513c; }
@@ -250,7 +266,7 @@
 .hsz-buborek__nyil--lent { bottom: -9px; border-right: 2px solid var(--hsz-sarga); border-bottom: 2px solid var(--hsz-sarga); }
 .hsz-buborek__fej { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin-bottom: .2rem; }
 .hsz-buborek__szamlalo { font: 900 .78rem var(--hsz-cimbetu); color: var(--hsz-sarga); }
-.hsz-buborek__x { background: transparent; border: 0; color: var(--hsz-feher); font-size: 1.3rem; line-height: 1; cursor: pointer; padding: 0 .2rem; }
+.hsz-buborek__x, .hsz-buborek__x:hover { background: transparent; border: 0; color: var(--hsz-feher); font-family: var(--hsz-betu); font-size: 1.3rem; line-height: 1; cursor: pointer; padding: 0 .2rem; }
 .hsz-buborek__x:focus-visible { outline: 2px solid var(--hsz-sarga); }
 .hsz-buborek__szoveg { margin: .1rem 0 .4rem; font-weight: bold; }
 .hsz-buborek__miert { margin: 0 0 .5rem; font-size: .86rem; color: #e4ddc2; }
@@ -275,8 +291,8 @@ g.hsz-kiemelt .hsz-eszkoz__haz { stroke: var(--hsz-yolk); stroke-width: 6; }
   border-radius: 1rem;
   padding: .8rem 1rem 1rem;
 }
-.hsz-pc-urlap__cim { font: 900 1rem var(--hsz-cimbetu); margin: 0 0 .5rem; }
-.hsz-pc-urlap__mezo { display: block; margin-bottom: .55rem; font-size: .9rem; }
+.hsz .hsz-pc-urlap__cim { letter-spacing: normal; font: 900 1rem var(--hsz-cimbetu); margin: 0 0 .5rem; }
+.hsz-pc-urlap__mezo { display: block; margin-bottom: .55rem; font-size: .9rem; font-weight: normal; }
 .hsz-pc-urlap__mezo span { display: block; margin-bottom: .15rem; }
 .hsz-pc-urlap__mezo input {
   width: 100%; font: 1rem var(--hsz-mono);
