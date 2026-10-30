@@ -1,4 +1,4 @@
-/* Haloszim v0.4.0 – routerrantotta.hu – minden jog fenntartva. */
+/* Haloszim v0.5.0 – routerrantotta.hu – minden jog fenntartva. */
 (() => {
   // src/mag/ido.js
   var Ora = class {
@@ -235,13 +235,13 @@
     const elotag = reszek.slice(0, -1).join("/");
     const illok = letezok.filter((s) => s.startsWith(elotag ? elotag + "/" : ""));
     if (illok.length === 0) return [];
-    const ertekek = [...new Set(illok.map((s) => Number(s.split("/")[melyikResz])))].sort((a, b) => a - b);
+    const ertekek2 = [...new Set(illok.map((s) => Number(s.split("/")[melyikResz])))].sort((a, b) => a - b);
     const utolso = reszek[melyikResz];
-    if (utolso !== "" && !ertekek.some((v) => String(v).startsWith(utolso))) return [];
-    const teljes = utolso !== "" && ertekek.includes(Number(utolso));
+    if (utolso !== "" && !ertekek2.some((v) => String(v).startsWith(utolso))) return [];
+    const teljes = utolso !== "" && ertekek2.includes(Number(utolso));
     const vanMeg = illok.some((s) => s.split("/").length > melyikResz + 1);
     if (teljes && vanMeg) return ["/"];
-    return [`<${ertekek[0]}-${ertekek[ertekek.length - 1]}>`];
+    return [`<${ertekek2[0]}-${ertekek2[ertekek2.length - 1]}>`];
   }
   function interfeszKiegeszit(r, kornyezet) {
     if (!/^[a-zA-Z-]+$/.test(r)) return null;
@@ -297,8 +297,8 @@
     let aktMod = mod;
     let cs = fak[aktMod];
     let gyokerKezdet = 0;
-    const ertekek = {};
-    if (!cs) return { ok: false, hiba: "ervenytelen", oszlop: tokenek[0] ? tokenek[0].kezdet : 0, tokenIndex: 0, mod, ertekek, gyokerKezdet };
+    const ertekek2 = {};
+    if (!cs) return { ok: false, hiba: "ervenytelen", oszlop: tokenek[0] ? tokenek[0].kezdet : 0, tokenIndex: 0, mod, ertekek: ertekek2, gyokerKezdet };
     let i = 0;
     while (i < tokenek.length) {
       if (cs.tovabb) {
@@ -316,18 +316,18 @@
         continue;
       }
       if (jeloltek.length > 1) {
-        return { ok: false, hiba: "ketertelmu", tokenIndex: i, mod: aktMod, ertekek, gyokerKezdet };
+        return { ok: false, hiba: "ketertelmu", tokenIndex: i, mod: aktMod, ertekek: ertekek2, gyokerKezdet };
       }
       let illett = false;
       let legjobbHiba = null;
       for (const p of cs.parameterek) {
         const tipus = PARAM_TIPUSOK[p.elem.param];
         if (megallMaradeknal && tipus.maradekot) {
-          return { ok: true, cs, mod: aktMod, ertekek, gyokerKezdet, maradekParam: p, maradekIndex: i };
+          return { ok: true, cs, mod: aktMod, ertekek: ertekek2, gyokerKezdet, maradekParam: p, maradekIndex: i };
         }
         const r = tipus.illeszt(p.elem, tokenek, i, sor2, kornyezet);
         if (r.ok) {
-          ertekek[p.elem.kulcs] = r.ertek;
+          ertekek2[p.elem.kulcs] = r.ertek;
           cs = p.csomopont;
           i = r.kovetkezo;
           illett = true;
@@ -344,14 +344,14 @@
           oszlop: legjobbHiba.oszlop,
           tokenIndex: i,
           mod: aktMod,
-          ertekek,
+          ertekek: ertekek2,
           gyokerKezdet,
           felbeHagyott: legjobbHiba.hiba === "hianyos"
         };
       }
-      return { ok: false, hiba: "ervenytelen", oszlop: t.kezdet, tokenIndex: i, mod: aktMod, ertekek, gyokerKezdet };
+      return { ok: false, hiba: "ervenytelen", oszlop: t.kezdet, tokenIndex: i, mod: aktMod, ertekek: ertekek2, gyokerKezdet };
     }
-    return { ok: true, cs, mod: aktMod, ertekek, gyokerKezdet, tokenIndex: i };
+    return { ok: true, cs, mod: aktMod, ertekek: ertekek2, gyokerKezdet, tokenIndex: i };
   }
   function illeszt(fak, mod, sor2, kornyezet = {}) {
     const tokenek = szavakra(sor2);
@@ -941,6 +941,26 @@
     }
   ];
 
+  // src/magyar.js
+  var EGYES = ["", "es", "es", "as", "es", "ös", "os", "es", "as", "es"];
+  var TIZES = ["", "es", "as", "as", "es", "es", "as", "es", "as", "es"];
+  function esRag(n) {
+    const x = Math.abs(Math.trunc(Number(n)));
+    let rag;
+    if (x === 0) rag = "s";
+    else if (x % 10 !== 0) rag = EGYES[x % 10];
+    else if (x % 100 !== 0) rag = TIZES[x % 100 / 10];
+    else if (x % 1e3 !== 0) rag = "as";
+    else rag = "es";
+    return `${n}-${rag}`;
+  }
+  function nevelo(n) {
+    const s = String(Math.abs(Math.trunc(Number(n))));
+    if (s === "1" || s[0] === "5") return "az";
+    if (s.length === 4 && s[0] === "1") return "az";
+    return "a";
+  }
+
   // src/mag/kapcsolas.js
   var MAC_ELETKOR = 3e5;
   function uzemmod(sw, port) {
@@ -993,7 +1013,7 @@
       vlan = port.accessVlan;
     }
     if (!vlanAktiv(sw, vlan)) {
-      return h.eldob(sw, port, keret2, `A(z) ${vlan}-es VLAN nem létezik ezen a switchen (${sw.hostname}), ezért a keretet eldobta.`);
+      return h.eldob(sw, port, keret2, `${nevelo(vlan) === "az" ? "Az" : "A"} ${esRag(vlan)} VLAN nem létezik ezen a switchen (${sw.hostname}), ezért a keretet eldobta.`);
     }
     if (keret2.forrasMac !== SZORAS) macTanul(sw, vlan, keret2.forrasMac, port.nev, h.ora.ido);
     let kimenok;
@@ -3111,6 +3131,11 @@
   };
 
   // src/feladat/ellenorzo.js
+  var aVlan = (n) => `${nevelo(n)} ${esRag(n)}`;
+  var AVlan = (n) => {
+    const t = aVlan(n);
+    return t[0].toUpperCase() + t.slice(1);
+  };
   var MOD_SZOVEG2 = { access: "access", trunk: "trunk", "dinamikus-auto": "dynamic auto", "dinamikus-kezdemenyezo": "dynamic desirable" };
   function rovid(nev) {
     return nev.replace(/^FastEthernet/, "Fa").replace(/^GigabitEthernet/, "Gi");
@@ -3119,7 +3144,7 @@
     vlan(f, c) {
       const sw = f.eszkoz(c.eszkoz);
       const v = sw.vlanok[c.vlan];
-      if (!v) return { ok: false, megjegyzes: `A(z) ${c.vlan}-es VLAN nincs létrehozva (${c.eszkoz}).` };
+      if (!v) return { ok: false, megjegyzes: `${AVlan(c.vlan)} VLAN nincs létrehozva (${c.eszkoz}).` };
       if (c.nev && v.nev !== c.nev) return { ok: false, megjegyzes: `A VLAN neve most: ${v.nev} (${c.nev} kellene).` };
       return { ok: true, megjegyzes: `Megvan: ${c.vlan} ${v.nev}` };
     },
@@ -3128,8 +3153,8 @@
       const p = portKeres(sw, c.port);
       const hibak = [];
       if (p.mod !== "access") hibak.push(`a port üzemmódja most ${MOD_SZOVEG2[p.mod]} (access kellene)`);
-      if (p.accessVlan !== c.vlan) hibak.push(`a port most a(z) ${p.accessVlan}-es VLAN-ban van`);
-      else if (!sw.vlanok[c.vlan]) hibak.push(`a(z) ${c.vlan}-es VLAN nem létezik ezen a switchen`);
+      if (p.accessVlan !== c.vlan) hibak.push(`a port most ${aVlan(p.accessVlan)} VLAN-ban van`);
+      else if (!sw.vlanok[c.vlan]) hibak.push(`${aVlan(c.vlan)} VLAN nem létezik ezen a switchen`);
       if (p.leallitva) hibak.push("a port le van kapcsolva (shutdown)");
       if (hibak.length) return { ok: false, megjegyzes: hibak.join("; ") + "." };
       return { ok: true, megjegyzes: `access, VLAN ${c.vlan}` };
@@ -3151,8 +3176,8 @@
     "vlan-nincs"(f, c) {
       const sw = f.eszkoz(c.eszkoz);
       const v = sw.vlanok[c.vlan];
-      if (v) return { ok: false, megjegyzes: `A(z) ${c.vlan}-es VLAN (${v.nev}) megvan ${c.eszkoz}-en, pedig itt nem szabadna lennie.` };
-      return { ok: true, megjegyzes: `A(z) ${c.vlan}-es VLAN nincs ${c.eszkoz}-en – ahogy kell.` };
+      if (v) return { ok: false, megjegyzes: `${AVlan(c.vlan)} VLAN (${v.nev}) megvan ezen: ${c.eszkoz}, pedig itt nem szabadna lennie.` };
+      return { ok: true, megjegyzes: `${AVlan(c.vlan)} VLAN nincs ezen: ${c.eszkoz} – ahogy kell.` };
     },
     vtp(f, c) {
       const sw = f.eszkoz(c.eszkoz);
@@ -3293,7 +3318,7 @@
     /**
      * @param {HTMLElement} szulo
      * @param {import('../feladat/betolto.js').BetoltottFeladat} f
-     * @param {{mod?: 'oktato'|'gyakorlo'|'vizsga', most?: () => number}} [beallitasok]
+     * @param {{mod?: 'oktato'|'gyakorlo'|'vizsga', most?: () => number, valtozatLink?: () => string}} [beallitasok]
      */
     constructor(szulo, f, beallitasok = {}) {
       this.f = f;
@@ -3314,6 +3339,7 @@
       fej.append(elem3("span", `hsz-panel__mod hsz-panel__mod--${this.mod}`, `${MODOK2[this.mod].nev} mód`));
       this.doboz.append(fej);
       this.doboz.append(elem3("p", "hsz-panel__modleiras", MODOK2[this.mod].leiras));
+      if (fd.mag !== null && fd.mag !== void 0) this.doboz.append(valtozatSor(fd.mag, beallitasok.valtozatLink));
       if (this.vizsga) {
         this.ora = elem3("p", "hsz-panel__ora");
         this.ora.setAttribute("aria-live", "off");
@@ -3518,6 +3544,40 @@
       clearInterval(this.oraIdozito);
     }
   };
+  function valtozatSor(mag, link) {
+    const p = elem3("p", "hsz-panel__valtozat");
+    p.append(document.createTextNode("Véletlen adatok – változat: "), elem3("b", "", `#${mag}`));
+    if (!link) return p;
+    const gomb = elem3("button", "hsz-tippgomb", "Link másolása");
+    gomb.type = "button";
+    gomb.title = "Ezzel a linkkel bárki pontosan ezt a változatot kapja (pl. a tanár az osztálynak)";
+    const mezo = elem3("input", "hsz-panel__link");
+    mezo.type = "text";
+    mezo.readOnly = true;
+    mezo.hidden = true;
+    mezo.setAttribute("aria-label", "A változat linkje");
+    const megmutat = () => {
+      mezo.value = link();
+      mezo.hidden = false;
+      mezo.focus();
+      mezo.select();
+    };
+    gomb.addEventListener("click", () => {
+      const url = link();
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(() => {
+          gomb.textContent = "Kimásolva!";
+          setTimeout(() => {
+            gomb.textContent = "Link másolása";
+          }, 2e3);
+        }, megmutat);
+      } else {
+        megmutat();
+      }
+    });
+    p.append(document.createTextNode(" "), gomb, mezo);
+    return p;
+  }
   function cimtervTabla(cimterv) {
     const cim = elem3("h3", "hsz-panel__alcim", "Címterv");
     const tabla = elem3("table", "hsz-panel__tabla");
@@ -3625,8 +3685,92 @@
     };
   }
 
+  // src/feladat/veletlen.js
+  function generator(mag) {
+    let a = Number(mag) >>> 0 || 1;
+    return () => {
+      a = a + 1831565813 >>> 0;
+      let t = a;
+      t = Math.imul(t ^ t >>> 15, t | 1);
+      t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  function ujMag() {
+    return 1 + Math.floor(Math.random() * 99999);
+  }
+  function ervenyesMag(m) {
+    return /^\d{1,9}$/.test(String(m)) && Number(m) > 0;
+  }
+  function ertekek(valtozok = {}, mag = null) {
+    const e = {};
+    const r = mag === null ? null : generator(mag);
+    for (const [nev, sz] of Object.entries(valtozok)) {
+      if (!r) {
+        e[nev] = sz.alap;
+        continue;
+      }
+      const tilos = (sz.kulonbozik || []).map((n) => e[n]);
+      let ertek;
+      for (let proba = 0; proba < 200; proba++) {
+        ertek = sorsol(sz, r);
+        if (!tilos.includes(ertek)) break;
+      }
+      if (tilos.includes(ertek)) throw new Error(`Nem sikerült különböző értéket sorsolni: ${nev}`);
+      e[nev] = ertek;
+    }
+    return e;
+  }
+  function sorsol(sz, r) {
+    if (sz.tipus === "szam") return sz.min + Math.floor(r() * (sz.max - sz.min + 1));
+    if (sz.tipus === "lista") return sz.lista[Math.floor(r() * sz.lista.length)];
+    if (sz.tipus === "jelszo") {
+      const szo = sz.lista[Math.floor(r() * sz.lista.length)];
+      const jegyek = 2 + Math.floor(r() * 3);
+      let szam = "";
+      for (let i = 0; i < jegyek; i++) szam += Math.floor(r() * 10);
+      return szo + szam;
+    }
+    throw new Error(`Ismeretlen változótípus: ${sz.tipus}`);
+  }
+  var HELYORZO = /\{([A-Z][A-Z0-9_]*)(?:\|(es|a|aes|Aes))?\}/g;
+  var CSAK_HELYORZO = /^\{([A-Z][A-Z0-9_]*)\}$/;
+  function behelyettesit(szoveg, e) {
+    const csak = CSAK_HELYORZO.exec(szoveg);
+    if (csak && typeof e[csak[1]] === "number") return e[csak[1]];
+    return szoveg.replace(HELYORZO, (teljes, nev, mod) => {
+      if (!(nev in e)) return teljes;
+      const v = e[nev];
+      if (!mod) return String(v);
+      if (mod === "es") return esRag(v);
+      if (mod === "a") return `${nevelo(v)} ${v}`;
+      const t = `${nevelo(v)} ${esRag(v)}`;
+      return mod === "Aes" ? t[0].toUpperCase() + t.slice(1) : t;
+    });
+  }
+  function bejar2(x, e) {
+    if (typeof x === "string") return behelyettesit(x, e);
+    if (Array.isArray(x)) return x.map((y) => bejar2(y, e));
+    if (x && typeof x === "object") {
+      const uj = {};
+      for (const [k, v] of Object.entries(x)) uj[behelyettesit(k, e)] = bejar2(v, e);
+      return uj;
+    }
+    return x;
+  }
+  function feladatValtozat(feladat, mag = null) {
+    const e = ertekek(feladat.valtozok, mag);
+    const { valtozok, ...tobbi } = feladat;
+    const v = bejar2(tobbi, e);
+    v.mag = mag;
+    v.ertekek = e;
+    v.eredeti = feladat;
+    void valtozok;
+    return v;
+  }
+
   // src/fo.js
-  var VERZIO = true ? "0.4.0" : "fejlesztői";
+  var VERZIO = true ? "0.5.0" : "fejlesztői";
   var HIBAJELENTO = "https://routerrantotta.hu/otlet.html";
   var ANIM_KESLELTETES = 260;
   var SZABAD = {
@@ -3649,12 +3793,15 @@
     gyoker.textContent = "";
     let azon = beallitasok.feladat;
     let mod = beallitasok.mod;
+    let kezdoMag = beallitasok.mag;
     try {
       const p = new URLSearchParams(window.location.search);
       azon = p.get("feladat") || azon;
       mod = p.get("mod") || mod;
+      if (p.get("mag")) kezdoMag = p.get("mag");
     } catch (e) {
     }
+    kezdoMag = ervenyesMag(kezdoMag) ? Number(kezdoMag) : null;
     if (!MODOK2[mod]) mod = "oktato";
     const kisKepernyo = elem4("p", "hsz-kiskepernyo", "Tipp: nagyobb képernyőn kényelmesebb a gyakorlás.");
     const tartalom = elem4("div", "hsz-tartalom");
@@ -3662,18 +3809,30 @@
     const lista = feladatLista();
     let aktualis = null;
     let fut = null;
-    const betolt = (feladat, ujMod = mod) => {
+    let mag = null;
+    const valtozatLink = () => {
+      try {
+        const url = new URL(window.location.href);
+        if (aktualis && aktualis.azon !== "szabad") url.searchParams.set("feladat", aktualis.azon);
+        url.searchParams.set("mod", mod);
+        if (mag !== null) url.searchParams.set("mag", String(mag));
+        else url.searchParams.delete("mag");
+        return url.toString();
+      } catch (e) {
+        return "";
+      }
+    };
+    const betolt = (feladat, ujMod = mod, ujMagErtek) => {
       if (fut) fut.leallit();
       tartalom.textContent = "";
       aktualis = feladat;
       mod = ujMod;
-      fut = feladatInditas(tartalom, feladat, mod);
+      if (mod === "oktato" || !feladat.valtozok) mag = null;
+      else mag = ujMagErtek !== void 0 && ujMagErtek !== null ? ujMagErtek : ujMag();
+      fut = feladatInditas(tartalom, feladatValtozat(feladat, mag), mod, valtozatLink);
       if (valaszto) valaszto.igazit(feladat, mod);
       try {
-        const url = new URL(window.location.href);
-        if (feladat.azon && feladat.azon !== "szabad") url.searchParams.set("feladat", feladat.azon);
-        url.searchParams.set("mod", mod);
-        window.history.replaceState(null, "", url.toString());
+        window.history.replaceState(null, "", valtozatLink());
       } catch (e) {
       }
     };
@@ -3692,12 +3851,16 @@
       },
       ujra: () => {
         if (!mehet("Biztosan újrakezded? Minden eddigi beállítás elvész.")) return;
-        betolt(aktualis);
+        betolt(aktualis, mod, mag);
+      },
+      ujValtozat: () => {
+        if (!mehet("Új változatot kérsz (más számokkal és nevekkel)? Az eddigi beállítások elvesznek.")) return;
+        betolt(aktualis, mod);
       }
     }) : null;
     if (valaszto) gyoker.append(valaszto.doboz);
     gyoker.append(tartalom);
-    betolt(feladatKeres(azon) || SZABAD);
+    betolt(feladatKeres(azon) || SZABAD, mod, kezdoMag);
     return {
       /** Feladat betöltése azonosító szerint. */
       betolt: (az) => {
@@ -3707,9 +3870,12 @@
       get mod() {
         return mod;
       },
+      get mag() {
+        return mag;
+      },
       /** Mód váltása (a feladat újraindul). */
-      modValt: (m) => {
-        if (MODOK2[m]) betolt(aktualis, m);
+      modValt: (m, ujM) => {
+        if (MODOK2[m]) betolt(aktualis, m, ujM);
       },
       get panel() {
         return fut.panel;
@@ -3772,7 +3938,11 @@
     ujraGomb.type = "button";
     ujraGomb.title = "A feladat újraindítása az elejéről (minden beállítás elvész)";
     ujraGomb.addEventListener("click", () => h.ujra());
-    doboz.append(ujraGomb);
+    const ujValtGomb = elem4("button", "hsz-gomb hsz-gomb--masodlagos", "Új változat");
+    ujValtGomb.type = "button";
+    ujValtGomb.title = "Ugyanez a feladat más véletlen adatokkal (VLAN-számok, nevek, címek)";
+    ujValtGomb.addEventListener("click", () => h.ujValtozat());
+    doboz.append(ujraGomb, ujValtGomb);
     const tipusok = [...new Set(lista.map(tipusa))];
     for (const t of tipusok) tipusSel.append(new Option(t, t));
     const feladatokTolt = (tipus) => {
@@ -3804,13 +3974,14 @@
           g.setAttribute("aria-pressed", String(kulcs === mod));
           g.classList.toggle("hsz-modgomb--aktiv", kulcs === mod);
         }
+        ujValtGomb.hidden = mod === "oktato" || !f.valtozok;
         if (!lista.includes(f)) return;
         jelenlegi = f;
         visszaallit();
       }
     };
   }
-  function feladatInditas(gyoker, feladat, mod) {
+  function feladatInditas(gyoker, feladat, mod, valtozatLink) {
     const ora = new Ora();
     let elozo = performance.now();
     const idozito = setInterval(() => {
@@ -3829,7 +4000,7 @@
     const topologia = new Topologia(felso, { elemek: f.elemek, halozat, meret: feladat.topologia.meret }, {
       valaszt: (e) => valaszt(e, true)
     });
-    const panel = feladat.celok.length ? new FeladatPanel(felso, f, { mod }) : null;
+    const panel = feladat.celok.length ? new FeladatPanel(felso, f, { mod, valtozatLink }) : null;
     let piszkos = false;
     const jelzo = elem4("a", "hsz-jelzo", "Hibás a kimenet? Jelezd!");
     jelzo.target = "_blank";

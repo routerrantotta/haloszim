@@ -43,6 +43,7 @@ export function konfigbol(...sorok) {
 import '../feladatok/vlan-1.js';
 import '../feladatok/vtp-1.js';
 import { feladatKeres, feladatBetolt } from '../src/feladat/betolto.js';
+import { feladatValtozat } from '../src/feladat/veletlen.js';
 import { ipBeallit } from '../src/mag/vegpont.js';
 
 /** A vlan-1 feladat hálózata; f.mm('SW1') a switch konzolja (privilegizált módban). */
@@ -50,9 +51,13 @@ export function vlanFeladat() {
   return feladatTeszt('vlan-1');
 }
 
-/** Bármelyik feladat hálózata a tesztekhez (ugyanazokkal a segédekkel). */
-export function feladatTeszt(azon) {
-  const f = feladatBetolt(feladatKeres(azon), { kesleltetes: 1 });
+/**
+ * Bármelyik feladat hálózata a tesztekhez (ugyanazokkal a segédekkel).
+ * mag: a véletlen változat száma (null = alapadatok, mint oktató módban); f.e = a változók értékei.
+ */
+export function feladatTeszt(azon, mag = null) {
+  const f = feladatBetolt(feladatValtozat(feladatKeres(azon), mag), { kesleltetes: 1 });
+  f.e = f.feladat.ertekek;
   const munkamenetek = new Map();
   f.mm = (nev) => {
     if (!munkamenetek.has(nev)) {

@@ -24,6 +24,7 @@ import { Topologia } from './nezet/topologia.js';
 import { PcAblak } from './nezet/pc-ablak.js';
 import { FeladatPanel, MODOK } from './nezet/panel.js';
 import { feladatKeres, feladatBetolt, feladatLista } from './feladat/betolto.js';
+import { feladatValtozat, ujMag, ervenyesMag } from './feladat/veletlen.js';
 
 /* global __VERZIO__ */
 export const VERZIO = typeof __VERZIO__ !== 'undefined' ? __VERZIO__ : 'fejlesztői';
@@ -57,7 +58,7 @@ function tipusa(f) {
 /**
  * Elindítja a szimulátort a megadott elemben.
  * @param {HTMLElement} gyoker
- * @param {{feladat?: string, mod?: 'oktato'|'gyakorlo'|'vizsga'}} [beallitasok]
+ * @param {{feladat?: string, mod?: 'oktato'|'gyakorlo'|'vizsga', mag?: number}} [beallitasok]
  */
 export function indit(gyoker, beallitasok = {}) {
   gyoker.classList.add('hsz');
@@ -65,13 +66,16 @@ export function indit(gyoker, beallitasok = {}) {
 
   let azon = beallitasok.feladat;
   let mod = beallitasok.mod;
+  let kezdoMag = beallitasok.mag;
   try {
     const p = new URLSearchParams(window.location.search);
     azon = p.get('feladat') || azon;
     mod = p.get('mod') || mod;
+    if (p.get('mag')) kezdoMag = p.get('mag');
   } catch (e) {
     // nincs URL (pl. teszt): marad a megadott
   }
+  kezdoMag = ervenyesMag(kezdoMag) ? Number(kezdoMag) : null;
   if (!MODOK[mod]) mod = 'oktato';
 
   const kisKepernyo = elem('p', 'hsz-kiskepernyo', 'Tipp: nagyobb képernyőn kényelmesebb a gyakorlás.');
@@ -82,19 +86,37 @@ export function indit(gyoker, beallitasok = {}) {
   let aktualis = null;
   let fut = null;
 
-  /** Egy feladat (újra)indítása a megadott módban; a régi hálózat leáll. */
-  const betolt = (feladat, ujMod = mod) => {
+  let mag = null;
+  /** A változat linkje (a tanár ezzel adhatja ugyanazt a változatot mindenkinek). */
+  const valtozatLink = () => {
+    try {
+      const url = new URL(window.location.href);
+      if (aktualis && aktualis.azon !== 'szabad') url.searchParams.set('feladat', aktualis.azon);
+      url.searchParams.set('mod', mod);
+      if (mag !== null) url.searchParams.set('mag', String(mag));
+      else url.searchParams.delete('mag');
+      return url.toString();
+    } catch (e) {
+      return '';
+    }
+  };
+
+  /**
+   * Egy feladat (újra)indítása; a régi hálózat leáll.
+   * Oktató módban az alapadatokkal, a többiben véletlen adatokkal (ujMagErtek: undefined = új sorsolás,
+   * szám = az a változat).
+   */
+  const betolt = (feladat, ujMod = mod, ujMagErtek) => {
     if (fut) fut.leallit();
     tartalom.textContent = '';
     aktualis = feladat;
     mod = ujMod;
-    fut = feladatInditas(tartalom, feladat, mod);
+    if (mod === 'oktato' || !feladat.valtozok) mag = null;
+    else mag = ujMagErtek !== undefined && ujMagErtek !== null ? ujMagErtek : ujMag();
+    fut = feladatInditas(tartalom, feladatValtozat(feladat, mag), mod, valtozatLink);
     if (valaszto) valaszto.igazit(feladat, mod);
     try {
-      const url = new URL(window.location.href);
-      if (feladat.azon && feladat.azon !== 'szabad') url.searchParams.set('feladat', feladat.azon);
-      url.searchParams.set('mod', mod);
-      window.history.replaceState(null, '', url.toString());
+      window.history.replaceState(null, '', valtozatLink());
     } catch (e) {
       // file:// alatt egyes böngészők nem engedik – nem baj, csak az URL nem frissül
     }
@@ -116,12 +138,16 @@ export function indit(gyoker, beallitasok = {}) {
     },
     ujra: () => {
       if (!mehet('Biztosan újrakezded? Minden eddigi beállítás elvész.')) return;
-      betolt(aktualis);
+      betolt(aktualis, mod, mag);
+    },
+    ujValtozat: () => {
+      if (!mehet('Új változatot kérsz (más számokkal és nevekkel)? Az eddigi beállítások elvesznek.')) return;
+      betolt(aktualis, mod);
     },
   }) : null;
   if (valaszto) gyoker.append(valaszto.doboz);
   gyoker.append(tartalom);
-  betolt(feladatKeres(azon) || SZABAD);
+  betolt(feladatKeres(azon) || SZABAD, mod, kezdoMag);
 
   return {
     /** Feladat betöltése azonosító szerint. */
@@ -130,9 +156,10 @@ export function indit(gyoker, beallitasok = {}) {
       if (f) betolt(f);
     },
     get mod() { return mod; },
+    get mag() { return mag; },
     /** Mód váltása (a feladat újraindul). */
-    modValt: (m) => {
-      if (MODOK[m]) betolt(aktualis, m);
+    modValt: (m, ujM) => {
+      if (MODOK[m]) betolt(aktualis, m, ujM);
     },
     get panel() { return fut.panel; },
     get feladat() { return fut.feladat; },
@@ -150,7 +177,7 @@ export function indit(gyoker, beallitasok = {}) {
  * A feladatválasztó: két legördülő (típus, feladat), a mód (Oktató / Gyakorló / Vizsga) és
  * Újrakezdés gomb. A visszahívások false-t adnak, ha a tanuló mégsem akart váltani.
  * @param {Object[]} lista
- * @param {{feladat: (f: Object) => boolean, mod: (m: string) => boolean, ujra: () => void}} h
+ * @param {{feladat: (f: Object) => boolean, mod: (m: string) => boolean, ujra: () => void, ujValtozat: () => void}} h
  */
 function feladatValaszto(lista, h) {
   const doboz = elem('div', 'hsz-valaszto');
@@ -189,7 +216,11 @@ function feladatValaszto(lista, h) {
   ujraGomb.type = 'button';
   ujraGomb.title = 'A feladat újraindítása az elejéről (minden beállítás elvész)';
   ujraGomb.addEventListener('click', () => h.ujra());
-  doboz.append(ujraGomb);
+  const ujValtGomb = elem('button', 'hsz-gomb hsz-gomb--masodlagos', 'Új változat');
+  ujValtGomb.type = 'button';
+  ujValtGomb.title = 'Ugyanez a feladat más véletlen adatokkal (VLAN-számok, nevek, címek)';
+  ujValtGomb.addEventListener('click', () => h.ujValtozat());
+  doboz.append(ujraGomb, ujValtGomb);
 
   const tipusok = [...new Set(lista.map(tipusa))];
   for (const t of tipusok) tipusSel.append(new Option(t, t));
@@ -224,6 +255,7 @@ function feladatValaszto(lista, h) {
         g.setAttribute('aria-pressed', String(kulcs === mod));
         g.classList.toggle('hsz-modgomb--aktiv', kulcs === mod);
       }
+      ujValtGomb.hidden = mod === 'oktato' || !f.valtozok;
       if (!lista.includes(f)) return;
       jelenlegi = f;
       visszaallit();
@@ -235,7 +267,7 @@ function feladatValaszto(lista, h) {
  * Egy feladat felépítése a megadott elemben (topológia, panel, eszközök, lábléc).
  * @returns {Object} – a futó feladat adatai és egy leallit() függvény
  */
-function feladatInditas(gyoker, feladat, mod) {
+function feladatInditas(gyoker, feladat, mod, valtozatLink) {
   // A szimulált óra a valódi idővel együtt halad (később gyorsítható, megállítható).
   const ora = new Ora();
   let elozo = performance.now();
@@ -259,7 +291,7 @@ function feladatInditas(gyoker, feladat, mod) {
   const topologia = new Topologia(felso, { elemek: f.elemek, halozat, meret: feladat.topologia.meret }, {
     valaszt: (e) => valaszt(e, true),
   });
-  const panel = feladat.celok.length ? new FeladatPanel(felso, f, { mod }) : null;
+  const panel = feladat.celok.length ? new FeladatPanel(felso, f, { mod, valtozatLink }) : null;
   /** Dolgozott-e már a tanuló (beírt parancsot, beállított IP-t) – váltás előtt ezért kérdezünk. */
   let piszkos = false;
 

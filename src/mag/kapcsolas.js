@@ -13,6 +13,7 @@
 
 import { SZORAS } from './ethernet.js';
 import { vtpFogad } from './vtp.js';
+import { esRag, nevelo } from '../magyar.js';
 
 /** A MAC-bejegyzések élettartama (az IOS alapértéke 300 másodperc). */
 export const MAC_ELETKOR = 300000;
@@ -88,7 +89,7 @@ export function kapcsoloFogad(h, sw, port, keret) {
     vlan = port.accessVlan;
   }
   if (!vlanAktiv(sw, vlan)) {
-    return h.eldob(sw, port, keret, `A(z) ${vlan}-es VLAN nem létezik ezen a switchen (${sw.hostname}), ezért a keretet eldobta.`);
+    return h.eldob(sw, port, keret, `${nevelo(vlan) === 'az' ? 'Az' : 'A'} ${esRag(vlan)} VLAN nem létezik ezen a switchen (${sw.hostname}), ezért a keretet eldobta.`);
   }
 
   if (keret.forrasMac !== SZORAS) macTanul(sw, vlan, keret.forrasMac, port.nev, h.ora.ido);

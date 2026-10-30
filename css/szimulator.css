@@ -204,6 +204,10 @@
 .hsz-panel__mod--vizsga { background: var(--hsz-fekete); color: var(--hsz-sarga); }
 .hsz-panel__mod--gyakorlo { background: var(--hsz-yolk); }
 .hsz-panel__modleiras { margin: .3rem 0 .4rem; font-size: .85rem; color: #57513c; }
+.hsz-panel__valtozat { margin: 0 0 .5rem; font-size: .88rem; }
+.hsz-panel__valtozat .hsz-tippgomb { margin-top: 0; }
+.hsz-panel__link { display: block; width: 100%; margin-top: .3rem; font: .8rem var(--hsz-mono); padding: .25rem .4rem; border: 1.5px solid var(--hsz-fekete); border-radius: .4rem; }
+.hsz-panel__link[hidden] { display: none; }
 .hsz-panel__ora { margin: .2rem 0 .5rem; font: 700 .95rem var(--hsz-mono); }
 .hsz-panel__zarva { margin: 1rem 0 0; padding: .55rem .8rem; border: 2px dashed #a39c80; border-radius: .75rem; font-size: .88rem; color: #57513c; }
 .hsz-panel__gombok { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }

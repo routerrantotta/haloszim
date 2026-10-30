@@ -5,11 +5,30 @@
  * A szövegekben a `…` közötti rész parancsként (egyenközű betűvel) jelenik meg.
  */
 (function (g) {
+  var NEVEK = ['IRODA', 'RAKTAR', 'PENZUGY', 'MARKETING', 'FEJLESZTES', 'VEZETOSEG', 'ERTEKESITES', 'HR',
+    'VENDEG', 'LABOR', 'SZERVIZ', 'GYARTAS', 'LOGISZTIKA', 'OKTATAS', 'UGYFELSZOLGALAT'];
   (g.HaloszimFeladatok = g.HaloszimFeladatok || []).push({
     azon: 'vtp-1',
     tipus: 'VLAN',
     cim: 'VTP: server, transparent, client',
     szint: 'haladó',
+    // Véletlen adatok (gyakorló és vizsga mód) – lásd vlan-1.js és src/feladat/veletlen.js.
+    valtozok: {
+      VLAN1: { tipus: 'szam', alap: 10, min: 2, max: 254 },
+      VLAN2: { tipus: 'szam', alap: 20, min: 2, max: 254, kulonbozik: ['VLAN1'] },
+      HELYI: { tipus: 'szam', alap: 99, min: 2, max: 254, kulonbozik: ['VLAN1', 'VLAN2'] },
+      REGI: { tipus: 'szam', alap: 30, min: 2, max: 254, kulonbozik: ['VLAN1', 'VLAN2', 'HELYI'] },
+      NEV1: { tipus: 'lista', alap: 'IRODA', lista: NEVEK },
+      NEV2: { tipus: 'lista', alap: 'RAKTAR', lista: NEVEK, kulonbozik: ['NEV1'] },
+      NEVH: { tipus: 'lista', alap: 'SAJAT', lista: ['SAJAT', 'HELYI', 'KAMERA', 'NYOMTATO', 'MGMT', 'BIZTONSAG'] },
+      TARTOMANY: { tipus: 'lista', alap: 'ROUTERRANTOTTA', lista: ['ROUTERRANTOTTA', 'KOZPONT', 'TELEPHELY', 'CAMPUS', 'IRODAHAZ', 'LABOR'] },
+      JELSZO: { tipus: 'jelszo', alap: 'Rantotta2026', lista: ['Rantotta', 'Titok', 'Vtp', 'Kapcsolo', 'Halozat'] },
+      REVIZIO: { tipus: 'szam', alap: 15, min: 6, max: 60 },
+      H1: { tipus: 'szam', alap: 11, min: 2, max: 250 },
+      H2: { tipus: 'szam', alap: 12, min: 2, max: 250 },
+      H3: { tipus: 'szam', alap: 13, min: 2, max: 250, kulonbozik: ['H1'] },
+      H4: { tipus: 'szam', alap: 14, min: 2, max: 250, kulonbozik: ['H2'] },
+    },
     leiras: [
       'Három switch van sorban: SW1 – SW2 – SW3. A VLAN-okat csak SW1-en szeretnénk karbantartani, a többi '
         + 'switch a VTP (VLAN Trunking Protocol) segítségével kapja meg őket. SW2 középen transparent módban lesz: '
@@ -22,7 +41,7 @@
     lepesek: [
       {
         cel: 'SW3 régi beállításai ne írhassák felül a hálózatot: SW3 legyen VTP-kliens, nullázott revíziószámmal.',
-        parancsok: 'SW3: `show vtp status` (a revízió 15!), majd `vtp mode transparent`, `vtp mode client`',
+        parancsok: 'SW3: `show vtp status` (a revízió {REVIZIO}!), majd `vtp mode transparent`, `vtp mode client`',
         tippek: [
           'Nézd meg SW3 VTP-állapotát: mekkora a „Configuration Revision”?',
           'A revíziót egy olyan szerepváltás nullázza, amelyben a switch nem vesz részt a VTP-ben. '
@@ -30,8 +49,8 @@
         ],
       },
       {
-        cel: 'Mindhárom switch ugyanabban a VTP-tartományban legyen (ROUTERRANTOTTA), ugyanazzal a jelszóval (Rantotta2026).',
-        parancsok: 'Mindhárom switchen: `vtp domain ROUTERRANTOTTA`, `vtp password Rantotta2026`',
+        cel: 'Mindhárom switch ugyanabban a VTP-tartományban legyen ({TARTOMANY}), ugyanazzal a jelszóval ({JELSZO}).',
+        parancsok: 'Mindhárom switchen: `vtp domain {TARTOMANY}`, `vtp password {JELSZO}`',
         tippek: ['Mindkét beállítás globális konfigurációs módban, a `vtp` szóval kezdődik. A tartománynév kis- és nagybetű-érzékeny!'],
       },
       {
@@ -43,16 +62,16 @@
         ],
       },
       {
-        cel: 'A hálózatban legyen 10-es VLAN IRODA és 20-as VLAN RAKTAR néven – a VTP-n keresztül eljutva SW3-ra is.',
-        parancsok: 'SW1: `vlan 10`, `name IRODA`, `vlan 20`, `name RAKTAR`',
+        cel: 'A hálózatban legyen {VLAN1|es} VLAN {NEV1} és {VLAN2|es} VLAN {NEV2} néven – a VTP-n keresztül eljutva SW3-ra is.',
+        parancsok: 'SW1: `vlan {VLAN1}`, `name {NEV1}`, `vlan {VLAN2}`, `name {NEV2}`',
         tippek: [
           'VLAN-t csak a serveren érdemes létrehozni: a kliensen nem is lehet.',
           'A tartomány és a jelszó legyen már beállítva, mielőtt létrehozod a VLAN-okat – a tartománynév megadása nullázza a revíziót.',
         ],
       },
       {
-        cel: 'SW2-n a forgalom átmenjen a 10-es és 20-as VLAN-ban, és legyen egy csak helyben használt VLAN is: 99 SAJAT.',
-        parancsok: 'SW2: `vlan 10`, `vlan 20`, `vlan 99`, `name SAJAT`',
+        cel: 'SW2-n a forgalom átmenjen {VLAN1|aes} és {VLAN2|es} VLAN-ban, és legyen egy csak helyben használt VLAN is: {HELYI} {NEVH}.',
+        parancsok: 'SW2: `vlan {VLAN1}`, `vlan {VLAN2}`, `vlan {HELYI}`, `name {NEVH}`',
         tippek: [
           'A transparent switch nem veszi át a hirdetett VLAN-okat – amit használni akar, azt magának kell létrehoznia.',
         ],
@@ -66,22 +85,22 @@
         ],
       },
       {
-        cel: 'SW1-en és SW3-on a Fa0/1 port access port legyen a 10-es VLAN-ban, a Fa0/2 a 20-asban.',
-        parancsok: '`interface fa0/1`, `switchport mode access`, `switchport access vlan 10`; '
-          + '`interface fa0/2`, `switchport mode access`, `switchport access vlan 20`',
+        cel: 'SW1-en és SW3-on a Fa0/1 port access port legyen {VLAN1|aes} VLAN-ban, a Fa0/2 {VLAN2|aes} VLAN-ban.',
+        parancsok: '`interface fa0/1`, `switchport mode access`, `switchport access vlan {VLAN1}`; '
+          + '`interface fa0/2`, `switchport mode access`, `switchport access vlan {VLAN2}`',
         tippek: ['A VTP csak a VLAN-ok listáját terjeszti; a portok beállítását minden switchen külön kell elvégezni.'],
       },
       {
         cel: 'Győződj meg róla, hogy SW3 átvette a VLAN-okat, a régi VLAN-ok eltűntek, és PC1 eléri PC3-at, PC2 a PC4-et.',
-        parancsok: '`show vtp status` és `show vlan brief` mindhárom switchen; PC1-en `ping 192.168.10.13`. Végül: Ellenőrzés.',
+        parancsok: '`show vtp status` és `show vlan brief` mindhárom switchen; PC1-en `ping 192.168.{VLAN1}.{H3}`. Végül: Ellenőrzés.',
         tippek: ['Hasonlítsd össze a revíziószámokat: SW1-nek és SW3-nak egyeznie kell, SW2-é 0.'],
       },
     ],
     cimterv: [
-      { eszkoz: 'PC1', ip: '192.168.10.11', maszk: '255.255.255.0', vlan: 10, hova: 'SW1 Fa0/1' },
-      { eszkoz: 'PC2', ip: '192.168.20.12', maszk: '255.255.255.0', vlan: 20, hova: 'SW1 Fa0/2' },
-      { eszkoz: 'PC3', ip: '192.168.10.13', maszk: '255.255.255.0', vlan: 10, hova: 'SW3 Fa0/1' },
-      { eszkoz: 'PC4', ip: '192.168.20.14', maszk: '255.255.255.0', vlan: 20, hova: 'SW3 Fa0/2' },
+      { eszkoz: 'PC1', ip: '192.168.{VLAN1}.{H1}', maszk: '255.255.255.0', vlan: '{VLAN1}', hova: 'SW1 Fa0/1' },
+      { eszkoz: 'PC2', ip: '192.168.{VLAN2}.{H2}', maszk: '255.255.255.0', vlan: '{VLAN2}', hova: 'SW1 Fa0/2' },
+      { eszkoz: 'PC3', ip: '192.168.{VLAN1}.{H3}', maszk: '255.255.255.0', vlan: '{VLAN1}', hova: 'SW3 Fa0/1' },
+      { eszkoz: 'PC4', ip: '192.168.{VLAN2}.{H4}', maszk: '255.255.255.0', vlan: '{VLAN2}', hova: 'SW3 Fa0/2' },
     ],
     topologia: {
       meret: { szel: 1090, mag: 400 },
@@ -104,38 +123,38 @@
       ],
     },
     kiindulo: {
-      PC1: { ip: '192.168.10.11', maszk: '255.255.255.0' },
-      PC2: { ip: '192.168.20.12', maszk: '255.255.255.0' },
-      PC3: { ip: '192.168.10.13', maszk: '255.255.255.0' },
-      PC4: { ip: '192.168.20.14', maszk: '255.255.255.0' },
-      // A „régi labor” maradványa: ugyanaz a tartomány és jelszó, de 15-ös revízió és régi VLAN-ok.
+      PC1: { ip: '192.168.{VLAN1}.{H1}', maszk: '255.255.255.0' },
+      PC2: { ip: '192.168.{VLAN2}.{H2}', maszk: '255.255.255.0' },
+      PC3: { ip: '192.168.{VLAN1}.{H3}', maszk: '255.255.255.0' },
+      PC4: { ip: '192.168.{VLAN2}.{H4}', maszk: '255.255.255.0' },
+      // A „régi labor” maradványa: ugyanaz a tartomány és jelszó, de {REVIZIO|es} revízió és régi VLAN-ok.
       SW3: {
-        vtp: { mod: 'server', tartomany: 'ROUTERRANTOTTA', jelszo: 'Rantotta2026', verzio: 1, revizio: 15 },
-        vlanok: { 10: 'REGI_LABOR', 30: 'TESZT' },
+        vtp: { mod: 'server', tartomany: '{TARTOMANY}', jelszo: '{JELSZO}', verzio: 1, revizio: '{REVIZIO}' },
+        vlanok: { '{VLAN1}': 'REGI_LABOR', '{REGI}': 'TESZT' },
       },
     },
     celok: [
-      { tipus: 'vtp', eszkoz: 'SW1', mod: 'server', tartomany: 'ROUTERRANTOTTA', jelszo: 'Rantotta2026', verzio: 2, szoveg: 'SW1: VTP server, ROUTERRANTOTTA, jelszó, version 2' },
-      { tipus: 'vtp', eszkoz: 'SW2', mod: 'transparent', tartomany: 'ROUTERRANTOTTA', jelszo: 'Rantotta2026', verzio: 2, szoveg: 'SW2: VTP transparent, ROUTERRANTOTTA, jelszó, version 2' },
-      { tipus: 'vtp', eszkoz: 'SW3', mod: 'client', tartomany: 'ROUTERRANTOTTA', jelszo: 'Rantotta2026', verzio: 2, szoveg: 'SW3: VTP client, ROUTERRANTOTTA, jelszó, version 2 (a servertől)' },
+      { tipus: 'vtp', eszkoz: 'SW1', mod: 'server', tartomany: '{TARTOMANY}', jelszo: '{JELSZO}', verzio: 2, szoveg: 'SW1: VTP server, {TARTOMANY}, jelszó, version 2' },
+      { tipus: 'vtp', eszkoz: 'SW2', mod: 'transparent', tartomany: '{TARTOMANY}', jelszo: '{JELSZO}', verzio: 2, szoveg: 'SW2: VTP transparent, {TARTOMANY}, jelszó, version 2' },
+      { tipus: 'vtp', eszkoz: 'SW3', mod: 'client', tartomany: '{TARTOMANY}', jelszo: '{JELSZO}', verzio: 2, szoveg: 'SW3: VTP client, {TARTOMANY}, jelszó, version 2 (a servertől)' },
       { tipus: 'trunk', eszkoz: 'SW1', port: 'GigabitEthernet0/1', szoveg: 'SW1 Gi0/1 – SW2 Gi0/1: működő trunk' },
       { tipus: 'trunk', eszkoz: 'SW2', port: 'GigabitEthernet0/2', szoveg: 'SW2 Gi0/2 – SW3 Gi0/1: működő trunk' },
-      { tipus: 'vlan', eszkoz: 'SW1', vlan: 10, nev: 'IRODA', szoveg: 'SW1: 10-es VLAN, neve IRODA' },
-      { tipus: 'vlan', eszkoz: 'SW1', vlan: 20, nev: 'RAKTAR', szoveg: 'SW1: 20-as VLAN, neve RAKTAR' },
+      { tipus: 'vlan', eszkoz: 'SW1', vlan: '{VLAN1}', nev: '{NEV1}', szoveg: 'SW1: {VLAN1|es} VLAN, neve {NEV1}' },
+      { tipus: 'vlan', eszkoz: 'SW1', vlan: '{VLAN2}', nev: '{NEV2}', szoveg: 'SW1: {VLAN2|es} VLAN, neve {NEV2}' },
       { tipus: 'vtp-szinkron', eszkoz: 'SW3', forras: 'SW1', szoveg: 'SW3 a VTP-n át átvette SW1 VLAN-jait (azonos revízió, azonos VLAN-ok)' },
-      { tipus: 'vlan', eszkoz: 'SW2', vlan: 10, szoveg: 'SW2: van 10-es VLAN (transparent: kézzel)' },
-      { tipus: 'vlan', eszkoz: 'SW2', vlan: 20, szoveg: 'SW2: van 20-as VLAN (transparent: kézzel)' },
-      { tipus: 'vlan', eszkoz: 'SW2', vlan: 99, nev: 'SAJAT', szoveg: 'SW2: helyi VLAN 99 SAJAT' },
-      { tipus: 'access-port', eszkoz: 'SW1', port: 'FastEthernet0/1', vlan: 10, szoveg: 'SW1 Fa0/1 (PC1): access, VLAN 10' },
-      { tipus: 'access-port', eszkoz: 'SW1', port: 'FastEthernet0/2', vlan: 20, szoveg: 'SW1 Fa0/2 (PC2): access, VLAN 20' },
-      { tipus: 'access-port', eszkoz: 'SW3', port: 'FastEthernet0/1', vlan: 10, szoveg: 'SW3 Fa0/1 (PC3): access, VLAN 10' },
-      { tipus: 'access-port', eszkoz: 'SW3', port: 'FastEthernet0/2', vlan: 20, szoveg: 'SW3 Fa0/2 (PC4): access, VLAN 20' },
-      { tipus: 'ping', honnan: 'PC1', cel: 'PC3', vart: true, szoveg: 'Ping PC1 → PC3 megy (VLAN 10, három switchen át)' },
-      { tipus: 'ping', honnan: 'PC2', cel: 'PC4', vart: true, szoveg: 'Ping PC2 → PC4 megy (VLAN 20, három switchen át)' },
-      { tipus: 'vlan-nincs', eszkoz: 'SW1', vlan: 30, ellenproba: true, szoveg: 'Ellenpróba: a régi labor VLAN-jai nem írták felül SW1-et (nincs 30-as VLAN)' },
-      { tipus: 'vlan-nincs', eszkoz: 'SW3', vlan: 30, ellenproba: true, szoveg: 'Ellenpróba: a régi 30-as VLAN eltűnt SW3-ról is' },
-      { tipus: 'vlan-nincs', eszkoz: 'SW1', vlan: 99, ellenproba: true, szoveg: 'Ellenpróba: SW2 helyi VLAN-ja (99) nem került át SW1-re' },
-      { tipus: 'vlan-nincs', eszkoz: 'SW3', vlan: 99, ellenproba: true, szoveg: 'Ellenpróba: SW2 helyi VLAN-ja (99) nem került át SW3-ra' },
+      { tipus: 'vlan', eszkoz: 'SW2', vlan: '{VLAN1}', szoveg: 'SW2: van {VLAN1|es} VLAN (transparent: kézzel)' },
+      { tipus: 'vlan', eszkoz: 'SW2', vlan: '{VLAN2}', szoveg: 'SW2: van {VLAN2|es} VLAN (transparent: kézzel)' },
+      { tipus: 'vlan', eszkoz: 'SW2', vlan: '{HELYI}', nev: '{NEVH}', szoveg: 'SW2: helyi VLAN {HELYI} {NEVH}' },
+      { tipus: 'access-port', eszkoz: 'SW1', port: 'FastEthernet0/1', vlan: '{VLAN1}', szoveg: 'SW1 Fa0/1 (PC1): access, VLAN {VLAN1}' },
+      { tipus: 'access-port', eszkoz: 'SW1', port: 'FastEthernet0/2', vlan: '{VLAN2}', szoveg: 'SW1 Fa0/2 (PC2): access, VLAN {VLAN2}' },
+      { tipus: 'access-port', eszkoz: 'SW3', port: 'FastEthernet0/1', vlan: '{VLAN1}', szoveg: 'SW3 Fa0/1 (PC3): access, VLAN {VLAN1}' },
+      { tipus: 'access-port', eszkoz: 'SW3', port: 'FastEthernet0/2', vlan: '{VLAN2}', szoveg: 'SW3 Fa0/2 (PC4): access, VLAN {VLAN2}' },
+      { tipus: 'ping', honnan: 'PC1', cel: 'PC3', vart: true, szoveg: 'Ping PC1 → PC3 megy (VLAN {VLAN1}, három switchen át)' },
+      { tipus: 'ping', honnan: 'PC2', cel: 'PC4', vart: true, szoveg: 'Ping PC2 → PC4 megy (VLAN {VLAN2}, három switchen át)' },
+      { tipus: 'vlan-nincs', eszkoz: 'SW1', vlan: '{REGI}', ellenproba: true, szoveg: 'Ellenpróba: a régi labor VLAN-jai nem írták felül SW1-et (nincs {REGI|es} VLAN)' },
+      { tipus: 'vlan-nincs', eszkoz: 'SW3', vlan: '{REGI}', ellenproba: true, szoveg: 'Ellenpróba: a régi {REGI|es} VLAN eltűnt SW3-ról is' },
+      { tipus: 'vlan-nincs', eszkoz: 'SW1', vlan: '{HELYI}', ellenproba: true, szoveg: 'Ellenpróba: SW2 helyi VLAN-ja ({HELYI}) nem került át SW1-re' },
+      { tipus: 'vlan-nincs', eszkoz: 'SW3', vlan: '{HELYI}', ellenproba: true, szoveg: 'Ellenpróba: SW2 helyi VLAN-ja ({HELYI}) nem került át SW3-ra' },
       {
         tipus: 'szoras', honnan: 'PC1', elerje: ['PC3'], neErje: ['PC2', 'PC4'], ellenproba: true,
         szoveg: 'Ellenpróba: PC1 szórása csak PC3-hoz jut el, PC2-höz és PC4-hez nem',
@@ -164,8 +183,8 @@
         cim: 'A revíziószám – és a csapda',
         szoveg: [
           'Minden switch azt az adatbázist tartja meg, amelyiknek NAGYOBB a revíziószáma. Ez akkor is igaz, ha a '
-            + 'nagyobb számú switch kliens! SW3 egy régi laborból jött 15-ös revízióval: ha a nullázása nélkül '
-            + 'kerül a tartományba, a régi VLAN-jai (10 REGI_LABOR, 30 TESZT) mindenhol felülírják a jókat – '
+            + 'nagyobb számú switch kliens! SW3 egy régi laborból jött {REVIZIO|es} revízióval: ha a nullázása nélkül '
+            + 'kerül a tartományba, a régi VLAN-jai ({VLAN1} REGI_LABOR, {REGI} TESZT) mindenhol felülírják a jókat – '
             + 'és az irodai portok egyszerre rossz VLAN-ba, vagy nem létező VLAN-ba kerülnek.',
           'Nullázni kétféleképpen lehet: transparent módba kapcsolással (`vtp mode transparent`, utána vissza), vagy '
             + 'a tartománynév megváltoztatásával. A server → client váltás NEM nulláz!',
@@ -195,8 +214,8 @@
         cim: 'Miért kellett SW2-n kézzel létrehozni a VLAN-okat?',
         szoveg: [
           'A transparent switch nem veszi át a hirdetett VLAN-okat. A PC1 → PC3 forgalom viszont rajta megy át, '
-            + 'a trunkon VLAN 10-es címkével – és ha SW2-n nincs 10-es VLAN, eldobja a keretet (a rajzon ✕ jelzi). '
-            + 'A helyi 99-es VLAN pedig azért nem jut el SW1-re és SW3-ra, mert a transparent switch a saját VLAN-jait nem hirdeti.',
+            + 'a trunkon VLAN {VLAN1|es} címkével – és ha SW2-n nincs {VLAN1|es} VLAN, eldobja a keretet (a rajzon ✕ jelzi). '
+            + 'A helyi {HELYI|es} VLAN pedig azért nem jut el SW1-re és SW3-ra, mert a transparent switch a saját VLAN-jait nem hirdeti.',
         ],
       },
       {

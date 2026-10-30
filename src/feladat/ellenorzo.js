@@ -17,6 +17,11 @@
 import { uzemmod } from '../mag/kapcsolas.js';
 import { egyPing, szorasProba } from '../mag/vegpont.js';
 import { portKeres } from '../modell/switch.js';
+import { esRag, nevelo } from '../magyar.js';
+
+/** „a 10-es” / „az 5-ös” */
+const aVlan = (n) => `${nevelo(n)} ${esRag(n)}`;
+const AVlan = (n) => { const t = aVlan(n); return t[0].toUpperCase() + t.slice(1); };
 
 /**
  * @typedef {Object} Eredmeny
@@ -35,7 +40,7 @@ const ALLAPOT_CELOK = {
   vlan(f, c) {
     const sw = f.eszkoz(c.eszkoz);
     const v = sw.vlanok[c.vlan];
-    if (!v) return { ok: false, megjegyzes: `A(z) ${c.vlan}-es VLAN nincs létrehozva (${c.eszkoz}).` };
+    if (!v) return { ok: false, megjegyzes: `${AVlan(c.vlan)} VLAN nincs létrehozva (${c.eszkoz}).` };
     if (c.nev && v.nev !== c.nev) return { ok: false, megjegyzes: `A VLAN neve most: ${v.nev} (${c.nev} kellene).` };
     return { ok: true, megjegyzes: `Megvan: ${c.vlan} ${v.nev}` };
   },
@@ -45,8 +50,8 @@ const ALLAPOT_CELOK = {
     const p = portKeres(sw, c.port);
     const hibak = [];
     if (p.mod !== 'access') hibak.push(`a port üzemmódja most ${MOD_SZOVEG[p.mod]} (access kellene)`);
-    if (p.accessVlan !== c.vlan) hibak.push(`a port most a(z) ${p.accessVlan}-es VLAN-ban van`);
-    else if (!sw.vlanok[c.vlan]) hibak.push(`a(z) ${c.vlan}-es VLAN nem létezik ezen a switchen`);
+    if (p.accessVlan !== c.vlan) hibak.push(`a port most ${aVlan(p.accessVlan)} VLAN-ban van`);
+    else if (!sw.vlanok[c.vlan]) hibak.push(`${aVlan(c.vlan)} VLAN nem létezik ezen a switchen`);
     if (p.leallitva) hibak.push('a port le van kapcsolva (shutdown)');
     if (hibak.length) return { ok: false, megjegyzes: hibak.join('; ') + '.' };
     return { ok: true, megjegyzes: `access, VLAN ${c.vlan}` };
@@ -70,8 +75,8 @@ const ALLAPOT_CELOK = {
   'vlan-nincs'(f, c) {
     const sw = f.eszkoz(c.eszkoz);
     const v = sw.vlanok[c.vlan];
-    if (v) return { ok: false, megjegyzes: `A(z) ${c.vlan}-es VLAN (${v.nev}) megvan ${c.eszkoz}-en, pedig itt nem szabadna lennie.` };
-    return { ok: true, megjegyzes: `A(z) ${c.vlan}-es VLAN nincs ${c.eszkoz}-en – ahogy kell.` };
+    if (v) return { ok: false, megjegyzes: `${AVlan(c.vlan)} VLAN (${v.nev}) megvan ezen: ${c.eszkoz}, pedig itt nem szabadna lennie.` };
+    return { ok: true, megjegyzes: `${AVlan(c.vlan)} VLAN nincs ezen: ${c.eszkoz} – ahogy kell.` };
   },
 
   vtp(f, c) {

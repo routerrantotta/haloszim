@@ -2,6 +2,24 @@
 
 A legújabb van felül.
 
+## v0.5 – 2026-10-30 – Véletlen adatok, megosztható változatok
+
+- **Gyakorló és Vizsga módban minden indításkor más adatok:** VLAN-számok (2–254), VLAN-nevek, IP-címek
+  (a harmadik bájt a VLAN száma, a gépek száma is véletlen), és a VTP-feladatban a tartománynév, a jelszó, a
+  helyi és a „régi” VLAN, valamint a csapda revíziószáma. A szövegek, a címterv, a teendők, a tippek, a magyarázat
+  és az ellenőrzés is ehhez igazodik. **Oktató módban** maradnak az alapadatok (VLAN 10 IRODA …).
+- **Változatszám és link:** a panelen „Véletlen adatok – változat: #12345”, és **Link másolása** gomb. A link
+  (`?feladat=…&mod=…&mag=12345`) mindenkinek pontosan ugyanazt a változatot adja – pl. a tanár így adhat ki
+  egy vizsgát az osztálynak. (Ha a böngésző nem engedi a vágólapot, a link kijelölve megjelenik.)
+- **Új változat** gomb (gyakorló és vizsga módban): ugyanaz a feladat más adatokkal. Az **Újrakezdés** ugyanazt a
+  változatot indítja újra.
+- **Feladatfájl:** új `valtozok` mező (szabályok: szám tartománnyal, lista, jelszó; „különbözzön ettől”), a
+  szövegekben helyőrzők: `{VLAN1}`, `{VLAN1|es}` → „10-es”, `{VLAN1|aes}` → „a 10-es” (helyes magyar raggal és
+  névelővel: 20-as, az 5-ös, 140-es …). Új modulok: `src/feladat/veletlen.js`, `src/magyar.js`.
+- Javítva: a magyarázó üzenetekben a VLAN-szám ragja („a 20-as VLAN” a korábbi „20-es” helyett).
+- Tesztek: 300 változat feladatonként (nincs maradék helyőrző, különböző VLAN-ok), 8–8 véletlen változat teljes
+  megoldása és ellenőrzése, a VTP-csapda véletlen adatokkal is; 115 teszt.
+
 ## v0.4 – 2026-10-30 – Három mód: Oktató, Gyakorló, Vizsga
 
 - **Módválasztó** a feladatválasztó mellett: **Oktató | Gyakorló | Vizsga**. A mód az URL-be is bekerül

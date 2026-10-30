@@ -62,7 +62,7 @@ export class FeladatPanel {
   /**
    * @param {HTMLElement} szulo
    * @param {import('../feladat/betolto.js').BetoltottFeladat} f
-   * @param {{mod?: 'oktato'|'gyakorlo'|'vizsga', most?: () => number}} [beallitasok]
+   * @param {{mod?: 'oktato'|'gyakorlo'|'vizsga', most?: () => number, valtozatLink?: () => string}} [beallitasok]
    */
   constructor(szulo, f, beallitasok = {}) {
     this.f = f;
@@ -86,6 +86,7 @@ export class FeladatPanel {
     fej.append(elem('span', `hsz-panel__mod hsz-panel__mod--${this.mod}`, `${MODOK[this.mod].nev} mód`));
     this.doboz.append(fej);
     this.doboz.append(elem('p', 'hsz-panel__modleiras', MODOK[this.mod].leiras));
+    if (fd.mag !== null && fd.mag !== undefined) this.doboz.append(valtozatSor(fd.mag, beallitasok.valtozatLink));
 
     if (this.vizsga) {
       this.ora = elem('p', 'hsz-panel__ora');
@@ -313,6 +314,44 @@ export class FeladatPanel {
   leallit() {
     clearInterval(this.oraIdozito);
   }
+}
+
+/**
+ * „Változat: #12345 – Link másolása”: a tanár ezzel a linkkel ugyanazt a változatot adhatja
+ * mindenkinek. Ha a vágólap nem érhető el (pl. fájlként megnyitott oldalon), a link egy
+ * kijelölt szövegmezőben jelenik meg, onnan Ctrl+C-vel másolható.
+ */
+function valtozatSor(mag, link) {
+  const p = elem('p', 'hsz-panel__valtozat');
+  p.append(document.createTextNode('Véletlen adatok – változat: '), elem('b', '', `#${mag}`));
+  if (!link) return p;
+  const gomb = elem('button', 'hsz-tippgomb', 'Link másolása');
+  gomb.type = 'button';
+  gomb.title = 'Ezzel a linkkel bárki pontosan ezt a változatot kapja (pl. a tanár az osztálynak)';
+  const mezo = elem('input', 'hsz-panel__link');
+  mezo.type = 'text';
+  mezo.readOnly = true;
+  mezo.hidden = true;
+  mezo.setAttribute('aria-label', 'A változat linkje');
+  const megmutat = () => {
+    mezo.value = link();
+    mezo.hidden = false;
+    mezo.focus();
+    mezo.select();
+  };
+  gomb.addEventListener('click', () => {
+    const url = link();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(() => {
+        gomb.textContent = 'Kimásolva!';
+        setTimeout(() => { gomb.textContent = 'Link másolása'; }, 2000);
+      }, megmutat);
+    } else {
+      megmutat();
+    }
+  });
+  p.append(document.createTextNode(' '), gomb, mezo);
+  return p;
 }
 
 /** A címterv táblázata (cím + görgethető táblázat). */
