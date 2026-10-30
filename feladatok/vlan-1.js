@@ -6,7 +6,9 @@
  *
  * Felépítés:
  *   azon, tipus, cim, szint – azonosító, feladattípus (a választó első listája), cím, nehézség
- *   leiras, lepesek – a feladatpanel szövegei (a `…` közötti rész parancsként jelenik meg)
+ *   leiras – a feladatpanel bevezetője (parancs nélkül: a vizsga mód is mutatja)
+ *   lepesek – teendők: { cel (parancs nélkül), parancsok (oktató mód), tippek: [] (gyakorló mód) };
+ *             a szövegekben a `…` közötti rész parancsként (egyenközű betűvel) jelenik meg
  *   cimterv   – a PC-k tervezett címei (a panel táblázata és a ping-próbák célcímei)
  *   topologia – eszközök (típus, hely a rajzon: x, y) és kábelek [eszköz, port, eszköz, port]
  *   kiindulo  – kiinduló beállítások (itt nincs: a PC-k üresek, a switchek gyáriak)
@@ -27,13 +29,47 @@
         + 'Ehhez a két switch közötti kábelnek trunknak kell lennie: az viszi át mindkét VLAN forgalmát, '
         + '802.1Q-címkével megjelölve.',
     ],
+    // Teendők: cel = mit kell elérni (parancs nélkül – a gyakorló és a vizsga mód csak ezt mutatja),
+    // parancsok = hogyan (az oktató mód mutatja), tippek = fokozatos segítség a gyakorló módban.
     lepesek: [
-      'Mindkét switchen hozd létre a VLAN-okat: 10 – IRODA, 20 – RAKTAR (`vlan 10`, `name IRODA`).',
-      'Mindkét switchen: Fa0/1 → access port a 10-es VLAN-ban, Fa0/2 → access port a 20-as VLAN-ban '
-        + '(`switchport mode access`, `switchport access vlan 10`).',
-      'A két switch közötti Gi0/1 port legyen trunk (`switchport mode trunk`).',
-      'Kattints a PC-kre, és állítsd be az IP-címüket a táblázat szerint.',
-      'Próbáld ki: PC1-ről pingeld PC3-at, PC2-ről PC4-et. Végül nyomd meg az Ellenőrzés gombot.',
+      {
+        cel: 'Mindkét switchen legyen 10-es VLAN IRODA néven, és 20-as VLAN RAKTAR néven.',
+        parancsok: '`enable`, `configure terminal`, `vlan 10`, `name IRODA`, `exit`, `vlan 20`, `name RAKTAR`',
+        tippek: [
+          'A VLAN-t globális konfigurációs módban hozod létre; a nevét a VLAN saját almódjában adod meg.',
+          'A parancs neve maga a `vlan`, utána a szám; a név megadása: `name`.',
+        ],
+      },
+      {
+        cel: 'Mindkét switchen: a PC1/PC3 felé néző Fa0/1 port biztosan access port legyen a 10-es VLAN-ban, '
+          + 'a PC2/PC4 felé néző Fa0/2 port a 20-as VLAN-ban.',
+        parancsok: '`interface fa0/1`, `switchport mode access`, `switchport access vlan 10`; '
+          + '`interface fa0/2`, `switchport mode access`, `switchport access vlan 20`',
+        tippek: [
+          'Ez interfész-beállítás: előbb lépj be a port beállításaiba.',
+          'Két dolgot kell megadni a porton: az üzemmódot (access) és azt, hogy melyik VLAN-hoz tartozik. '
+            + 'Mindkettő a `switchport` paranccsal kezdődik.',
+        ],
+      },
+      {
+        cel: 'A két switch közötti kapcsolat (Gi0/1) vigye át mindkét VLAN forgalmát.',
+        parancsok: 'Mindkét switchen: `interface gi0/1`, `switchport mode trunk`',
+        tippek: [
+          'Egy kábelen több VLAN forgalma csak 802.1Q-címkével mehet át – az ilyen port neve trunk.',
+          'A port üzemmódját kell átállítani, ugyanazzal a paranccsal, mint az access portoknál.',
+        ],
+      },
+      {
+        cel: 'Minden PC kapja meg a címterv szerinti IP-címet és maszkot.',
+        parancsok: 'Kattints a PC-re, írd be az IP-címet és a maszkot (pl. 255.255.255.0 vagy /24), majd Mentés.',
+        tippek: ['A PC-k beállítása nem parancssorból megy: kattints a rajzon a gépre.'],
+      },
+      {
+        cel: 'Győződj meg róla, hogy az azonos VLAN-ú gépek elérik egymást a két switchen át, a különbözők nem.',
+        parancsok: 'PC1-en: `ping 192.168.10.13`; PC2-n: `ping 192.168.20.14`; switchen: `show vlan brief`, '
+          + '`show interfaces trunk`. Végül: Ellenőrzés.',
+        tippek: ['A PC parancssorában a `ping` paranccsal próbálhatod ki; a switchen a `show` parancsok mutatják az állapotot.'],
+      },
     ],
     cimterv: [
       { eszkoz: 'PC1', ip: '192.168.10.11', maszk: '255.255.255.0', vlan: 10, hova: 'SW1 Fa0/1' },

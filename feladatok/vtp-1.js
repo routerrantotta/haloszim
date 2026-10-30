@@ -14,19 +14,68 @@
       'Három switch van sorban: SW1 – SW2 – SW3. A VLAN-okat csak SW1-en szeretnénk karbantartani, a többi '
         + 'switch a VTP (VLAN Trunking Protocol) segítségével kapja meg őket. SW2 középen transparent módban lesz: '
         + 'továbbengedi a hirdetéseket, de a saját VLAN-jait maga kezeli.',
-      'Figyelem: SW3 egy régi laborból került ide, és még a régi beállításait őrzi. Nézd meg rajta a '
-        + '`show vtp status` kimenetét, mielőtt bármit összekötsz!',
+      'Figyelem: SW3 egy régi laborból került ide, és még a régi beállításait őrzi. Mielőtt bármit '
+        + 'összekötsz, nézd meg, milyen VTP-állapotban van!',
       'A PC-k IP-címe már be van állítva (lásd a címtervet).',
     ],
+    // Teendők: cel (parancs nélkül), parancsok (oktató mód), tippek (gyakorló mód) – lásd vlan-1.js.
     lepesek: [
-      'SW3: `show vtp status` – a revíziószám 15! Nullázd: `vtp mode transparent`, majd `vtp mode client`.',
-      'Mindhárom switchen: `vtp domain ROUTERRANTOTTA` és `vtp password Rantotta2026`.',
-      'SW1: server marad (gyári), `vtp version 2`. SW2: `vtp mode transparent`, `vtp version 2`.',
-      'SW1-en (a serveren) hozd létre a VLAN-okat: 10 – IRODA, 20 – RAKTAR.',
-      'SW2 transparent: itt kézzel kell létrehozni a 10-es és a 20-as VLAN-t, és egy helyi VLAN-t is: 99 – SAJAT.',
-      'Trunk minden switchek közötti porton: SW1 Gi0/1, SW2 Gi0/1 és Gi0/2, SW3 Gi0/1 – `switchport mode trunk`.',
-      'SW1-en és SW3-on: Fa0/1 → access, VLAN 10; Fa0/2 → access, VLAN 20.',
-      'Nézd meg: `show vtp status` és `show vlan brief` mindhárom switchen, majd ping PC1 → PC3. Végül: Ellenőrzés.',
+      {
+        cel: 'SW3 régi beállításai ne írhassák felül a hálózatot: SW3 legyen VTP-kliens, nullázott revíziószámmal.',
+        parancsok: 'SW3: `show vtp status` (a revízió 15!), majd `vtp mode transparent`, `vtp mode client`',
+        tippek: [
+          'Nézd meg SW3 VTP-állapotát: mekkora a „Configuration Revision”?',
+          'A revíziót egy olyan szerepváltás nullázza, amelyben a switch nem vesz részt a VTP-ben. '
+            + 'A server → client váltás NEM nulláz.',
+        ],
+      },
+      {
+        cel: 'Mindhárom switch ugyanabban a VTP-tartományban legyen (ROUTERRANTOTTA), ugyanazzal a jelszóval (Rantotta2026).',
+        parancsok: 'Mindhárom switchen: `vtp domain ROUTERRANTOTTA`, `vtp password Rantotta2026`',
+        tippek: ['Mindkét beállítás globális konfigurációs módban, a `vtp` szóval kezdődik. A tartománynév kis- és nagybetű-érzékeny!'],
+      },
+      {
+        cel: 'SW1 legyen a VTP-server, SW2 transparent; a tartomány a 2-es VTP-verziót használja.',
+        parancsok: 'SW1: `vtp version 2` (server gyárilag). SW2: `vtp mode transparent`, `vtp version 2`',
+        tippek: [
+          'A verziót a serveren elég beállítani, a hirdetés elviszi a kliensekhez – de a transparent switchhez nem.',
+          'A szerep: `vtp mode …`, a verzió: `vtp version …`.',
+        ],
+      },
+      {
+        cel: 'A hálózatban legyen 10-es VLAN IRODA és 20-as VLAN RAKTAR néven – a VTP-n keresztül eljutva SW3-ra is.',
+        parancsok: 'SW1: `vlan 10`, `name IRODA`, `vlan 20`, `name RAKTAR`',
+        tippek: [
+          'VLAN-t csak a serveren érdemes létrehozni: a kliensen nem is lehet.',
+          'A tartomány és a jelszó legyen már beállítva, mielőtt létrehozod a VLAN-okat – a tartománynév megadása nullázza a revíziót.',
+        ],
+      },
+      {
+        cel: 'SW2-n a forgalom átmenjen a 10-es és 20-as VLAN-ban, és legyen egy csak helyben használt VLAN is: 99 SAJAT.',
+        parancsok: 'SW2: `vlan 10`, `vlan 20`, `vlan 99`, `name SAJAT`',
+        tippek: [
+          'A transparent switch nem veszi át a hirdetett VLAN-okat – amit használni akar, azt magának kell létrehoznia.',
+        ],
+      },
+      {
+        cel: 'A switchek közötti kapcsolatok (SW1 Gi0/1 – SW2 Gi0/1, SW2 Gi0/2 – SW3 Gi0/1) vigyék át az összes VLAN forgalmát és a VTP-hirdetéseket.',
+        parancsok: 'SW1 és SW3: `interface gi0/1`, `switchport mode trunk`; SW2: `interface range gi0/1 - 2`, `switchport mode trunk`',
+        tippek: [
+          'A VTP-hirdetés csak trunkon megy át.',
+          'Eltérő tartományú switchek között a dinamikus egyeztetés (DTP) nem hoz létre trunkot – kapcsold be kifejezetten.',
+        ],
+      },
+      {
+        cel: 'SW1-en és SW3-on a Fa0/1 port access port legyen a 10-es VLAN-ban, a Fa0/2 a 20-asban.',
+        parancsok: '`interface fa0/1`, `switchport mode access`, `switchport access vlan 10`; '
+          + '`interface fa0/2`, `switchport mode access`, `switchport access vlan 20`',
+        tippek: ['A VTP csak a VLAN-ok listáját terjeszti; a portok beállítását minden switchen külön kell elvégezni.'],
+      },
+      {
+        cel: 'Győződj meg róla, hogy SW3 átvette a VLAN-okat, a régi VLAN-ok eltűntek, és PC1 eléri PC3-at, PC2 a PC4-et.',
+        parancsok: '`show vtp status` és `show vlan brief` mindhárom switchen; PC1-en `ping 192.168.10.13`. Végül: Ellenőrzés.',
+        tippek: ['Hasonlítsd össze a revíziószámokat: SW1-nek és SW3-nak egyeznie kell, SW2-é 0.'],
+      },
     ],
     cimterv: [
       { eszkoz: 'PC1', ip: '192.168.10.11', maszk: '255.255.255.0', vlan: 10, hova: 'SW1 Fa0/1' },

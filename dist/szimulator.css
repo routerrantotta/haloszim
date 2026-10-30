@@ -188,6 +188,43 @@
 .hsz-gomb--masodlagos { background: var(--hsz-feher); color: var(--hsz-fekete); }
 .hsz-gomb--masodlagos:hover:not(:disabled) { background: #fff; }
 
+/* módválasztó */
+.hsz-modok { display: inline-flex; border: 2px solid var(--hsz-fekete); border-radius: 999px; overflow: hidden; background: var(--hsz-feher); }
+.hsz-modgomb {
+  font: 700 .95rem var(--hsz-betu); color: var(--hsz-fekete);
+  background: transparent; border: 0; padding: .45rem .9rem; cursor: pointer;
+}
+.hsz-modgomb + .hsz-modgomb { border-left: 2px solid var(--hsz-fekete); }
+.hsz-modgomb:hover { background: #fff; }
+.hsz-modgomb--aktiv, .hsz-modgomb--aktiv:hover { background: var(--hsz-fekete); color: var(--hsz-sarga); }
+.hsz-modgomb:focus-visible { outline: 3px solid var(--hsz-yolk); outline-offset: -3px; }
+
+/* módok a panelen */
+.hsz-panel__mod { font-size: .75rem; border: 1.5px solid var(--hsz-fekete); border-radius: 999px; padding: 0 .55rem; background: var(--hsz-feher); }
+.hsz-panel__mod--vizsga { background: var(--hsz-fekete); color: var(--hsz-sarga); }
+.hsz-panel__mod--gyakorlo { background: var(--hsz-yolk); }
+.hsz-panel__modleiras { margin: .3rem 0 .4rem; font-size: .85rem; color: #57513c; }
+.hsz-panel__ora { margin: .2rem 0 .5rem; font: 700 .95rem var(--hsz-mono); }
+.hsz-panel__zarva { margin: 1rem 0 0; padding: .55rem .8rem; border: 2px dashed #a39c80; border-radius: .75rem; font-size: .88rem; color: #57513c; }
+.hsz-panel__gombok { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+
+/* teendők: cél, parancs, tippek */
+.hsz-lepes__cel { display: block; }
+.hsz-lepes__parancs { display: block; margin-top: .15rem; font-size: .88rem; color: #3b3826; }
+.hsz-lepes__parancs[hidden] { display: none; }
+.hsz-lepes__tippek { display: block; }
+.hsz-lepes__tipp { display: block; margin-top: .25rem; padding: .25rem .5rem; background: #fff6cf; border-left: 3px solid var(--hsz-yolk); border-radius: .25rem; font-size: .88rem; }
+.hsz-tippgomb {
+  margin-top: .25rem;
+  font: 700 .8rem var(--hsz-betu); color: var(--hsz-fekete);
+  background: var(--hsz-feher); border: 1.5px solid var(--hsz-fekete); border-radius: 999px;
+  padding: .1rem .7rem; cursor: pointer;
+}
+.hsz-tippgomb:hover:not(:disabled) { background: var(--hsz-sarga); }
+.hsz-tippgomb:disabled { opacity: .5; cursor: default; }
+.hsz-tippgomb:focus-visible { outline: 3px solid var(--hsz-yolk); outline-offset: 2px; }
+.hsz-cel__megj[hidden] { display: none; }
+
 /* ---------- PC-ablak ---------- */
 .hsz-pc-ablak { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); align-items: start; }
 @media (min-width: 900px) { .hsz-pc-ablak { grid-template-columns: 17rem minmax(0, 1fr); } }

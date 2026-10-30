@@ -5,7 +5,9 @@ Böngészőben futó, feladat-alapú hálózati szimulátor a [routerrantotta.hu
 **Kipróbálás:** https://routerrantotta.github.io/haloszim/ (fejlesztői kipróbáló oldal)
 
 Jelenleg (v0.3) két feladat van, legördülő listából választhatók: **VLAN-ok két switchen, trunkkel**
-(2 switch, 4 PC) és **VTP: server, transparent, client** (3 switch, 4 PC). Minden feladat végén magyarázat van. A switchek
+(2 switch, 4 PC) és **VTP: server, transparent, client** (3 switch, 4 PC). Minden feladat három módban
+játszható: **Oktató** (parancsokkal), **Gyakorló** (csak a cél, tippekkel), **Vizsga** (önellenőrzés, időméréssel,
+Beadás gombbal). Minden feladat végén magyarázat van. A switchek
 IOS-szerű parancssorral kezelhetők (módok, rövidítés, `?` súgó, Tab, előzmények, valódi hibaüzenetek), a PC-k egy
 ablakban (IP-beállítás, `ping`, `ipconfig`, `arp -a`). A csomagok mozgása látszik a rajzon, az Ellenőrzés gomb
 pedig eredményalapon – valódi ping- és szórásos próbákkal, ellenpróbával – nézi meg a megoldást.
@@ -22,7 +24,7 @@ Minden jog fenntartva – Horváth Gábor EV.
 
 A futtatáshoz semmit nem kell telepíteni: az `index.html` közvetlenül (akár fájlként, dupla kattintással is)
 megnyitható, mert a kész szimulátor a `dist/` mappában van, a feladatok a `feladatok/` mappában.
-Másik feladat az URL-ben választható: `index.html?feladat=vlan-1`.
+Feladat és mód az URL-ben is választható: `index.html?feladat=vtp-1&mod=vizsga` (mod: oktato, gyakorlo, vizsga).
 
 Fejlesztéshez (Node.js 20+):
 

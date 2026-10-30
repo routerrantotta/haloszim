@@ -2,6 +2,21 @@
 
 A legújabb van felül.
 
+## v0.4 – 2026-10-30 – Három mód: Oktató, Gyakorló, Vizsga
+
+- **Módválasztó** a feladatválasztó mellett: **Oktató | Gyakorló | Vizsga**. A mód az URL-be is bekerül
+  (`?feladat=vtp-1&mod=vizsga`). Ha a tanuló már dolgozott, feladat- vagy módváltás és Újrakezdés előtt rákérdez.
+- **Oktató mód:** mint eddig – a teendők mellett a parancsok, Ellenőrzés bármikor, a magyarázat lenyitható.
+- **Gyakorló mód:** a teendők csak a célt mondják ki (parancs nélkül). Teendőnként **Tipp** gomb, amely fokozatosan
+  segít; az utolsó tipp a megoldás. Sikeres ellenőrzéskor kiírja, hány tipp kellett.
+- **Vizsga mód:** csak a forgatókönyv és a követelmények; nincs parancs, nincs tipp, a magyarázat zárva.
+  Az idő mérődik. **Beadás** többször is lehet: ilyenkor csak a ✔/✘ látszik, a részletes okok nem.
+  Ha minden cél teljesül: „Sikeres vizsga!” idővel és a beadások számával, és megnyílik minden.
+  A **Feladom** gomb is megnyitja a parancsokat, a részletes okokat és a magyarázatot.
+- **Feladatfájl:** a teendők új alakja `{ cel, parancsok, tippek }` (a régi, szöveges alak is működik); mindkét
+  feladat átírva. A leírások parancs nélküliek, hogy a vizsga módban se áruljanak el semmit.
+- Új teszt a feladatfájlokra (a célok tényleg parancs nélküliek, minden teendőnek van parancsa és tippje); 109 teszt.
+
 ## v0.3 – 2026-10-30 – Feladatválasztó, VTP-feladat, magyarázatok
 
 - **Főoldal:** rövid bemutatás a szimulátorról; a „Mit próbálj ki?” lista helyett minden feladat saját magyarázatot kapott.
