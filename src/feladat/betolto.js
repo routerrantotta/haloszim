@@ -10,6 +10,7 @@ import { Halozat } from '../mag/halozat.js';
 import { ujSwitch2960 } from '../modell/switch.js';
 import { ujPc } from '../modell/pc.js';
 import { ipBeallit } from '../mag/vegpont.js';
+import { vtpIdozitoIndit } from '../mag/vtp.js';
 
 /** A betöltött feladatok listája (a feladatfájlok töltik fel). */
 export function feladatLista() {
@@ -54,12 +55,26 @@ export function feladatBetolt(feladat, beallitasok = {}) {
   for (const [a, pa, b, pb] of feladat.topologia.kabelek || []) {
     halozat.kabel(nevek.get(a), pa, nevek.get(b), pb);
   }
-  // Kiinduló beállítások (pl. egy PC-nek már van IP-címe).
+  // Kiinduló beállítások: PC-nél IP-cím; switchnél gépnév, VTP, VLAN-ok.
+  //   { PC1: { ip, maszk }, SW3: { vtp: { mod, tartomany, jelszo, verzio, revizio }, vlanok: { 10: 'NEV' } } }
   for (const [nev, beall] of Object.entries(feladat.kiindulo || {})) {
     const eszkoz = nevek.get(nev);
-    if (eszkoz.tipus === 'pc') ipBeallit(eszkoz, beall);
-    else if (beall.hostname) eszkoz.hostname = beall.hostname;
+    if (eszkoz.tipus === 'pc') {
+      ipBeallit(eszkoz, beall);
+      continue;
+    }
+    if (beall.hostname) eszkoz.hostname = beall.hostname;
+    const v = beall.vtp || {};
+    if (v.mod) eszkoz.vtpMod = v.mod;
+    if (v.tartomany) eszkoz.vtpTartomany = v.tartomany;
+    if (v.jelszo) eszkoz.vtpJelszo = v.jelszo;
+    if (v.verzio) eszkoz.vtpVerzio = v.verzio;
+    if (v.revizio) eszkoz.vtpRevizio = v.revizio;
+    for (const [szam, vnev] of Object.entries(beall.vlanok || {})) {
+      eszkoz.vlanok[szam] = { nev: vnev, gyari: false, tamogatott: true };
+    }
   }
+  vtpIdozitoIndit(halozat);
   return {
     feladat,
     halozat,

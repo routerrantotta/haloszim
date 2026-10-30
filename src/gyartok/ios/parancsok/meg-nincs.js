@@ -15,11 +15,12 @@ const MEG_NINCS = '(a szimulátorban még nincs meg)';
 
 /** Mód → a még hiányzó parancsok nevei (több szóból is állhat, pl. „switchport trunk”). */
 const LISTA = {
-  felhasznalo: ['connect', 'disconnect', 'ping', 'ssh', 'telnet', 'terminal', 'traceroute', 'show interfaces'],
+  felhasznalo: ['connect', 'disconnect', 'ping', 'ssh', 'telnet', 'terminal', 'traceroute', 'show interfaces', 'show vtp counters'],
   priv: ['clear', 'clock', 'connect', 'copy', 'debug', 'delete', 'dir', 'disconnect', 'erase', 'more',
-    'ping', 'reload', 'setup', 'ssh', 'telnet', 'terminal', 'traceroute', 'undebug', 'write', 'show interfaces'],
+    'ping', 'reload', 'setup', 'ssh', 'telnet', 'terminal', 'traceroute', 'undebug', 'write', 'show interfaces', 'show vtp counters'],
   konfig: ['aaa', 'access-list', 'banner', 'boot', 'cdp', 'clock', 'crypto', 'default', 'enable', 'ip',
-    'line', 'logging', 'mac', 'ntp', 'service', 'snmp-server', 'spanning-tree', 'username', 'vtp'],
+    'line', 'logging', 'mac', 'ntp', 'service', 'snmp-server', 'spanning-tree', 'username',
+    'vtp pruning', 'vtp interface', 'vtp file'],
   'konfig-if': ['cdp', 'channel-group', 'description', 'duplex', 'ip', 'spanning-tree', 'speed',
     'switchport trunk', 'switchport nonegotiate', 'switchport port-security', 'switchport voice'],
   'konfig-if-tartomany': ['cdp', 'channel-group', 'description', 'duplex', 'spanning-tree', 'speed',

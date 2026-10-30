@@ -22,7 +22,11 @@ export function konfiguracioTorzs(sw) {
   s.push(`hostname ${sw.hostname}`, '!');
   s.push('boot-start-marker', 'boot-end-marker', '!', '!');
   s.push('no aaa new-model', 'system mtu routing 1500');
-  if (sw.vtpMod !== 'server') s.push(`vtp mode ${sw.vtpMod}`);
+  // A VTP-beállítás a vlan.dat-ban van; a running-configban csak transparent módban látszik.
+  if (sw.vtpMod === 'transparent') {
+    if (sw.vtpTartomany) s.push(`vtp domain ${sw.vtpTartomany}`);
+    s.push('vtp mode transparent');
+  }
   s.push('!', '!', '!', '!', '!', '!');
   s.push('spanning-tree mode pvst', 'spanning-tree extend system-id', '!');
   s.push('vlan internal allocation policy ascending', '!');

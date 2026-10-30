@@ -16,6 +16,7 @@
 import { Ora, naploIdobelyeg } from './ido.js';
 import { kapcsoloFogad, macTorolPort } from './kapcsolas.js';
 import { vegpontFogad } from './vegpont.js';
+import { vtpTrunkValtozas } from './vtp.js';
 
 /** Ennyi idő után jön a „link up” üzenet a bekapcsolt porton (ms). */
 export const LINK_FEL_IDO = 1000;
@@ -168,6 +169,8 @@ export class Halozat {
           v.port.fent = true;
           this.naplo(v.eszkoz, `%LINEPROTO-5-UPDOWN: Line protocol on Interface ${v.port.nev}, changed state to up`);
         }
+        if (k.a.eszkoz.tipus === 'switch') vtpTrunkValtozas(k.a.eszkoz, k.a.port);
+        else if (k.b.eszkoz.tipus === 'switch') vtpTrunkValtozas(k.b.eszkoz, k.b.port);
         this.esemeny({ tipus: 'allapot' });
       }));
     }

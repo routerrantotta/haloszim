@@ -13,6 +13,18 @@ function elem(tag, osztaly, szoveg) {
   return e;
 }
 
+/**
+ * Szöveg elembe írása: a `…` közötti részek <code> elemmé válnak (parancsok).
+ * Csak szövegcsomópontokat készít (nincs innerHTML), így a feladatfájl szövege nem lehet kód.
+ */
+function szovegbe(cel, szoveg) {
+  String(szoveg).split('`').forEach((resz, i) => {
+    if (resz === '') return;
+    cel.append(i % 2 === 1 ? elem('code', 'hsz-kod', resz) : document.createTextNode(resz));
+  });
+  return cel;
+}
+
 /** Szünet két próba között (ms), hogy a csomagok ne keveredjenek a rajzon. */
 const PROBA_SZUNET = 500;
 
@@ -33,12 +45,12 @@ export class FeladatPanel {
     fej.append(elem('h2', 'hsz-panel__cim', fd.cim));
     if (fd.szint) fej.append(elem('span', 'hsz-panel__szint', fd.szint));
     this.doboz.append(fej);
-    for (const bek of fd.leiras || []) this.doboz.append(elem('p', 'hsz-panel__szoveg', bek));
+    for (const bek of fd.leiras || []) this.doboz.append(szovegbe(elem('p', 'hsz-panel__szoveg'), bek));
 
     if (fd.lepesek && fd.lepesek.length) {
       this.doboz.append(elem('h3', 'hsz-panel__alcim', 'Teendők'));
       const ol = elem('ol', 'hsz-panel__lepesek');
-      for (const l of fd.lepesek) ol.append(elem('li', '', l));
+      for (const l of fd.lepesek) ol.append(szovegbe(elem('li'), l));
       this.doboz.append(ol);
     }
 
@@ -68,10 +80,33 @@ export class FeladatPanel {
     this.osszegzes.setAttribute('role', 'status');
     this.lista = elem('ul', 'hsz-celok');
     this.lista.hidden = true;
+    // Magyarázat a feladat végén: lenyitható, bármikor elolvasható.
+    if (fd.magyarazat && fd.magyarazat.length) {
+      const d = elem('details', 'hsz-magyarazat');
+      d.append(elem('summary', 'hsz-magyarazat__cim', 'Magyarázat: mit, miért és miért így állítunk be?'));
+      for (const resz of fd.magyarazat) {
+        d.append(szovegbe(elem('h4', 'hsz-magyarazat__alcim'), resz.cim));
+        for (const bek of resz.szoveg || []) {
+          if (Array.isArray(bek)) {
+            const ul = elem('ul', 'hsz-magyarazat__lista');
+            for (const li of bek) ul.append(szovegbe(elem('li'), li));
+            d.append(ul);
+          } else {
+            d.append(szovegbe(elem('p', 'hsz-magyarazat__szoveg'), bek));
+          }
+        }
+      }
+      this.magyarazat = d;
+      this.doboz.append(d);
+    }
+
     // A gomb és az összegzés a panel alján marad (görgetéskor is látszik).
     const lab = elem('div', 'hsz-panel__lab');
     lab.append(this.osszegzes, this.gomb);
-    this.doboz.append(this.lista, lab);
+    // Az eredménylista a magyarázat elé kerül (közvetlenül a címterv után).
+    if (this.magyarazat) this.doboz.insertBefore(this.lista, this.magyarazat);
+    else this.doboz.append(this.lista);
+    this.doboz.append(lab);
     szulo.append(this.doboz);
   }
 

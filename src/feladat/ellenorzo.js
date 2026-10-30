@@ -67,6 +67,42 @@ const ALLAPOT_CELOK = {
     return { ok: true, megjegyzes: `Mindkét vég trunkként működik (${modok}).` };
   },
 
+  'vlan-nincs'(f, c) {
+    const sw = f.eszkoz(c.eszkoz);
+    const v = sw.vlanok[c.vlan];
+    if (v) return { ok: false, megjegyzes: `A(z) ${c.vlan}-es VLAN (${v.nev}) megvan ${c.eszkoz}-en, pedig itt nem szabadna lennie.` };
+    return { ok: true, megjegyzes: `A(z) ${c.vlan}-es VLAN nincs ${c.eszkoz}-en – ahogy kell.` };
+  },
+
+  vtp(f, c) {
+    const sw = f.eszkoz(c.eszkoz);
+    const hibak = [];
+    if (c.mod && sw.vtpMod !== c.mod) hibak.push(`a szerep most ${sw.vtpMod} (${c.mod} kellene)`);
+    if (c.tartomany !== undefined && sw.vtpTartomany !== c.tartomany) {
+      hibak.push(`a tartomány most ${sw.vtpTartomany ? `„${sw.vtpTartomany}”` : 'nincs megadva'} („${c.tartomany}” kellene; kis- és nagybetű számít)`);
+    }
+    if (c.jelszo !== undefined && sw.vtpJelszo !== c.jelszo) hibak.push(sw.vtpJelszo ? 'a jelszó nem egyezik' : 'nincs jelszó');
+    if (c.verzio && sw.vtpVerzio !== c.verzio) hibak.push(`a verzió most ${sw.vtpVerzio} (${c.verzio} kellene)`);
+    if (hibak.length) return { ok: false, megjegyzes: hibak.join('; ') + '.' };
+    return { ok: true, megjegyzes: `${sw.vtpMod}, tartomány: ${sw.vtpTartomany}, verzió: ${sw.vtpVerzio}, revízió: ${sw.vtpMod === 'transparent' ? 0 : sw.vtpRevizio}` };
+  },
+
+  'vtp-szinkron'(f, c) {
+    const sw = f.eszkoz(c.eszkoz);
+    const forras = f.eszkoz(c.forras);
+    const lista = (e) => Object.entries(e.vlanok).filter(([, v]) => !v.gyari).map(([n, v]) => `${n} ${v.nev}`).sort().join(', ');
+    const sajat = lista(sw);
+    const ott = lista(forras);
+    if (sw.vtpRevizio === forras.vtpRevizio && sajat === ott) {
+      return { ok: true, megjegyzes: `Azonos revízió (${sw.vtpRevizio}) és azonos VLAN-ok: ${sajat || '–'}.` };
+    }
+    let megj = `${c.eszkoz}: revízió ${sw.vtpRevizio}, VLAN-ok: ${sajat || '–'}. ${c.forras}: revízió ${forras.vtpRevizio}, VLAN-ok: ${ott || '–'}.`;
+    if (sw.vtpRevizio > forras.vtpRevizio) megj += ` ${c.eszkoz} revíziója nagyobb – ő írná felül a többieket!`;
+    else if (sw.vtpRevizio === forras.vtpRevizio) megj += ' Egyenlő revíziónál nincs átvétel: módosíts valamit a serveren (pl. hozz létre és törölj egy VLAN-t).';
+    else megj += ' A hirdetés nem ért ide: nézd meg a trunkokat, a tartománynevet, a jelszót és a köztes switch verzióját.';
+    return { ok: false, megjegyzes: megj };
+  },
+
   'pc-ip'(f, c) {
     const pc = f.eszkoz(c.eszkoz);
     if (!pc.ip) return { ok: false, megjegyzes: `${c.eszkoz}-nek még nincs IP-címe (kattints a gépre).` };

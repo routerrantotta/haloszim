@@ -28,8 +28,7 @@
   main{padding-bottom:2.5rem}
   h2{font-family:var(--display);font-size:1.4rem;margin:2rem 0 .5rem}
   code{font-family:Consolas,"Courier New",monospace;background:var(--white);padding:0 .3rem;border-radius:.3rem;white-space:nowrap}
-  .probak{columns:2 18rem;padding-left:1.2rem;margin:.5rem 0}
-  .probak li{break-inside:avoid;margin-bottom:.3rem}
+  .bevezeto{max-width:52rem}
   footer{border-top:2px solid var(--black);padding:1rem 0 2rem;font-size:.9rem}
   a{color:inherit}
 </style>
@@ -40,29 +39,15 @@
   <div class="wrap">
     <h1>Haloszim</h1>
     <p class="alcim">Hálózati szimulátor a routerrantotta.hu-hoz – <span class="figyelem">fejlesztői kipróbáló oldal</span></p>
-    <p>Az első feladat: két switch, négy PC, két VLAN és egy trunk. Kattints egy eszközre a rajzon (vagy a fülekre),
-       és gépelj a parancssorába. A PC-knél az IP-címet is ott állíthatod be.</p>
+    <p class="bevezeto">Böngészőben futó hálózati labor: switchek és PC-k, IOS-szerű parancssor, és a rajzon követhető,
+       ahogy a csomagok útnak indulnak. Válassz feladatot, oldd meg, és az <b>Ellenőrzés</b> gomb megmondja, valóban
+       működik-e a hálózat. Minden feladat végén magyarázat is van: mit, miért és miért úgy állítunk be.</p>
   </div>
 </header>
 
 <main class="wrap">
   <div id="hsz"><noscript>A szimulátorhoz be kell kapcsolni a JavaScriptet.</noscript></div>
 
-  <h2>Mit próbálj ki?</h2>
-  <ul class="probak">
-    <li>SW1-en: <code>en</code>, <code>conf t</code>, <code>vlan 10</code>, <code>name IRODA</code></li>
-    <li><code>int fa0/1</code>, <code>sw mo acc</code>, <code>sw acc vl 10</code></li>
-    <li><code>int g0/1</code>, <code>switchport mode trunk</code></li>
-    <li><code>do sh vl br</code>, <code>do sh int trunk</code></li>
-    <li><code>show interfaces status</code></li>
-    <li>ping után: <code>show mac address-table</code></li>
-    <li>PC1: IP-cím, maszk, Mentés, majd <code>ping 192.168.10.13</code></li>
-    <li>PC-n: <code>ipconfig</code>, <code>arp -a</code>, <code>help</code></li>
-    <li>Figyeld a rajzon: ARP-szórás, ping, VLAN-címke a trunkon</li>
-    <li><code>shutdown</code> a trunk porton – mi lesz a pinggel?</li>
-    <li>Csak az egyik oldalon trunk? Nézd meg: <code>sh int tr</code> a másikon</li>
-    <li>Végül: <b>Ellenőrzés</b> gomb a feladatpanelen</li>
-  </ul>
 </main>
 
 <footer>
@@ -73,7 +58,9 @@
 </footer>
 
 <script src="dist/szimulator.js"></script>
+<!-- A feladatok: egy feladat = egy fájl; a sorrend a választóban is ez lesz. -->
 <script src="feladatok/vlan-1.js"></script>
+<script src="feladatok/vtp-1.js"></script>
 <script>Haloszim.indit(document.getElementById('hsz'), { feladat: 'vlan-1' });</script>
 </body>
 </html>

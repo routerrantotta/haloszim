@@ -6,7 +6,7 @@
  * A rajzok saját készítésűek (nem gyártói ikonok).
  *
  * Az animáció a hálózat eseményeiből jön (mag/halozat.js): minden „keret” eseménynél egy
- * pötty végigcsúszik a kábelen. Színek: ARP = narancs, ping (ICMP) = fekete-sárga;
+ * pötty végigcsúszik a kábelen. Színek: ARP = narancs, ping (ICMP) = fekete-sárga, VTP = fehér rombusz;
  * a trunkon a 802.1Q-címke (VLAN-szám) a pötty fölött látszik. Eldobott keret: ✕ jel.
  */
 
@@ -58,6 +58,8 @@ export class Topologia {
   constructor(szulo, { elemek, halozat, meret }, beallitasok = {}) {
     this.elemek = elemek;
     this.halozat = halozat;
+    /** Van-e értelme a VTP-jelnek a jelmagyarázatban (legalább két switch). */
+    this.vanVtp = elemek.filter((e) => e.tipus === 'switch').length > 1;
     this.beallitasok = beallitasok;
     const m = meret || { szel: 800, mag: 400 };
 
@@ -94,6 +96,7 @@ export class Topologia {
     j.className = 'hsz-jelmagyarazat';
     j.innerHTML = '<span><i class="hsz-potty hsz-potty--arp"></i>ARP</span>'
       + '<span><i class="hsz-potty hsz-potty--icmp"></i>ping (ICMP)</span>'
+      + (this.vanVtp ? '<span><i class="hsz-potty hsz-potty--vtp"></i>VTP-hirdetés</span>' : '')
       + '<span><b class="hsz-cimke-minta">10</b>802.1Q-címke (VLAN)</span>'
       + '<span><b class="hsz-x-minta">✕</b>eldobott keret</span>'
       + '<span><i class="hsz-vonal-minta"></i>trunk</span>';
@@ -267,7 +270,8 @@ export class Topologia {
     const kr = this.kabelek.find((x) => x.k === this.halozat.kabelVege(e.honnan.eszkoz, e.honnan.port));
     if (!kr || typeof kr.ut.getTotalLength !== 'function') return;
     const elore = kr.k.a.eszkoz === e.honnan.eszkoz && kr.k.a.port === e.honnan.port;
-    const g = svg('g', { class: `hsz-csomag hsz-csomag--${e.keret.tipus === 'arp' ? 'arp' : 'icmp'}` });
+    const fajta = e.keret.tipus === 'arp' || e.keret.tipus === 'vtp' ? e.keret.tipus : 'icmp';
+    const g = svg('g', { class: `hsz-csomag hsz-csomag--${fajta}` });
     g.append(svg('circle', { r: 7 }));
     if (e.keret.vlan !== undefined) {
       const c = svg('g', { class: 'hsz-csomag__cimke', transform: 'translate(0 -16)' });
@@ -328,6 +332,11 @@ export class Topologia {
 
 /** A csomag rövid leírása (a pötty buboréka). */
 function csomagLeiras(k) {
+  if (k.tipus === 'vtp') {
+    const a = k.adat;
+    return `VTP-${a.keres ? 'kérés és hirdetés' : 'hirdetés'} (${a.kuldo}): tartomány ${a.tartomany}, revízió ${a.revizio}, `
+      + `VLAN-ok: ${Object.keys(a.vlanok).join(', ') || '–'}`;
+  }
   const cimke = k.vlan !== undefined ? ` – 802.1Q-címke: VLAN ${k.vlan}` : '';
   if (k.tipus === 'arp') {
     const a = k.adat;

@@ -13,6 +13,7 @@ import { SZO } from './alap.js';
 import { portKeres, alapVlanNev } from '../../../modell/switch.js';
 import { macTorolPort } from '../../../mag/kapcsolas.js';
 import { portValtozott } from '../../../mag/halozat.js';
+import { vtpVlanValtozas, vtpTrunkValtozas } from '../../../mag/vtp.js';
 
 const IF_MODOK = ['konfig-if', 'konfig-if-tartomany'];
 const SWITCHPORT = { szo: 'switchport', sugo: 'Kapcsolóport-beállítások (VLAN, üzemmód)' };
@@ -32,6 +33,7 @@ function portokra(ctx, fn) {
     const tul = ctx.eszkoz.halozat && ctx.eszkoz.halozat.szomszed(ctx.eszkoz, p);
     if (tul && tul.eszkoz.tipus === 'switch') macTorolPort(tul.eszkoz, tul.port.nev);
     portValtozott(ctx.eszkoz, p);
+    vtpTrunkValtozas(ctx.eszkoz, p);
   }
 }
 
@@ -68,13 +70,15 @@ export const switchportParancsok = [
     szavak: [SWITCHPORT, ACCESS, VLAN, { param: 'szam', kulcs: 'vlan', min: 1, max: 4094, sugo: 'A VLAN száma' }],
     vegrehajt(ctx, { vlan }) {
       const sw = ctx.eszkoz;
-      if (!sw.vlanok[vlan]) {
-        if (vlan >= KITERJESZTETT_TOL && sw.vtpMod === 'server') {
+      // Kliens módban a switch nem hozhat létre VLAN-t: a port beáll, de a VLAN-t a VTP-nek kell hoznia.
+      if (!sw.vlanok[vlan] && sw.vtpMod !== 'client') {
+        if (vlan >= KITERJESZTETT_TOL && sw.vtpMod !== 'transparent') {
           ctx.kiir('Extended VLAN(s) not allowed in current VTP mode.', '%Failed to commit extended VLAN(s) changes.');
           return;
         }
         ctx.kiir(`% Access VLAN does not exist. Creating vlan ${vlan}`);
         sw.vlanok[vlan] = { nev: alapVlanNev(vlan), gyari: false, tamogatott: true };
+        vtpVlanValtozas(sw);
       }
       portokra(ctx, (p) => {
         p.accessVlan = vlan;

@@ -1,6 +1,6 @@
 {
   "name": "haloszim",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Böngészőben futó, feladat-alapú hálózati szimulátor a routerrantotta.hu-hoz",
   "private": true,
   "type": "module",

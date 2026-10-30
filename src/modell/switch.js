@@ -39,11 +39,20 @@
  * @property {string} tipus     – "switch"
  * @property {string} modell    – "2960-24"
  * @property {string} hostname
- * @property {string} vtpMod    – "server" (gyári), később "transparent", "client"
+ * @property {string} vtpMod    – VTP-szerep: "server" (gyári), "client", "transparent"
  * @property {Object<number, Vlan>} vlanok – VLAN-szám → adatok
  * @property {Port[]} portok    – a portok a fizikai sorrendjükben
  * @property {MacBejegyzes[]} macTabla – a megtanult MAC-címek (MAC address table)
+ * @property {string} mac        – a switch saját (alap) MAC-címe (show vtp status: Device ID)
+ * @property {string} vtpTartomany – VTP-tartomány neve ('' = NULL, gyári)
+ * @property {string} vtpJelszo  – VTP-jelszó ('' = nincs)
+ * @property {number} vtpVerzio  – 1 vagy 2
+ * @property {number} vtpRevizio – a VLAN-adatbázis revíziószáma (configuration revision)
+ * @property {number|null} vtpModositva – mikor módosult utoljára (szimulált ms), null = soha
+ * @property {string|null} vtpMd5Hiba – melyik trunkon jött eltérő jelszavú hirdetés (rövid portnév)
  */
+
+import { macNevbol } from '../mag/ethernet.js';
 
 /** Az alapértelmezett gépnév. */
 export const ALAP_HOSTNAME = 'Switch';
@@ -93,6 +102,13 @@ export function ujSwitch2960(beallitasok = {}) {
     vlanok: gyariVlanok(),
     portok,
     macTabla: [],
+    mac: macNevbol('switch:' + (beallitasok.hostname || ALAP_HOSTNAME)),
+    vtpTartomany: '',
+    vtpJelszo: '',
+    vtpVerzio: 1,
+    vtpRevizio: 0,
+    vtpModositva: null,
+    vtpMd5Hiba: null,
   };
 }
 

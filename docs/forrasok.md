@@ -25,6 +25,9 @@ ezeket érdemes elsőként összevetni egy valódi eszközzel vagy újabb forrá
 | F11 | [Cisco Community – trunk portok egy Catalyst 2960-on](https://community.cisco.com/t5/switching/create-trunkports-on-catalyst-2960/m-p/2159710) | show interfaces trunk: a négy szakasz; link nélküli trunk port: status „other”, VLAN-listák „none” |
 | F12 | [administrator.de – show mac address-table IOS 15-ön](https://administrator.de/forum/cisco-switch-ios-15-show-mac-address-table-249926.html) | show mac address-table: fejléc, STATIC/CPU és DYNAMIC sorok, összesítő sor |
 | F13 | [Cisco Community – auto/auto: a-full, a-100](https://community.cisco.com/t5/switching/default-auto-negotiate-shows-a-full-a-100/td-p/4747925) | show interfaces status: valódi eszközön a-full / a-100 (a Packet Tracer itt „auto”-t mutat) |
+| F14 | [Cisco Community – VTP egy 2960XR-en](https://community.cisco.com/t5/switching/vtp-in-switch-2960xr/m-p/3192215) | show vtp status IOS 15-ös formája (VTP Version capable, Feature VLAN szakasz), `*** MD5 digest checksum mismatch on trunk: … ***` |
+| F15 | [UCG – Lab 3 (2017), VTP-gyakorlat](https://www.ucg.ac.me/skladiste/blog_2904/objava_20332/fajlovi/lab3_2017.pdf) | a vtp mode / domain / password válaszüzenetei, kliens VLAN-tiltás, régi (12.x) show vtp status |
+| F16 | [Cisco fórum – transparent → client váltás](https://supportforums.cisco.com/t5/switching/behavior-when-changing-vtp-transparent-to-vtp-client/m-p/1935598/highlight/true) | `Setting device to VTP CLIENT mode.`; transparentben a revízió 0, kliensként átveszi a server nagyobb revízióját |
 | E | Saját emlékezet (CCNA-oktatás, Packet Tracer-gyakorlat) | csak kiegészítésként; egyedül nem elég |
 
 ## Parancsok és üzenetek
@@ -63,7 +66,24 @@ ezeket érdemes elsőként összevetni egy valódi eszközzel vagy újabb forrá
 | Link le / fel | `%LINK-3-UPDOWN: Interface …, changed state to down/up`, utána `%LINEPROTO-5-UPDOWN: Line protocol on Interface …, changed state to down/up` (a szimulátorban 1 s, illetve 2 s múlva) | E | az időzítés: ellenőrizendő |
 | PC: `ping` | üres sor, `Pinging X with 32 bytes of data:`, `Reply from X: bytes=32 time<1ms TTL=128` / `Request timed out.` / `Reply from <saját IP>: Destination host unreachable.` / `PING: transmit failed. General failure.`; statisztika (`Packets: Sent = …, Received = …, Lost = … (…% loss),`) | E | ellenőrizendő (asztali gépek parancssorának formája; gyártónév nélkül) |
 | PC: `ipconfig`, `arp -a` | `Ethernet adapter FastEthernet0:`, pontozott címkék; `Interface: IP --- 0x2`, `Internet Address / Physical Address / Type` | E | ellenőrizendő |
+| `vtp mode …` | `Setting device to VTP SERVER/CLIENT/TRANSPARENT mode.`; ha már az: `Device mode already VTP SERVER.` | F15, F16 | rendben (régebbi IOS-forma; a 15.x a „… mode for VLANS.” alakot is írhatja: ellenőrizendő) |
+| `vtp domain …` | `Changing VTP domain name from NULL to X`; azonos névnél `Domain name already set to X.` | F15, E | a második: ellenőrizendő |
+| `vtp password …` / `no vtp password` | `Setting device VLAN database password to X` / `Clearing device VLAN database password.` | F15, E | a második: ellenőrizendő |
+| `vtp version` kliensen | `Cannot modify version in VTP client mode` | E | ellenőrizendő |
+| VLAN létrehozása kliensen | `VTP VLAN configuration not allowed when device is in CLIENT mode.` | F15, E | a % jel nélküli alak: ellenőrizendő |
+| `show vtp status` | IOS 15-ös forma: 7 fejsor (címke 32 karakteren, `: `), server esetén `Local updater ID …`, üres sor, `Feature VLAN:`, 14 kötőjel, 5 sor (címke 34 karakteren), MD5 két sorban 8-8 bájt; eltérő jelszónál `*** MD5 digest checksum mismatch on trunk: Gi0/1 ***` | F14, F15 | a pontos szélességek és a `3-1-93` dátumforma: ellenőrizendő |
+| `show vtp password` | `VTP Password: X`; ha nincs: `The VTP password is not configured.` | E | ellenőrizendő |
+| VTP a running-configban | csak transparent módban: `vtp domain X`, `vtp mode transparent`, és a VLAN-ok | F7, E | rendben |
 | `--More--` | 24 soros terminál: 23 sor, majd ` --More-- `; szóköz = oldal, Enter = sor, más = vége | E | ellenőrizendő |
+
+## Szándékos egyszerűsítések (v0.3-tól, VTP)
+
+- A VTP-hirdetés a szimulátorban egyetlen üzenet (a valódiban summary / subset / request), és a beállításváltozás vagy
+  a trunk feljötte után azonnal megy (kérés + válasz); 5 percenként is mindenki hirdet.
+- Minden VLAN-módosítás (létrehozás, átnevezés, törlés) külön +1 revízió – a valódi eszköz a vlan-almódból kilépéskor
+  ment, így ott kisebb lehet a szám.
+- Egyenlő revíziónál nincs átvétel (a valódi eszközön is így van), és nincs külön hibaüzenet.
+- VTP 3-as verzió, pruning, `vtp interface`, `vtp file` még nincs.
 
 ## Szándékos egyszerűsítések (v0.2-től)
 

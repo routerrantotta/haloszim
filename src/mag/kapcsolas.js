@@ -6,10 +6,13 @@
  *   - továbbítás: ismert cél → egy port; ismeretlen vagy szórás → az összes többi port
  *     abban a VLAN-ban (elárasztás); trunkon címkével, access porton címke nélkül,
  *   - DTP (egyszerűsítve): a „dynamic auto” port trunk lesz, ha a túloldal trunk vagy
- *     „dynamic desirable”; két „dynamic auto” port között nem lesz trunk.
+ *     „dynamic desirable”; két „dynamic auto” port között nem lesz trunk. Ha a két switch
+ *     VTP-tartományneve különbözik (és egyik sem üres), a dinamikus egyeztetés nem sikerül.
+ *   - A VTP-kereteket a switch nem továbbítja, hanem maga dolgozza fel (mag/vtp.js).
  */
 
 import { SZORAS } from './ethernet.js';
+import { vtpFogad } from './vtp.js';
 
 /** A MAC-bejegyzések élettartama (az IOS alapértéke 300 másodperc). */
 export const MAC_ELETKOR = 300000;
@@ -27,6 +30,10 @@ export function uzemmod(sw, port) {
   const tul = sw.halozat.szomszed(sw, port);
   if (!tul || tul.eszkoz.tipus !== 'switch') return 'access';
   const m = tul.port.mod;
+  // A DTP a VTP-tartománynevet is elküldi: eltérő nevek esetén nincs egyeztetett trunk.
+  const t1 = sw.vtpTartomany;
+  const t2 = tul.eszkoz.vtpTartomany;
+  if (t1 && t2 && t1 !== t2 && m !== 'trunk') return 'access';
   if (port.mod === 'dinamikus-auto') return m === 'trunk' || m === 'dinamikus-kezdemenyezo' ? 'trunk' : 'access';
   if (port.mod === 'dinamikus-kezdemenyezo') return m === 'access' ? 'access' : 'trunk';
   return 'access';
@@ -72,6 +79,7 @@ function macTanul(sw, vlan, mac, portNev, ido) {
  * @param {import('./halozat.js').Halozat} h
  */
 export function kapcsoloFogad(h, sw, port, keret) {
+  if (keret.tipus === 'vtp') return vtpFogad(h, sw, port, keret);
   let vlan;
   if (uzemmod(sw, port) === 'trunk') {
     vlan = keret.vlan !== undefined ? keret.vlan : port.nativVlan;

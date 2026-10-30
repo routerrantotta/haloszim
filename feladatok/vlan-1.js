@@ -5,16 +5,19 @@
  * és hozzáadja magát a HaloszimFeladatok listához. A szimulátort nem kell újraépíteni hozzá.
  *
  * Felépítés:
- *   azon, cim, szint, leiras, lepesek – a feladatpanel szövegei
+ *   azon, tipus, cim, szint – azonosító, feladattípus (a választó első listája), cím, nehézség
+ *   leiras, lepesek – a feladatpanel szövegei (a `…` közötti rész parancsként jelenik meg)
  *   cimterv   – a PC-k tervezett címei (a panel táblázata és a ping-próbák célcímei)
  *   topologia – eszközök (típus, hely a rajzon: x, y) és kábelek [eszköz, port, eszköz, port]
  *   kiindulo  – kiinduló beállítások (itt nincs: a PC-k üresek, a switchek gyáriak)
  *   celok     – az ellenőrzés céljai: állapot (vlan, access-port, trunk, pc-ip) és próbák
  *               (ping, szoras); az „ellenproba: true” jelöli, aminek NEM szabad működnie
+ *   magyarazat – a feladat végén lenyitható magyarázat: [{ cim, szoveg: [bekezdés | [listaelemek]] }]
  */
 (function (g) {
   (g.HaloszimFeladatok = g.HaloszimFeladatok || []).push({
     azon: 'vlan-1',
+    tipus: 'VLAN',
     cim: 'VLAN-ok két switchen, trunkkel',
     szint: 'kezdő',
     leiras: [
@@ -25,9 +28,10 @@
         + '802.1Q-címkével megjelölve.',
     ],
     lepesek: [
-      'Mindkét switchen hozd létre a VLAN-okat: 10 – IRODA, 20 – RAKTAR.',
-      'Mindkét switchen: Fa0/1 → access port a 10-es VLAN-ban, Fa0/2 → access port a 20-as VLAN-ban.',
-      'A két switch közötti Gi0/1 port legyen trunk.',
+      'Mindkét switchen hozd létre a VLAN-okat: 10 – IRODA, 20 – RAKTAR (`vlan 10`, `name IRODA`).',
+      'Mindkét switchen: Fa0/1 → access port a 10-es VLAN-ban, Fa0/2 → access port a 20-as VLAN-ban '
+        + '(`switchport mode access`, `switchport access vlan 10`).',
+      'A két switch közötti Gi0/1 port legyen trunk (`switchport mode trunk`).',
       'Kattints a PC-kre, és állítsd be az IP-címüket a táblázat szerint.',
       'Próbáld ki: PC1-ről pingeld PC3-at, PC2-ről PC4-et. Végül nyomd meg az Ellenőrzés gombot.',
     ],
@@ -81,6 +85,65 @@
         szoveg: 'Ellenpróba: PC2 szórása csak PC4-hez jut el, PC1-hez és PC3-hoz nem',
       },
       { tipus: 'ping', honnan: 'PC1', cel: 'PC2', vart: false, ellenproba: true, szoveg: 'Ellenpróba: ping PC1 → PC2 NEM megy (különböző VLAN)' },
+    ],
+    magyarazat: [
+      {
+        cim: 'Mi a VLAN, és miért kell?',
+        szoveg: [
+          'A VLAN egy switchen belüli „virtuális switch”: a 10-es VLAN portjai csak egymással beszélgetnek, a 20-as '
+            + 'VLAN portjai csak egymással – mintha két külön switch lenne. Így az irodai és a raktári gépek egy '
+            + 'eszközön osztoznak, mégis elkülönülnek: a szórásaik (broadcast) sem jutnak át a másik csoporthoz. '
+            + 'Ez biztonság és rend is: kisebb szórási tartomány, kevesebb fölösleges forgalom.',
+        ],
+      },
+      {
+        cim: 'Miért `switchport mode access`, ha a port magától is működne?',
+        szoveg: [
+          'A 2960 portja gyárilag „dynamic auto”: ha a túloldal trunkot kezdeményez, trunk lesz belőle. Egy PC-nek '
+            + 'szánt portnál ez kockázat (egy rosszindulatú eszköz trunkot nyithatna, és minden VLAN-hoz hozzáférne). '
+            + 'A `switchport mode access` kikapcsolja ezt az egyeztetést: a port biztosan access marad. '
+            + 'A `switchport access vlan 10` mondja meg, melyik VLAN-hoz tartozzon.',
+        ],
+      },
+      {
+        cim: 'Mit csinál a trunk és a 802.1Q-címke?',
+        szoveg: [
+          'A két switch között egyetlen kábel van, de mindkét VLAN forgalmának át kell rajta mennie. A trunk minden '
+            + 'keretre ráteszi a 802.1Q-címkét (a VLAN számát), így a túloldali switch tudja, melyik VLAN-ba tegye. '
+            + 'A rajzon ezt a pötty fölötti szám mutatja. A natív VLAN (gyárilag az 1-es) keretei címke nélkül mennek.',
+          'Ha csak az egyik oldalon kapcsolod be (`switchport mode trunk`), a másik, „dynamic auto” oldal a DTP '
+            + 'segítségével szintén trunk lesz – ezért fogadja el az ellenőrzés. A gyakorlatban mégis mindkét oldalon '
+            + 'érdemes kifejezetten beállítani: így nem függ az egyeztetéstől.',
+        ],
+      },
+      {
+        cim: 'Miért kellett mindkét switchen létrehozni a VLAN-okat?',
+        szoveg: [
+          'A switch csak olyan VLAN forgalmát továbbítja, amelyik nála létezik. Ha SW2-n nincs 10-es VLAN, a trunkon '
+            + 'érkező 10-es címkéjű keretet eldobja (a rajzon ✕). A VLAN-okat a VTP is szétoszthatná a switchek '
+            + 'között – erről szól a „VTP: server, transparent, client” feladat.',
+        ],
+      },
+      {
+        cim: 'Miért nem éri el PC1 a PC2-t?',
+        szoveg: [
+          'Két okból sem: más VLAN-ban vannak (más szórási tartomány, az ARP-kérdés el sem jut), és más IP-hálózatban '
+            + '(192.168.10.0/24 és 192.168.20.0/24). Két VLAN között csak egy router (vagy 3. rétegbeli switch) tud '
+            + 'forgalmat átvinni – ez egy későbbi feladat témája lesz (router-on-a-stick).',
+          'Ezért van két ellenpróba: a ping PC1 → PC2 nem mehet át, és a szórás sem juthat át a másik VLAN-ba. '
+            + 'Ha minden gép az 1-es VLAN-ban maradt volna, a ping PC1 → PC3 akkor is működne – de az ellenpróba megbukna.',
+        ],
+      },
+      {
+        cim: 'Próbáld ki!',
+        szoveg: [[
+          '`show vlan brief` – a trunk port nem szerepel benne, csak az access portok.',
+          '`show interfaces trunk` – mindkét switchen; ha az egyik oldal csak „auto”, az is látszik.',
+          'Ping után: `show mac address-table` – melyik MAC-cím melyik porton és VLAN-ban van.',
+          'PC-n: `arp -a` a ping előtt és után.',
+          '`shutdown` a trunk porton: figyeld a naplóüzeneteket mindkét switchen, és próbáld a pinget. Utána `no shutdown`.',
+        ]],
+      },
     ],
   });
 })(typeof window !== 'undefined' ? window : globalThis);

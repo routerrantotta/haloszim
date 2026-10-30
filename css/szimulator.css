@@ -64,6 +64,7 @@
 .hsz-anim { pointer-events: none; }
 .hsz-csomag--arp circle { fill: var(--hsz-yolk); stroke: var(--hsz-fekete); stroke-width: 2; }
 .hsz-csomag--icmp circle { fill: var(--hsz-fekete); stroke: var(--hsz-sarga); stroke-width: 2.5; }
+.hsz-csomag--vtp circle { fill: var(--hsz-feher); stroke: var(--hsz-fekete); stroke-width: 2.5; stroke-dasharray: 3 2; }
 .hsz-csomag__cimke rect { fill: var(--hsz-feher); stroke: var(--hsz-fekete); stroke-width: 1.5; }
 .hsz-csomag__cimke text { fill: var(--hsz-fekete); font: 700 11px var(--hsz-betu); }
 .hsz-eldobva circle { fill: #b3261e; }
@@ -76,6 +77,7 @@
 .hsz-jelmagyarazat span { display: inline-flex; align-items: center; gap: .35rem; }
 .hsz-potty { display: inline-block; width: .8rem; height: .8rem; border-radius: 50%; }
 .hsz-potty--arp { background: var(--hsz-yolk); border: 2px solid var(--hsz-fekete); }
+.hsz-potty--vtp { background: var(--hsz-feher); border: 2px dashed var(--hsz-fekete); }
 .hsz-potty--icmp { background: var(--hsz-fekete); border: 2px solid var(--hsz-sarga); }
 .hsz-cimke-minta { font-size: .75rem; border: 1.5px solid var(--hsz-fekete); border-radius: .3rem; padding: 0 .25rem; background: var(--hsz-feher); }
 .hsz-x-minta { display: inline-grid; place-items: center; width: 1rem; height: 1rem; border-radius: 50%; background: #b3261e; color: #fff; font-size: .65rem; }
@@ -87,6 +89,7 @@
 @media (min-width: 960px) {
   .hsz-felso { grid-template-columns: minmax(0, 1.75fr) minmax(17rem, 1fr); }
   .hsz-felso--egy { grid-template-columns: minmax(0, 1fr); }
+  .hsz-felso--egy .hsz-panel { max-height: 30rem; }
   .hsz-panel { max-height: 34rem; overflow: auto; }
   /* A gomb és az összegzés görgetéskor is látszik a panel alján. */
   .hsz-panel__lab { position: sticky; bottom: 0; }
@@ -156,6 +159,34 @@
 .hsz-cel--fut { background: #fff6cf; }
 .hsz-cel--ok .hsz-cel__jel { color: #1e7d32; }
 .hsz-cel--hiba .hsz-cel__jel, .hsz-cel--hiba .hsz-cel__megj { color: #b3261e; }
+
+/* parancsok a szövegben */
+.hsz-kod { font: .88em var(--hsz-mono); background: #f1ead0; border-radius: .25rem; padding: 0 .25rem; white-space: nowrap; }
+
+/* magyarázat a feladat végén */
+.hsz-magyarazat { margin-top: 1rem; border: 2px solid var(--hsz-fekete); border-radius: .75rem; background: #fffbe6; }
+.hsz-magyarazat__cim { cursor: pointer; font: 900 .95rem var(--hsz-cimbetu); padding: .55rem .8rem; list-style-position: inside; }
+.hsz-magyarazat__cim:focus-visible { outline: 3px solid var(--hsz-yolk); outline-offset: 2px; border-radius: .6rem; }
+.hsz-magyarazat[open] .hsz-magyarazat__cim { border-bottom: 1.5px solid var(--hsz-fekete); }
+.hsz-magyarazat__alcim { font: 900 .9rem var(--hsz-cimbetu); margin: .8rem .8rem .25rem; }
+.hsz-magyarazat__szoveg { margin: .3rem .8rem .5rem; }
+.hsz-magyarazat__lista { margin: .3rem .8rem .6rem; padding-left: 1.2rem; }
+.hsz-magyarazat__lista li { margin-bottom: .3rem; }
+
+/* feladatválasztó */
+.hsz-valaszto {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: .6rem 1rem;
+  margin-bottom: 1rem;
+}
+.hsz-valaszto__mezo { display: flex; flex-direction: column; gap: .2rem; font: 700 .9rem var(--hsz-betu); min-width: 0; }
+.hsz-valaszto__mezo select {
+  font: 1rem var(--hsz-betu); color: var(--hsz-fekete);
+  background: var(--hsz-feher); border: 2px solid var(--hsz-fekete); border-radius: .6rem;
+  padding: .4rem 2rem .4rem .6rem; max-width: 100%; cursor: pointer;
+}
+.hsz-valaszto__mezo select:focus-visible { outline: 3px solid var(--hsz-yolk); outline-offset: 2px; }
+.hsz-gomb--masodlagos { background: var(--hsz-feher); color: var(--hsz-fekete); }
+.hsz-gomb--masodlagos:hover:not(:disabled) { background: #fff; }
 
 /* ---------- PC-ablak ---------- */
 .hsz-pc-ablak { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); align-items: start; }

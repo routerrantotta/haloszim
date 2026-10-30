@@ -1,4 +1,4 @@
-/* Haloszim v0.2.0 – routerrantotta.hu – minden jog fenntartva. */
+/* Haloszim v0.3.0 – routerrantotta.hu – minden jog fenntartva. */
 (() => {
   // src/mag/ido.js
   var Ora = class {
@@ -737,6 +737,37 @@
     return sorok;
   }
 
+  // src/mag/ethernet.js
+  var SZORAS = "ffffffffffff";
+  var kovetkezoAzon = 1;
+  function ujKeretAzon() {
+    return kovetkezoAzon++;
+  }
+  function macNevbol(nev) {
+    let h = 2166136261;
+    for (let i = 0; i < nev.length; i++) {
+      h ^= nev.charCodeAt(i);
+      h = Math.imul(h, 16777619) >>> 0;
+    }
+    const kever = (x) => {
+      x ^= x >>> 16;
+      x = Math.imul(x, 2246822507) >>> 0;
+      x ^= x >>> 13;
+      x = Math.imul(x, 3266489909) >>> 0;
+      x ^= x >>> 16;
+      return x >>> 0;
+    };
+    const a = kever(h);
+    const b = kever(a ^ 2654435769);
+    return "02" + a.toString(16).padStart(8, "0") + (b & 255).toString(16).padStart(2, "0");
+  }
+  function macPontos(mac) {
+    return `${mac.slice(0, 4)}.${mac.slice(4, 8)}.${mac.slice(8, 12)}`;
+  }
+  function macKotojeles(mac) {
+    return mac.toUpperCase().match(/../g).join("-");
+  }
+
   // src/modell/switch.js
   var ALAP_HOSTNAME = "Switch";
   function gyariVlanok() {
@@ -773,7 +804,14 @@
       vtpMod: "server",
       vlanok: gyariVlanok(),
       portok,
-      macTabla: []
+      macTabla: [],
+      mac: macNevbol("switch:" + (beallitasok.hostname || ALAP_HOSTNAME)),
+      vtpTartomany: "",
+      vtpJelszo: "",
+      vtpVerzio: 1,
+      vtpRevizio: 0,
+      vtpModositva: null,
+      vtpMd5Hiba: null
     };
   }
   function portKeres(sw, nev) {
@@ -903,95 +941,6 @@
     }
   ];
 
-  // src/gyartok/ios/parancsok/vlan.js
-  var VLAN_SZO = { szo: "vlan", sugo: "VLAN létrehozása vagy szerkesztése" };
-  var VLAN_SZAM = { param: "szam", kulcs: "vlan", min: 1, max: 4094, sugo: "A VLAN száma" };
-  var KITERJESZTETT_TOL = 1006;
-  var vlanParancsok = [
-    {
-      modok: ["konfig"],
-      szavak: [VLAN_SZO, VLAN_SZAM],
-      vegrehajt(ctx, { vlan }) {
-        const sw = ctx.eszkoz;
-        if (vlan >= KITERJESZTETT_TOL && sw.vtpMod === "server") {
-          ctx.kiir("Extended VLAN(s) not allowed in current VTP mode.", "%Failed to commit extended VLAN(s) changes.");
-          return;
-        }
-        if (!sw.vlanok[vlan]) sw.vlanok[vlan] = { nev: alapVlanNev(vlan), gyari: false, tamogatott: true };
-        ctx.modValt("konfig-vlan", { vlan });
-      }
-    },
-    {
-      modok: ["konfig"],
-      szavak: [SZO.no, { szo: "vlan", sugo: "VLAN törlése" }, VLAN_SZAM],
-      vegrehajt(ctx, { vlan }) {
-        const sw = ctx.eszkoz;
-        const v = sw.vlanok[vlan];
-        if (v && v.gyari) {
-          ctx.kiir(`%Default VLAN ${vlan} may not be deleted.`);
-          return;
-        }
-        delete sw.vlanok[vlan];
-      }
-    },
-    {
-      modok: ["konfig-vlan"],
-      szavak: [
-        { szo: "name", sugo: "A VLAN nevének megadása" },
-        { param: "szo", kulcs: "nev", maxHossz: 32, sugo: "A VLAN neve (legfeljebb 32 karakter, szóköz nélkül)" }
-      ],
-      vegrehajt(ctx, { nev }) {
-        const szam = ctx.kontextus.vlan;
-        const v = ctx.eszkoz.vlanok[szam];
-        if (v.gyari) {
-          ctx.kiir(`%Default VLAN ${szam} may not have its name changed.`);
-          return;
-        }
-        v.nev = nev;
-      }
-    },
-    {
-      modok: ["konfig-vlan"],
-      szavak: [SZO.no, { szo: "name", sugo: "A VLAN nevének visszaállítása (VLANxxxx)" }],
-      vegrehajt(ctx) {
-        const szam = ctx.kontextus.vlan;
-        const v = ctx.eszkoz.vlanok[szam];
-        if (!v.gyari) v.nev = alapVlanNev(szam);
-      }
-    }
-  ];
-
-  // src/mag/ethernet.js
-  var SZORAS = "ffffffffffff";
-  var kovetkezoAzon = 1;
-  function ujKeretAzon() {
-    return kovetkezoAzon++;
-  }
-  function macNevbol(nev) {
-    let h = 2166136261;
-    for (let i = 0; i < nev.length; i++) {
-      h ^= nev.charCodeAt(i);
-      h = Math.imul(h, 16777619) >>> 0;
-    }
-    const kever = (x) => {
-      x ^= x >>> 16;
-      x = Math.imul(x, 2246822507) >>> 0;
-      x ^= x >>> 13;
-      x = Math.imul(x, 3266489909) >>> 0;
-      x ^= x >>> 16;
-      return x >>> 0;
-    };
-    const a = kever(h);
-    const b = kever(a ^ 2654435769);
-    return "02" + a.toString(16).padStart(8, "0") + (b & 255).toString(16).padStart(2, "0");
-  }
-  function macPontos(mac) {
-    return `${mac.slice(0, 4)}.${mac.slice(4, 8)}.${mac.slice(8, 12)}`;
-  }
-  function macKotojeles(mac) {
-    return mac.toUpperCase().match(/../g).join("-");
-  }
-
   // src/mag/kapcsolas.js
   var MAC_ELETKOR = 3e5;
   function uzemmod(sw, port) {
@@ -1001,6 +950,9 @@
     const tul = sw.halozat.szomszed(sw, port);
     if (!tul || tul.eszkoz.tipus !== "switch") return "access";
     const m = tul.port.mod;
+    const t1 = sw.vtpTartomany;
+    const t2 = tul.eszkoz.vtpTartomany;
+    if (t1 && t2 && t1 !== t2 && m !== "trunk") return "access";
     if (port.mod === "dinamikus-auto") return m === "trunk" || m === "dinamikus-kezdemenyezo" ? "trunk" : "access";
     if (port.mod === "dinamikus-kezdemenyezo") return m === "access" ? "access" : "trunk";
     return "access";
@@ -1031,20 +983,21 @@
       t.push({ vlan, mac, port: portNev, ido });
     }
   }
-  function kapcsoloFogad(h, sw, port, keret) {
+  function kapcsoloFogad(h, sw, port, keret2) {
+    if (keret2.tipus === "vtp") return vtpFogad(h, sw, port, keret2);
     let vlan;
     if (uzemmod(sw, port) === "trunk") {
-      vlan = keret.vlan !== void 0 ? keret.vlan : port.nativVlan;
+      vlan = keret2.vlan !== void 0 ? keret2.vlan : port.nativVlan;
     } else {
-      if (keret.vlan !== void 0) return h.eldob(sw, port, keret, "Címkés (802.1Q) keret érkezett egy access portra.");
+      if (keret2.vlan !== void 0) return h.eldob(sw, port, keret2, "Címkés (802.1Q) keret érkezett egy access portra.");
       vlan = port.accessVlan;
     }
     if (!vlanAktiv(sw, vlan)) {
-      return h.eldob(sw, port, keret, `A(z) ${vlan}-es VLAN nem létezik ezen a switchen (${sw.hostname}), ezért a keretet eldobta.`);
+      return h.eldob(sw, port, keret2, `A(z) ${vlan}-es VLAN nem létezik ezen a switchen (${sw.hostname}), ezért a keretet eldobta.`);
     }
-    if (keret.forrasMac !== SZORAS) macTanul(sw, vlan, keret.forrasMac, port.nev, h.ora.ido);
+    if (keret2.forrasMac !== SZORAS) macTanul(sw, vlan, keret2.forrasMac, port.nev, h.ora.ido);
     let kimenok;
-    const ismert = keret.celMac !== SZORAS && macTabla(sw).find((b) => b.vlan === vlan && b.mac === keret.celMac);
+    const ismert = keret2.celMac !== SZORAS && macTabla(sw).find((b) => b.vlan === vlan && b.mac === keret2.celMac);
     if (ismert) {
       if (ismert.port === port.nev) return;
       kimenok = sw.portok.filter((p) => p.nev === ismert.port);
@@ -1055,9 +1008,202 @@
       if (!p.fent || !portTagja(sw, p, vlan)) continue;
       const trunk = uzemmod(sw, p) === "trunk";
       const cimke = trunk && vlan !== p.nativVlan ? vlan : void 0;
-      h.kuld(sw, p, { ...keret, vlan: cimke });
+      h.kuld(sw, p, { ...keret2, vlan: cimke });
     }
   }
+
+  // src/mag/vtp.js
+  var VTP_IDOKOZ = 3e5;
+  var VTP_MAC = "01000ccccccc";
+  function kivonat(szoveg) {
+    let h1 = 2166136261;
+    let h2 = 16777619;
+    for (let i = 0; i < szoveg.length; i++) {
+      const c = szoveg.charCodeAt(i);
+      h1 = Math.imul(h1 ^ c, 16777619) >>> 0;
+      h2 = Math.imul(h2 ^ c, 1540483477) >>> 0;
+    }
+    return [h1, h2, Math.imul(h1 ^ h2, 2246822507) >>> 0, Math.imul(h2 + 2654435769, 3266489909) >>> 0];
+  }
+  function jelszoKivonat(jelszo) {
+    return kivonat("jelszo:" + jelszo).join("-");
+  }
+  function vtpVlanok(sw) {
+    const v = {};
+    for (const [szam, adat] of Object.entries(sw.vlanok)) if (!adat.gyari) v[szam] = adat.nev;
+    return v;
+  }
+  function vtpMd5(sw) {
+    const szoveg = JSON.stringify([sw.vtpTartomany, sw.vtpJelszo, sw.vtpRevizio, vtpVlanok(sw)]);
+    const bajtok = [];
+    for (const sz of kivonat(szoveg)) for (let i = 0; i < 4; i++) bajtok.push(sz >>> 24 - 8 * i & 255);
+    return bajtok;
+  }
+  function trunkPortok(sw) {
+    return sw.portok.filter((p) => p.fent && uzemmod(sw, p) === "trunk");
+  }
+  function hirdethet(sw) {
+    return !!sw.halozat && !!sw.vtpTartomany && sw.vtpMod !== "transparent";
+  }
+  function keret(sw, keres) {
+    return {
+      forrasMac: sw.mac,
+      celMac: VTP_MAC,
+      tipus: "vtp",
+      adat: {
+        kuldo: sw.hostname,
+        tartomany: sw.vtpTartomany,
+        revizio: sw.vtpRevizio,
+        verzio: sw.vtpVerzio,
+        jelszoKivonat: jelszoKivonat(sw.vtpJelszo),
+        vlanok: vtpVlanok(sw),
+        keres
+      }
+    };
+  }
+  function vtpHirdet(sw, { keres = false, kiveve = null, csak = null } = {}) {
+    if (!hirdethet(sw)) return;
+    const portok = csak ? [csak] : trunkPortok(sw).filter((p) => p !== kiveve);
+    for (const p of portok) sw.halozat.kuld(sw, p, keret(sw, keres));
+  }
+  function vtpVlanValtozas(sw) {
+    if (sw.vtpMod === "transparent") return;
+    sw.vtpRevizio++;
+    sw.vtpModositva = sw.halozat ? sw.halozat.ora.ido : 0;
+    vtpHirdet(sw);
+    if (sw.halozat) sw.halozat.esemeny({ tipus: "allapot" });
+  }
+  function vtpBeallitasValtozas(sw) {
+    vtpHirdet(sw, { keres: true });
+  }
+  function vtpTrunkValtozas(sw, port) {
+    if (!sw.halozat) return;
+    const tul = sw.halozat.szomszed(sw, port);
+    for (const [e, p] of [[sw, port], tul ? [tul.eszkoz, tul.port] : [null, null]]) {
+      if (e && e.tipus === "switch" && p.fent && uzemmod(e, p) === "trunk") vtpHirdet(e, { keres: true, csak: p });
+    }
+  }
+  function atvesz(sw, a) {
+    for (const szam of Object.keys(sw.vlanok)) {
+      if (!sw.vlanok[szam].gyari && !(szam in a.vlanok)) delete sw.vlanok[szam];
+    }
+    for (const [szam, nev] of Object.entries(a.vlanok)) {
+      const v = sw.vlanok[szam];
+      if (v && v.gyari) continue;
+      sw.vlanok[szam] = { nev: nev || alapVlanNev(szam), gyari: false, tamogatott: true };
+    }
+    sw.vtpRevizio = a.revizio;
+    if (a.verzio === 2) sw.vtpVerzio = 2;
+    sw.vtpModositva = sw.halozat.ora.ido;
+  }
+  function vtpFogad(h, sw, port, k) {
+    if (uzemmod(sw, port) !== "trunk") return;
+    const a = k.adat;
+    if (sw.vtpMod === "transparent") {
+      if (sw.vtpVerzio === 2 || a.tartomany === sw.vtpTartomany) {
+        for (const p of trunkPortok(sw)) if (p !== port) h.kuld(sw, p, k);
+      }
+      return;
+    }
+    if (!sw.vtpTartomany && a.tartomany) {
+      sw.vtpTartomany = a.tartomany;
+    }
+    if (a.tartomany !== sw.vtpTartomany) return;
+    if (a.jelszoKivonat !== jelszoKivonat(sw.vtpJelszo)) {
+      sw.vtpMd5Hiba = port.rovid;
+      return h.eldob(sw, port, k, `A VTP-hirdetés jelszava nem egyezik (${sw.hostname}), ezért nem fogadta el.`);
+    }
+    sw.vtpMd5Hiba = null;
+    if (a.revizio > sw.vtpRevizio) {
+      atvesz(sw, a);
+      h.esemeny({ tipus: "allapot" });
+      vtpHirdet(sw, { kiveve: port });
+    } else if (a.revizio < sw.vtpRevizio || a.keres) {
+      vtpHirdet(sw, { csak: port });
+    }
+  }
+  function vtpIdozitoIndit(h) {
+    const kor = () => {
+      for (const e of h.eszkozok) if (e.tipus === "switch") vtpHirdet(e);
+      h.ora.utemez(VTP_IDOKOZ, kor);
+    };
+    h.ora.utemez(VTP_IDOKOZ, kor);
+  }
+
+  // src/gyartok/ios/parancsok/vlan.js
+  var VLAN_SZO = { szo: "vlan", sugo: "VLAN létrehozása vagy szerkesztése" };
+  var VLAN_SZAM = { param: "szam", kulcs: "vlan", min: 1, max: 4094, sugo: "A VLAN száma" };
+  var KITERJESZTETT_TOL = 1006;
+  function kliensTiltas(ctx) {
+    if (ctx.eszkoz.vtpMod !== "client") return false;
+    ctx.kiir("VTP VLAN configuration not allowed when device is in CLIENT mode.");
+    return true;
+  }
+  var vlanParancsok = [
+    {
+      modok: ["konfig"],
+      szavak: [VLAN_SZO, VLAN_SZAM],
+      vegrehajt(ctx, { vlan }) {
+        const sw = ctx.eszkoz;
+        if (kliensTiltas(ctx)) return;
+        if (vlan >= KITERJESZTETT_TOL && sw.vtpMod !== "transparent") {
+          ctx.kiir("Extended VLAN(s) not allowed in current VTP mode.", "%Failed to commit extended VLAN(s) changes.");
+          return;
+        }
+        if (!sw.vlanok[vlan]) {
+          sw.vlanok[vlan] = { nev: alapVlanNev(vlan), gyari: false, tamogatott: true };
+          vtpVlanValtozas(sw);
+        }
+        ctx.modValt("konfig-vlan", { vlan });
+      }
+    },
+    {
+      modok: ["konfig"],
+      szavak: [SZO.no, { szo: "vlan", sugo: "VLAN törlése" }, VLAN_SZAM],
+      vegrehajt(ctx, { vlan }) {
+        const sw = ctx.eszkoz;
+        if (kliensTiltas(ctx)) return;
+        const v = sw.vlanok[vlan];
+        if (v && v.gyari) {
+          ctx.kiir(`%Default VLAN ${vlan} may not be deleted.`);
+          return;
+        }
+        if (!v) return;
+        delete sw.vlanok[vlan];
+        vtpVlanValtozas(sw);
+      }
+    },
+    {
+      modok: ["konfig-vlan"],
+      szavak: [
+        { szo: "name", sugo: "A VLAN nevének megadása" },
+        { param: "szo", kulcs: "nev", maxHossz: 32, sugo: "A VLAN neve (legfeljebb 32 karakter, szóköz nélkül)" }
+      ],
+      vegrehajt(ctx, { nev }) {
+        const szam = ctx.kontextus.vlan;
+        const v = ctx.eszkoz.vlanok[szam];
+        if (v.gyari) {
+          ctx.kiir(`%Default VLAN ${szam} may not have its name changed.`);
+          return;
+        }
+        if (v.nev === nev) return;
+        v.nev = nev;
+        vtpVlanValtozas(ctx.eszkoz);
+      }
+    },
+    {
+      modok: ["konfig-vlan"],
+      szavak: [SZO.no, { szo: "name", sugo: "A VLAN nevének visszaállítása (VLANxxxx)" }],
+      vegrehajt(ctx) {
+        const szam = ctx.kontextus.vlan;
+        const v = ctx.eszkoz.vlanok[szam];
+        if (!v.gyari && v.nev !== alapVlanNev(szam)) {
+          v.nev = alapVlanNev(szam);
+          vtpVlanValtozas(ctx.eszkoz);
+        }
+      }
+    }
+  ];
 
   // src/mag/ip.js
   function ipSzam(szoveg) {
@@ -1114,8 +1260,8 @@
   function nic(pc) {
     return pc.portok[0];
   }
-  function kuld(h, pc, keret) {
-    h.kuld(pc, nic(pc), { azon: ujKeretAzon(), forrasMac: pc.mac, ...keret });
+  function kuld(h, pc, keret2) {
+    h.kuld(pc, nic(pc), { azon: ujKeretAzon(), forrasMac: pc.mac, ...keret2 });
   }
   function vanIp(pc) {
     return !!pc.ip && !!pc.maszk;
@@ -1210,12 +1356,12 @@
       cb(kik);
     });
   }
-  function vegpontFogad(h, pc, port, keret) {
-    if (keret.vlan !== void 0) return h.eldob(pc, port, keret, "A PC nem ismeri a 802.1Q-címkés keretet.");
-    if (keret.celMac !== pc.mac && keret.celMac !== SZORAS) return;
-    h.esemeny({ tipus: "fogadva", eszkoz: pc, port, keret });
-    if (keret.tipus === "arp") {
-      const arp = keret.adat;
+  function vegpontFogad(h, pc, port, keret2) {
+    if (keret2.vlan !== void 0) return h.eldob(pc, port, keret2, "A PC nem ismeri a 802.1Q-címkés keretet.");
+    if (keret2.celMac !== pc.mac && keret2.celMac !== SZORAS) return;
+    h.esemeny({ tipus: "fogadva", eszkoz: pc, port, keret: keret2 });
+    if (keret2.tipus === "arp") {
+      const arp = keret2.adat;
       if (!vanIp(pc) || arp.kuldoIp === "0.0.0.0") return;
       if (arp.celIp !== pc.ip) return;
       arpTanul(h, pc, arp.kuldoIp, arp.kuldoMac);
@@ -1228,8 +1374,8 @@
       }
       return;
     }
-    if (keret.tipus === "ipv4") {
-      const ip = keret.adat;
+    if (keret2.tipus === "ipv4") {
+      const ip = keret2.adat;
       if (!vanIp(pc) || ip.celIp !== pc.ip) return;
       if (ip.protokoll === "icmp" && ip.icmp.tipus === "echo-keres") {
         ipKuld(h, pc, ip.forrasIp, { protokoll: "icmp", icmp: { tipus: "echo-valasz", sorszam: ip.icmp.sorszam } });
@@ -1319,22 +1465,22 @@
      * @param {Object} port
      * @param {Object} keret
      */
-    kuld(eszkoz, port, keret) {
+    kuld(eszkoz, port, keret2) {
       if (!port.fent) return;
       const tul = this.szomszed(eszkoz, port);
       if (!tul) return;
-      this.esemeny({ tipus: "keret", honnan: { eszkoz, port }, hova: tul, keret, idotartam: this.kesleltetes });
-      this.ora.utemez(this.kesleltetes, () => this.fogad(tul.eszkoz, tul.port, keret));
+      this.esemeny({ tipus: "keret", honnan: { eszkoz, port }, hova: tul, keret: keret2, idotartam: this.kesleltetes });
+      this.ora.utemez(this.kesleltetes, () => this.fogad(tul.eszkoz, tul.port, keret2));
     }
     /** @private – egy keret megérkezett egy portra */
-    fogad(eszkoz, port, keret) {
+    fogad(eszkoz, port, keret2) {
       if (!port.fent) return;
-      if (eszkoz.tipus === "switch") kapcsoloFogad(this, eszkoz, port, keret);
-      else vegpontFogad(this, eszkoz, port, keret);
+      if (eszkoz.tipus === "switch") kapcsoloFogad(this, eszkoz, port, keret2);
+      else vegpontFogad(this, eszkoz, port, keret2);
     }
     /** Eldobott keret (a nézet egy jelet tesz ki, a tanuló láthatja, hol akadt el a csomag). */
-    eldob(eszkoz, port, keret, ok) {
-      this.esemeny({ tipus: "eldobva", eszkoz, port, keret, ok });
+    eldob(eszkoz, port, keret2, ok) {
+      this.esemeny({ tipus: "eldobva", eszkoz, port, keret: keret2, ok });
     }
     /**
      * Egy port beállítása megváltozott (shutdown / no shutdown). Kiszámolja, működik-e a kábel,
@@ -1375,6 +1521,8 @@
             v.port.fent = true;
             this.naplo(v.eszkoz, `%LINEPROTO-5-UPDOWN: Line protocol on Interface ${v.port.nev}, changed state to up`);
           }
+          if (k.a.eszkoz.tipus === "switch") vtpTrunkValtozas(k.a.eszkoz, k.a.port);
+          else if (k.b.eszkoz.tipus === "switch") vtpTrunkValtozas(k.b.eszkoz, k.b.port);
           this.esemeny({ tipus: "allapot" });
         }));
       }
@@ -1487,7 +1635,10 @@
     s.push(`hostname ${sw.hostname}`, "!");
     s.push("boot-start-marker", "boot-end-marker", "!", "!");
     s.push("no aaa new-model", "system mtu routing 1500");
-    if (sw.vtpMod !== "server") s.push(`vtp mode ${sw.vtpMod}`);
+    if (sw.vtpMod === "transparent") {
+      if (sw.vtpTartomany) s.push(`vtp domain ${sw.vtpTartomany}`);
+      s.push("vtp mode transparent");
+    }
     s.push("!", "!", "!", "!", "!", "!");
     s.push("spanning-tree mode pvst", "spanning-tree extend system-id", "!");
     s.push("vlan internal allocation policy ascending", "!");
@@ -1685,6 +1836,7 @@
       const tul = ctx.eszkoz.halozat && ctx.eszkoz.halozat.szomszed(ctx.eszkoz, p);
       if (tul && tul.eszkoz.tipus === "switch") macTorolPort(tul.eszkoz, tul.port.nev);
       portValtozott(ctx.eszkoz, p);
+      vtpTrunkValtozas(ctx.eszkoz, p);
     }
   }
   function modParancs(szavak, mod) {
@@ -1718,13 +1870,14 @@
       szavak: [SWITCHPORT, ACCESS, VLAN2, { param: "szam", kulcs: "vlan", min: 1, max: 4094, sugo: "A VLAN száma" }],
       vegrehajt(ctx, { vlan }) {
         const sw = ctx.eszkoz;
-        if (!sw.vlanok[vlan]) {
-          if (vlan >= KITERJESZTETT_TOL2 && sw.vtpMod === "server") {
+        if (!sw.vlanok[vlan] && sw.vtpMod !== "client") {
+          if (vlan >= KITERJESZTETT_TOL2 && sw.vtpMod !== "transparent") {
             ctx.kiir("Extended VLAN(s) not allowed in current VTP mode.", "%Failed to commit extended VLAN(s) changes.");
             return;
           }
           ctx.kiir(`% Access VLAN does not exist. Creating vlan ${vlan}`);
           sw.vlanok[vlan] = { nev: alapVlanNev(vlan), gyari: false, tamogatott: true };
+          vtpVlanValtozas(sw);
         }
         portokra(ctx, (p) => {
           p.accessVlan = vlan;
@@ -1742,10 +1895,163 @@
     }
   ];
 
+  // src/gyartok/ios/kimenetek/vtp-status.js
+  var MOD_NEV2 = { server: "Server", client: "Client", transparent: "Transparent" };
+  function datum(ms) {
+    const mp = Math.floor(ms / 1e3);
+    const k = (n) => String(n).padStart(2, "0");
+    const nap = 1 + Math.floor(mp / 86400);
+    return `3-${nap}-93 ${k(Math.floor(mp % 86400 / 3600))}:${k(Math.floor(mp % 3600 / 60))}:${k(mp % 60)}`;
+  }
+  function showVtpStatus(sw) {
+    const sor2 = (cim, ertek) => `${cim.padEnd(32)}: ${ertek}`.trimEnd();
+    const sor22 = (cim, ertek) => `${cim.padEnd(34)}: ${ertek}`.trimEnd();
+    const md5 = vtpMd5(sw).map((b) => "0x" + b.toString(16).toUpperCase().padStart(2, "0"));
+    const s = [
+      sor2("VTP Version capable", "1 to 3"),
+      sor2("VTP version running", String(sw.vtpVerzio)),
+      sor2("VTP Domain Name", sw.vtpTartomany),
+      sor2("VTP Pruning Mode", "Disabled"),
+      sor2("VTP Traps Generation", "Disabled"),
+      sor2("Device ID", macPontos(sw.mac)),
+      `Configuration last modified by 0.0.0.0 at ${sw.vtpModositva === null ? "0-0-00 00:00:00" : datum(sw.vtpModositva)}`
+    ];
+    if (sw.vtpMod === "server") s.push("Local updater ID is 0.0.0.0 (no valid interface found)");
+    s.push(
+      "",
+      "Feature VLAN:",
+      "--------------",
+      sor22("VTP Operating Mode", MOD_NEV2[sw.vtpMod]),
+      sor22("Maximum VLANs supported locally", "255"),
+      sor22("Number of existing VLANs", String(Object.keys(sw.vlanok).length)),
+      sor22("Configuration Revision", String(sw.vtpMod === "transparent" ? 0 : sw.vtpRevizio)),
+      sor22("MD5 digest", md5.slice(0, 8).join(" ")),
+      " ".repeat(36) + md5.slice(8).join(" ")
+    );
+    if (sw.vtpMd5Hiba) s.push(`*** MD5 digest checksum mismatch on trunk: ${sw.vtpMd5Hiba} ***`);
+    return s;
+  }
+  function showVtpPassword(sw) {
+    if (!sw.vtpJelszo) return ["The VTP password is not configured."];
+    return [`VTP Password: ${sw.vtpJelszo}`];
+  }
+
+  // src/gyartok/ios/parancsok/vtp.js
+  var VTP = { szo: "vtp", sugo: "VTP (VLAN Trunking Protocol) beállításai" };
+  var MODE2 = { szo: "mode", sugo: "A switch VTP-szerepe" };
+  var MOD_NEV3 = { server: "SERVER", client: "CLIENT", transparent: "TRANSPARENT" };
+  function modParancs2(mod, sugo2) {
+    return {
+      modok: ["konfig"],
+      szavak: [VTP, MODE2, { szo: mod, sugo: sugo2 }],
+      vegrehajt(ctx) {
+        const sw = ctx.eszkoz;
+        if (sw.vtpMod === mod) {
+          ctx.kiir(`Device mode already VTP ${MOD_NEV3[mod]}.`);
+          return;
+        }
+        sw.vtpMod = mod;
+        if (mod === "transparent") sw.vtpRevizio = 0;
+        ctx.kiir(`Setting device to VTP ${MOD_NEV3[mod]} mode.`);
+        vtpBeallitasValtozas(sw);
+      }
+    };
+  }
+  var vtpParancsok = [
+    modParancs2("server", "Server: VLAN-okat hoz létre és hirdet (gyári érték)"),
+    modParancs2("client", "Client: a serverek hirdetéséből veszi át a VLAN-okat, maga nem módosíthat"),
+    modParancs2("transparent", "Transparent: saját, helyi VLAN-ok; mások hirdetését csak továbbengedi"),
+    {
+      modok: ["konfig"],
+      szavak: [
+        VTP,
+        { szo: "domain", sugo: "A VTP-tartomány neve" },
+        { param: "szo", kulcs: "nev", maxHossz: 32, sugo: "A tartomány neve (legfeljebb 32 karakter, kis- és nagybetű számít)" }
+      ],
+      vegrehajt(ctx, { nev }) {
+        const sw = ctx.eszkoz;
+        if (sw.vtpTartomany === nev) {
+          ctx.kiir(`Domain name already set to ${nev}.`);
+          return;
+        }
+        ctx.kiir(`Changing VTP domain name from ${sw.vtpTartomany || "NULL"} to ${nev}`);
+        sw.vtpTartomany = nev;
+        sw.vtpRevizio = 0;
+        vtpBeallitasValtozas(sw);
+      }
+    },
+    {
+      modok: ["konfig"],
+      szavak: [
+        VTP,
+        { szo: "password", sugo: "A VTP-jelszó (a tartomány minden switchén azonos legyen)" },
+        { param: "szo", kulcs: "jelszo", maxHossz: 64, sugo: "A jelszó (szóköz nélkül)" }
+      ],
+      vegrehajt(ctx, { jelszo }) {
+        ctx.eszkoz.vtpJelszo = jelszo;
+        ctx.kiir(`Setting device VLAN database password to ${jelszo}`);
+        vtpBeallitasValtozas(ctx.eszkoz);
+      }
+    },
+    {
+      modok: ["konfig"],
+      szavak: [SZO.no, VTP, { szo: "password", sugo: "A VTP-jelszó törlése" }],
+      vegrehajt(ctx) {
+        ctx.eszkoz.vtpJelszo = "";
+        ctx.kiir("Clearing device VLAN database password.");
+        vtpBeallitasValtozas(ctx.eszkoz);
+      }
+    },
+    {
+      modok: ["konfig"],
+      szavak: [
+        VTP,
+        { szo: "version", sugo: "A VTP verziója" },
+        { param: "szam", kulcs: "verzio", min: 1, max: 3, sugo: "A verzió (1, 2 vagy 3)" }
+      ],
+      vegrehajt(ctx, { verzio }) {
+        const sw = ctx.eszkoz;
+        if (verzio === 3) {
+          ctx.kiir("[Szimulátor] A VTP 3-as verziója a szimulátorban még nincs meg. Használd a 2-est: vtp version 2", "");
+          return;
+        }
+        if (sw.vtpMod === "client") {
+          ctx.kiir("Cannot modify version in VTP client mode");
+          return;
+        }
+        if (sw.vtpVerzio === verzio) return;
+        sw.vtpVerzio = verzio;
+        if (sw.vtpMod === "server") vtpVlanValtozas(sw);
+      }
+    },
+    {
+      modok: ["felhasznalo", "priv"],
+      szavak: [
+        { szo: "show", sugo: "Információk megjelenítése az eszközről" },
+        VTP,
+        { szo: "status", sugo: "A VTP állapota: szerep, tartomány, verzió, revíziószám" }
+      ],
+      vegrehajt(ctx) {
+        ctx.kiir(...showVtpStatus(ctx.eszkoz));
+      }
+    },
+    {
+      modok: ["priv"],
+      szavak: [
+        { szo: "show", sugo: "Információk megjelenítése az eszközről" },
+        VTP,
+        { szo: "password", sugo: "A beállított VTP-jelszó" }
+      ],
+      vegrehajt(ctx) {
+        ctx.kiir(...showVtpPassword(ctx.eszkoz));
+      }
+    }
+  ];
+
   // src/gyartok/ios/parancsok/meg-nincs.js
   var MEG_NINCS = "(a szimulátorban még nincs meg)";
   var LISTA = {
-    felhasznalo: ["connect", "disconnect", "ping", "ssh", "telnet", "terminal", "traceroute", "show interfaces"],
+    felhasznalo: ["connect", "disconnect", "ping", "ssh", "telnet", "terminal", "traceroute", "show interfaces", "show vtp counters"],
     priv: [
       "clear",
       "clock",
@@ -1766,7 +2072,8 @@
       "traceroute",
       "undebug",
       "write",
-      "show interfaces"
+      "show interfaces",
+      "show vtp counters"
     ],
     konfig: [
       "aaa",
@@ -1787,7 +2094,9 @@
       "snmp-server",
       "spanning-tree",
       "username",
-      "vtp"
+      "vtp pruning",
+      "vtp interface",
+      "vtp file"
     ],
     "konfig-if": [
       "cdp",
@@ -1837,7 +2146,7 @@
     felirat: "IOS-szerű parancssor",
     modok: MODOK,
     kezdoMod: "felhasznalo",
-    parancsok: [...alapParancsok, ...vlanParancsok, ...interfeszParancsok, ...switchportParancsok, ...showParancsok, ...megNincsParancsok],
+    parancsok: [...alapParancsok, ...vlanParancsok, ...interfeszParancsok, ...switchportParancsok, ...showParancsok, ...vtpParancsok, ...megNincsParancsok],
     formazHiba,
     formazSugo,
     /** Az értelmezőnek szükséges eszközadatok. */
@@ -2222,6 +2531,7 @@
     constructor(szulo, { elemek, halozat, meret }, beallitasok = {}) {
       this.elemek = elemek;
       this.halozat = halozat;
+      this.vanVtp = elemek.filter((e) => e.tipus === "switch").length > 1;
       this.beallitasok = beallitasok;
       const m = meret || { szel: 800, mag: 400 };
       this.doboz = document.createElement("section");
@@ -2249,7 +2559,7 @@
     jelmagyarazat() {
       const j = document.createElement("p");
       j.className = "hsz-jelmagyarazat";
-      j.innerHTML = '<span><i class="hsz-potty hsz-potty--arp"></i>ARP</span><span><i class="hsz-potty hsz-potty--icmp"></i>ping (ICMP)</span><span><b class="hsz-cimke-minta">10</b>802.1Q-címke (VLAN)</span><span><b class="hsz-x-minta">✕</b>eldobott keret</span><span><i class="hsz-vonal-minta"></i>trunk</span>';
+      j.innerHTML = '<span><i class="hsz-potty hsz-potty--arp"></i>ARP</span><span><i class="hsz-potty hsz-potty--icmp"></i>ping (ICMP)</span>' + (this.vanVtp ? '<span><i class="hsz-potty hsz-potty--vtp"></i>VTP-hirdetés</span>' : "") + '<span><b class="hsz-cimke-minta">10</b>802.1Q-címke (VLAN)</span><span><b class="hsz-x-minta">✕</b>eldobott keret</span><span><i class="hsz-vonal-minta"></i>trunk</span>';
       return j;
     }
     /** @private – kattintható csoport egy eszköznek */
@@ -2405,7 +2715,8 @@
       const kr = this.kabelek.find((x) => x.k === this.halozat.kabelVege(e.honnan.eszkoz, e.honnan.port));
       if (!kr || typeof kr.ut.getTotalLength !== "function") return;
       const elore = kr.k.a.eszkoz === e.honnan.eszkoz && kr.k.a.port === e.honnan.port;
-      const g = svg("g", { class: `hsz-csomag hsz-csomag--${e.keret.tipus === "arp" ? "arp" : "icmp"}` });
+      const fajta = e.keret.tipus === "arp" || e.keret.tipus === "vtp" ? e.keret.tipus : "icmp";
+      const g = svg("g", { class: `hsz-csomag hsz-csomag--${fajta}` });
       g.append(svg("circle", { r: 7 }));
       if (e.keret.vlan !== void 0) {
         const c = svg("g", { class: "hsz-csomag__cimke", transform: "translate(0 -16)" });
@@ -2459,6 +2770,10 @@
     }
   };
   function csomagLeiras(k) {
+    if (k.tipus === "vtp") {
+      const a = k.adat;
+      return `VTP-${a.keres ? "kérés és hirdetés" : "hirdetés"} (${a.kuldo}): tartomány ${a.tartomany}, revízió ${a.revizio}, VLAN-ok: ${Object.keys(a.vlanok).join(", ") || "–"}`;
+    }
     const cimke = k.vlan !== void 0 ? ` – 802.1Q-címke: VLAN ${k.vlan}` : "";
     if (k.tipus === "arp") {
       const a = k.adat;
@@ -2833,6 +3148,39 @@
       const modok = vegek.map(([e, pp]) => `${e.hostname}: ${MOD_SZOVEG2[pp.mod]}`).join(", ");
       return { ok: true, megjegyzes: `Mindkét vég trunkként működik (${modok}).` };
     },
+    "vlan-nincs"(f, c) {
+      const sw = f.eszkoz(c.eszkoz);
+      const v = sw.vlanok[c.vlan];
+      if (v) return { ok: false, megjegyzes: `A(z) ${c.vlan}-es VLAN (${v.nev}) megvan ${c.eszkoz}-en, pedig itt nem szabadna lennie.` };
+      return { ok: true, megjegyzes: `A(z) ${c.vlan}-es VLAN nincs ${c.eszkoz}-en – ahogy kell.` };
+    },
+    vtp(f, c) {
+      const sw = f.eszkoz(c.eszkoz);
+      const hibak = [];
+      if (c.mod && sw.vtpMod !== c.mod) hibak.push(`a szerep most ${sw.vtpMod} (${c.mod} kellene)`);
+      if (c.tartomany !== void 0 && sw.vtpTartomany !== c.tartomany) {
+        hibak.push(`a tartomány most ${sw.vtpTartomany ? `„${sw.vtpTartomany}”` : "nincs megadva"} („${c.tartomany}” kellene; kis- és nagybetű számít)`);
+      }
+      if (c.jelszo !== void 0 && sw.vtpJelszo !== c.jelszo) hibak.push(sw.vtpJelszo ? "a jelszó nem egyezik" : "nincs jelszó");
+      if (c.verzio && sw.vtpVerzio !== c.verzio) hibak.push(`a verzió most ${sw.vtpVerzio} (${c.verzio} kellene)`);
+      if (hibak.length) return { ok: false, megjegyzes: hibak.join("; ") + "." };
+      return { ok: true, megjegyzes: `${sw.vtpMod}, tartomány: ${sw.vtpTartomany}, verzió: ${sw.vtpVerzio}, revízió: ${sw.vtpMod === "transparent" ? 0 : sw.vtpRevizio}` };
+    },
+    "vtp-szinkron"(f, c) {
+      const sw = f.eszkoz(c.eszkoz);
+      const forras = f.eszkoz(c.forras);
+      const lista = (e) => Object.entries(e.vlanok).filter(([, v]) => !v.gyari).map(([n, v]) => `${n} ${v.nev}`).sort().join(", ");
+      const sajat = lista(sw);
+      const ott = lista(forras);
+      if (sw.vtpRevizio === forras.vtpRevizio && sajat === ott) {
+        return { ok: true, megjegyzes: `Azonos revízió (${sw.vtpRevizio}) és azonos VLAN-ok: ${sajat || "–"}.` };
+      }
+      let megj = `${c.eszkoz}: revízió ${sw.vtpRevizio}, VLAN-ok: ${sajat || "–"}. ${c.forras}: revízió ${forras.vtpRevizio}, VLAN-ok: ${ott || "–"}.`;
+      if (sw.vtpRevizio > forras.vtpRevizio) megj += ` ${c.eszkoz} revíziója nagyobb – ő írná felül a többieket!`;
+      else if (sw.vtpRevizio === forras.vtpRevizio) megj += " Egyenlő revíziónál nincs átvétel: módosíts valamit a serveren (pl. hozz létre és törölj egy VLAN-t).";
+      else megj += " A hirdetés nem ért ide: nézd meg a trunkokat, a tartománynevet, a jelszót és a köztes switch verzióját.";
+      return { ok: false, megjegyzes: megj };
+    },
     "pc-ip"(f, c) {
       const pc = f.eszkoz(c.eszkoz);
       if (!pc.ip) return { ok: false, megjegyzes: `${c.eszkoz}-nek még nincs IP-címe (kattints a gépre).` };
@@ -2918,6 +3266,13 @@
     if (szoveg !== void 0) e.textContent = szoveg;
     return e;
   }
+  function szovegbe(cel, szoveg) {
+    String(szoveg).split("`").forEach((resz, i) => {
+      if (resz === "") return;
+      cel.append(i % 2 === 1 ? elem3("code", "hsz-kod", resz) : document.createTextNode(resz));
+    });
+    return cel;
+  }
   var PROBA_SZUNET = 500;
   var FeladatPanel = class {
     /**
@@ -2935,11 +3290,11 @@
       fej.append(elem3("h2", "hsz-panel__cim", fd.cim));
       if (fd.szint) fej.append(elem3("span", "hsz-panel__szint", fd.szint));
       this.doboz.append(fej);
-      for (const bek of fd.leiras || []) this.doboz.append(elem3("p", "hsz-panel__szoveg", bek));
+      for (const bek of fd.leiras || []) this.doboz.append(szovegbe(elem3("p", "hsz-panel__szoveg"), bek));
       if (fd.lepesek && fd.lepesek.length) {
         this.doboz.append(elem3("h3", "hsz-panel__alcim", "Teendők"));
         const ol = elem3("ol", "hsz-panel__lepesek");
-        for (const l of fd.lepesek) ol.append(elem3("li", "", l));
+        for (const l of fd.lepesek) ol.append(szovegbe(elem3("li"), l));
         this.doboz.append(ol);
       }
       if (fd.cimterv && fd.cimterv.length) {
@@ -2967,9 +3322,29 @@
       this.osszegzes.setAttribute("role", "status");
       this.lista = elem3("ul", "hsz-celok");
       this.lista.hidden = true;
+      if (fd.magyarazat && fd.magyarazat.length) {
+        const d = elem3("details", "hsz-magyarazat");
+        d.append(elem3("summary", "hsz-magyarazat__cim", "Magyarázat: mit, miért és miért így állítunk be?"));
+        for (const resz of fd.magyarazat) {
+          d.append(szovegbe(elem3("h4", "hsz-magyarazat__alcim"), resz.cim));
+          for (const bek of resz.szoveg || []) {
+            if (Array.isArray(bek)) {
+              const ul = elem3("ul", "hsz-magyarazat__lista");
+              for (const li of bek) ul.append(szovegbe(elem3("li"), li));
+              d.append(ul);
+            } else {
+              d.append(szovegbe(elem3("p", "hsz-magyarazat__szoveg"), bek));
+            }
+          }
+        }
+        this.magyarazat = d;
+        this.doboz.append(d);
+      }
       const lab = elem3("div", "hsz-panel__lab");
       lab.append(this.osszegzes, this.gomb);
-      this.doboz.append(this.lista, lab);
+      if (this.magyarazat) this.doboz.insertBefore(this.lista, this.magyarazat);
+      else this.doboz.append(this.lista);
+      this.doboz.append(lab);
       szulo.append(this.doboz);
     }
     /** Az ellenőrzés indítása. */
@@ -3073,9 +3448,22 @@
     }
     for (const [nev, beall] of Object.entries(feladat.kiindulo || {})) {
       const eszkoz = nevek.get(nev);
-      if (eszkoz.tipus === "pc") ipBeallit(eszkoz, beall);
-      else if (beall.hostname) eszkoz.hostname = beall.hostname;
+      if (eszkoz.tipus === "pc") {
+        ipBeallit(eszkoz, beall);
+        continue;
+      }
+      if (beall.hostname) eszkoz.hostname = beall.hostname;
+      const v = beall.vtp || {};
+      if (v.mod) eszkoz.vtpMod = v.mod;
+      if (v.tartomany) eszkoz.vtpTartomany = v.tartomany;
+      if (v.jelszo) eszkoz.vtpJelszo = v.jelszo;
+      if (v.verzio) eszkoz.vtpVerzio = v.verzio;
+      if (v.revizio) eszkoz.vtpRevizio = v.revizio;
+      for (const [szam, vnev] of Object.entries(beall.vlanok || {})) {
+        eszkoz.vlanok[szam] = { nev: vnev, gyari: false, tamogatott: true };
+      }
     }
+    vtpIdozitoIndit(halozat);
     return {
       feladat,
       halozat,
@@ -3089,7 +3477,7 @@
   }
 
   // src/fo.js
-  var VERZIO = true ? "0.2.0" : "fejlesztői";
+  var VERZIO = true ? "0.3.0" : "fejlesztői";
   var HIBAJELENTO = "https://routerrantotta.hu/otlet.html";
   var ANIM_KESLELTETES = 260;
   var SZABAD = {
@@ -3104,6 +3492,9 @@
     if (szoveg !== void 0) e.textContent = szoveg;
     return e;
   }
+  function tipusa(f) {
+    return f.tipus || "Egyéb";
+  }
   function indit(gyoker, beallitasok = {}) {
     gyoker.classList.add("hsz");
     gyoker.textContent = "";
@@ -3112,21 +3503,118 @@
       azon = new URLSearchParams(window.location.search).get("feladat") || azon;
     } catch (e) {
     }
-    const feladat = feladatKeres(azon) || SZABAD;
+    const kisKepernyo = elem4("p", "hsz-kiskepernyo", "Tipp: nagyobb képernyőn kényelmesebb a gyakorlás.");
+    const tartalom = elem4("div", "hsz-tartalom");
+    gyoker.append(kisKepernyo);
+    const lista = feladatLista();
+    let aktualis = null;
+    let fut = null;
+    const betolt = (feladat) => {
+      if (fut) fut.leallit();
+      tartalom.textContent = "";
+      aktualis = feladat;
+      fut = feladatInditas(tartalom, feladat);
+      if (valaszto) valaszto.igazit(feladat);
+      try {
+        const url = new URL(window.location.href);
+        if (feladat.azon && feladat.azon !== "szabad") url.searchParams.set("feladat", feladat.azon);
+        window.history.replaceState(null, "", url.toString());
+      } catch (e) {
+      }
+    };
+    const valaszto = lista.length ? feladatValaszto(lista, betolt, () => betolt(aktualis)) : null;
+    if (valaszto) gyoker.append(valaszto.doboz);
+    gyoker.append(tartalom);
+    betolt(feladatKeres(azon) || SZABAD);
+    return {
+      /** Feladat betöltése azonosító szerint. */
+      betolt: (az) => {
+        const f = feladatKeres(az);
+        if (f) betolt(f);
+      },
+      get feladat() {
+        return fut.feladat;
+      },
+      get halozat() {
+        return fut.halozat;
+      },
+      get ora() {
+        return fut.ora;
+      },
+      get nezetek() {
+        return fut.nezetek;
+      },
+      get eszkoz() {
+        return fut.eszkoz;
+      },
+      get munkamenet() {
+        return fut.munkamenet;
+      },
+      get terminal() {
+        return fut.terminal;
+      },
+      valaszt: (e, fokusz) => fut.valaszt(e, fokusz)
+    };
+  }
+  function feladatValaszto(lista, betolt, ujra) {
+    const doboz = elem4("div", "hsz-valaszto");
+    doboz.setAttribute("role", "group");
+    doboz.setAttribute("aria-label", "Feladat választása");
+    const mezo = (felirat) => {
+      const l = elem4("label", "hsz-valaszto__mezo");
+      const sel = elem4("select");
+      l.append(elem4("span", "", felirat), sel);
+      doboz.append(l);
+      return sel;
+    };
+    const tipusSel = mezo("Feladattípus");
+    const feladatSel = mezo("Feladat");
+    const ujraGomb = elem4("button", "hsz-gomb hsz-gomb--masodlagos", "Újrakezdés");
+    ujraGomb.type = "button";
+    ujraGomb.title = "A feladat újraindítása az elejéről (minden beállítás elvész)";
+    ujraGomb.addEventListener("click", () => {
+      if (window.confirm("Biztosan újrakezded? Minden eddigi beállítás elvész.")) ujra();
+    });
+    doboz.append(ujraGomb);
+    const tipusok = [...new Set(lista.map(tipusa))];
+    for (const t of tipusok) tipusSel.append(new Option(t, t));
+    const feladatokTolt = (tipus) => {
+      feladatSel.textContent = "";
+      for (const f of lista.filter((x) => tipusa(x) === tipus)) {
+        feladatSel.append(new Option(f.szint ? `${f.cim} (${f.szint})` : f.cim, f.azon));
+      }
+    };
+    tipusSel.addEventListener("change", () => {
+      feladatokTolt(tipusSel.value);
+      betolt(lista.find((x) => x.azon === feladatSel.value));
+    });
+    feladatSel.addEventListener("change", () => betolt(lista.find((x) => x.azon === feladatSel.value)));
+    return {
+      doboz,
+      /** A listák beállítása az éppen futó feladatra. */
+      igazit(f) {
+        if (!lista.includes(f)) return;
+        tipusSel.value = tipusa(f);
+        feladatokTolt(tipusa(f));
+        feladatSel.value = f.azon;
+      }
+    };
+  }
+  function feladatInditas(gyoker, feladat) {
     const ora = new Ora();
     let elozo = performance.now();
-    setInterval(() => {
+    const idozito = setInterval(() => {
       const most = performance.now();
       ora.lep(most - elozo);
       elozo = most;
     }, 20);
     const f = feladatBetolt(feladat, { ora, kesleltetes: ANIM_KESLELTETES });
     const { halozat } = f;
-    const kisKepernyo = elem4("p", "hsz-kiskepernyo", "Tipp: nagyobb képernyőn kényelmesebb a gyakorlás.");
-    const felso = elem4("div", feladat.celok.length ? "hsz-felso" : "hsz-felso hsz-felso--egy");
+    const szeles = feladat.topologia.meret && feladat.topologia.meret.szel > 900;
+    const felso = elem4("div", `hsz-felso${!feladat.celok.length || szeles ? " hsz-felso--egy" : ""}`);
     const munka = elem4("section", "hsz-munka");
     munka.setAttribute("aria-label", "Az eszközök kezelése");
-    gyoker.append(kisKepernyo, felso, munka);
+    gyoker.append(felso, munka);
     let valasztott = null;
     const topologia = new Topologia(felso, { elemek: f.elemek, halozat, meret: feladat.topologia.meret }, {
       valaszt: (e) => valaszt(e, true)
@@ -3225,7 +3713,12 @@
       // Visszafelé kompatibilis mezők (az első eszköz):
       eszkoz: f.elemek[0].eszkoz,
       munkamenet: elso.munkamenet,
-      terminal: elso.terminal
+      terminal: elso.terminal,
+      /** A feladat leállítása (az óra megáll, a hálózat eseményei elnémulnak). */
+      leallit() {
+        clearInterval(idozito);
+        halozat.figyelok = [];
+      }
     };
   }
   if (typeof window !== "undefined") {

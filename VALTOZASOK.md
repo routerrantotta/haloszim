@@ -2,6 +2,25 @@
 
 A legújabb van felül.
 
+## v0.3 – 2026-10-30 – Feladatválasztó, VTP-feladat, magyarázatok
+
+- **Főoldal:** rövid bemutatás a szimulátorról; a „Mit próbálj ki?” lista helyett minden feladat saját magyarázatot kapott.
+- **Feladatválasztó:** két legördülő lista (feladattípus → feladat) és Újrakezdés gomb. Váltáskor a feladat
+  azonnal betöltődik, az URL-be is bekerül (`?feladat=vtp-1`), így a link megosztható.
+- **Új feladat: „VTP: server, transparent, client”** (`feladatok/vtp-1.js`): három switch sorban, SW3 egy régi
+  laborból jön 15-ös revízióval (a klasszikus revíziócsapda), VTP-tartomány, jelszó, version 2, a transparent switch
+  helyi VLAN-ja. 22 cél, köztük ellenpróbák (a régi VLAN-ok és a helyi VLAN nem terjedhet el).
+- **Magyarázat minden feladat végén** (lenyitható): mit, miért és miért úgy állítunk be, plusz „Próbáld ki!” ötletek.
+  A szövegekben a parancsok egyenközű betűvel jelennek meg.
+- **VTP a szimulátorban** (`src/mag/vtp.js`): server / client / transparent, tartománynév (a NULL tartományú switch
+  átveszi az elsőt, amit hall), jelszó (eltérésnél MD5-hibasor), 1-es és 2-es verzió (a transparent továbbengedés
+  különbsége), revíziószám (a nagyobb nyer, kliensé is), nullázás transparent móddal vagy tartományváltással.
+  A DTP eltérő tartománynévnél nem egyeztet trunkot. A rajzon a VTP-hirdetés szaggatott szélű fehér pötty.
+- **Új parancsok:** `vtp mode server | client | transparent`, `vtp domain`, `vtp password`, `no vtp password`,
+  `vtp version`, `show vtp status`, `show vtp password`. Kliensen a VLAN-módosítás tiltva, transparent módban a
+  VTP-beállítás és a VLAN-ok a running-configban is látszanak, és kiterjesztett VLAN (1006–4094) is létrehozható.
+- 103 automatikus teszt (10 új a VTP-re).
+
 ## v0.2 – 2026-10-30 – Az első feladat: VLAN-ok két switchen, trunkkel
 
 - **Első feladat** (`feladatok/vlan-1.js`): 2 switch, 4 PC, 2 VLAN (10 IRODA, 20 RAKTAR), trunk a két switch között.
