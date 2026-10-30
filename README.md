@@ -4,10 +4,11 @@ Böngészőben futó, feladat-alapú hálózati szimulátor a [routerrantotta.hu
 
 **Kipróbálás:** https://routerrantotta.github.io/haloszim/ (fejlesztői kipróbáló oldal)
 
-Jelenleg (v0.1) a váz van kész: egy 2960 jellegű switch, IOS-szerű parancssorral – módok, rövidítés,
-`?` súgó, Tab-kiegészítés, előzmények, a valódi eszközre jellemző hibaüzenetek, és néhány parancs
-(`hostname`, `vlan` / `name`, `interface` / `interface range`, `shutdown`, `show vlan brief`,
-`show running-config`). A változások listája: [VALTOZASOK.md](VALTOZASOK.md).
+Jelenleg (v0.2) az első feladat kész: **VLAN-ok két switchen, trunkkel** (2 switch, 4 PC). A switchek
+IOS-szerű parancssorral kezelhetők (módok, rövidítés, `?` súgó, Tab, előzmények, valódi hibaüzenetek), a PC-k egy
+ablakban (IP-beállítás, `ping`, `ipconfig`, `arp -a`). A csomagok mozgása látszik a rajzon, az Ellenőrzés gomb
+pedig eredményalapon – valódi ping- és szórásos próbákkal, ellenpróbával – nézi meg a megoldást.
+A változások listája: [VALTOZASOK.md](VALTOZASOK.md).
 
 ## Jogi megjegyzés
 
@@ -18,8 +19,9 @@ Minden jog fenntartva – Horváth Gábor EV.
 
 ## Fejlesztés
 
-A futtatáshoz semmit nem kell telepíteni: az `index.html` közvetlenül (akár fájlként is) megnyitható,
-mert a kész szimulátor a `dist/` mappában van.
+A futtatáshoz semmit nem kell telepíteni: az `index.html` közvetlenül (akár fájlként, dupla kattintással is)
+megnyitható, mert a kész szimulátor a `dist/` mappában van, a feladatok a `feladatok/` mappában.
+Másik feladat az URL-ben választható: `index.html?feladat=vlan-1`.
 
 Fejlesztéshez (Node.js 20+):
 
@@ -32,11 +34,14 @@ npm test         # automatikus tesztek (node --test)
 ## Felépítés
 
 ```
-src/mag/          gyártófüggetlen motor (szimulált óra, később Ethernet, ARP, IP …)
-src/modell/       az eszközök állapota adatként (switch.js)
-src/cli/          gyártófüggetlen parancssor-értelmező, interfésznevek, munkamenet
+src/mag/          gyártófüggetlen motor: szimulált óra, hálózat és kábelek, switch-továbbítás
+                  (VLAN, 802.1Q, MAC-tábla, DTP), végpontok (ARP, IP, ping)
+src/modell/       az eszközök állapota adatként (switch.js, pc.js)
+src/cli/          parancssor-értelmező, interfésznevek, switch- és PC-munkamenet
 src/gyartok/ios/  az IOS-szerű parancssor: módok, parancsok (adatként), hibaüzenetek, kimenetek
-src/nezet/        terminál és SVG-topológia
+src/feladat/      feladat betöltése, eredményalapú ellenőrzés
+src/nezet/        terminál, SVG-topológia animációval, PC-ablak, feladatpanel
+feladatok/        egy feladat = egy fájl (vlan-1.js)
 css/              a szimulátor stílusa (csak .hsz- osztályok)
 dist/             a kész, beépíthető fájlok
 docs/             forrásjegyzék

@@ -36,3 +36,45 @@ export function konfigbol(...sorok) {
   fut(mm, 'enable', 'configure terminal');
   return { mm, kimenet: sorok.length ? fut(mm, ...sorok) : [] };
 }
+
+// ---------------------------------------------------------------------------
+// Hálózatos tesztekhez: a vlan-1 feladat betöltve, minden switchhez egy munkamenet.
+// ---------------------------------------------------------------------------
+import '../feladatok/vlan-1.js';
+import { feladatKeres, feladatBetolt } from '../src/feladat/betolto.js';
+import { ipBeallit } from '../src/mag/vegpont.js';
+
+/** A vlan-1 feladat hálózata; f.mm('SW1') a switch konzolja (privilegizált módban). */
+export function vlanFeladat() {
+  const f = feladatBetolt(feladatKeres('vlan-1'), { kesleltetes: 1 });
+  const munkamenetek = new Map();
+  f.mm = (nev) => {
+    if (!munkamenetek.has(nev)) {
+      const mm = new Munkamenet({ szemelyiseg: ios, eszkoz: f.eszkoz(nev), ora: f.halozat.ora });
+      fut(mm, 'enable');
+      munkamenetek.set(nev, mm);
+    }
+    return munkamenetek.get(nev);
+  };
+  /** Parancsok egy switchen (az utolsó kimenetét adja vissza). */
+  f.sw = (nev, ...sorok) => fut(f.mm(nev), ...sorok);
+  /** A PC-k IP-címe a címterv szerint. */
+  f.ipk = () => {
+    for (const s of f.feladat.cimterv) ipBeallit(f.eszkoz(s.eszkoz), { ip: s.ip, maszk: s.maszk });
+  };
+  f.lep = (ms = 20000) => f.halozat.ora.lep(ms);
+  return f;
+}
+
+/** A teljes, helyes megoldás egy switchen (rövidítve vagy kiírva). */
+export function megold(f, nev, roviden = false) {
+  if (roviden) {
+    f.sw(nev, 'conf t', 'vl 10', 'na IRODA', 'vl 20', 'na RAKTAR', 'int f0/1', 'sw mo acc', 'sw acc vl 10',
+      'int fa0/2', 'sw mo acc', 'sw acc vl 20', 'int g0/1', 'sw mo tr', 'end');
+  } else {
+    f.sw(nev, 'configure terminal', 'vlan 10', 'name IRODA', 'exit', 'vlan 20', 'name RAKTAR', 'exit',
+      'interface FastEthernet0/1', 'switchport mode access', 'switchport access vlan 10', 'exit',
+      'interface FastEthernet0/2', 'switchport mode access', 'switchport access vlan 20', 'exit',
+      'interface GigabitEthernet0/1', 'switchport mode trunk', 'end');
+  }
+}

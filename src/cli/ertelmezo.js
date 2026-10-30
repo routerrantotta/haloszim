@@ -238,8 +238,6 @@ function bejar(fak, mod, tokenek, sor, kornyezet, { megallMaradeknal = false } =
   if (!cs) return { ok: false, hiba: 'ervenytelen', oszlop: tokenek[0] ? tokenek[0].kezdet : 0, tokenIndex: 0, mod, ertekek, gyokerKezdet };
   let i = 0;
   while (i < tokenek.length) {
-    // A „még nincs meg” jelölésű parancs a sor többi részét nem vizsgálja.
-    if (cs.parancs && cs.parancs.nincsMeg) break;
     if (cs.tovabb) {
       aktMod = cs.tovabb;
       cs = fak[aktMod];
@@ -248,6 +246,9 @@ function bejar(fak, mod, tokenek, sor, kornyezet, { megallMaradeknal = false } =
     }
     const t = tokenek[i];
     const jeloltek = kulcsszoJeloltek(cs, t.szoveg);
+    // A „még nincs meg” jelölésű parancs a sor többi részét nem vizsgálja
+    // (kivéve, ha a folytatás egy már elkészült parancs, pl. „show interfaces trunk”).
+    if (cs.parancs && cs.parancs.nincsMeg && jeloltek.length === 0) break;
     if (jeloltek.length === 1) {
       cs = jeloltek[0].csomopont;
       i++;
@@ -354,7 +355,11 @@ export function sugo(fak, mod, sor, kornyezet = {}) {
 
   // Még meg nem írt parancs: a súgó csak ennyit tud mondani róla.
   if (tokenek.length > 0 && cs.parancs && cs.parancs.nincsMeg) {
-    return { ok: true, fajta: 'lista', elemek: [{ nev: '<cr>', sugo: cs.parancs.szavak[0].sugo }], cr: false, gyoker: false };
+    const nincsTovabb = cs.kulcsszavak.length === 0 && cs.parameterek.length === 0;
+    if (nincsTovabb) {
+      const szavak = cs.parancs.szavak;
+      return { ok: true, fajta: 'lista', elemek: [{ nev: '<cr>', sugo: szavak[szavak.length - 1].sugo }], cr: false, gyoker: false };
+    }
   }
 
   if (reszleges === '') {

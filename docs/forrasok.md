@@ -22,6 +22,9 @@ ezeket érdemes elsőként összevetni egy valódi eszközzel vagy újabb forrá
 | F8 | [Cisco NetAcad tananyag (Tartui Egyetem tükre), 3.2.1.1](https://courses.cs.ut.ee/all/MTAT.08.003/mat/2mrs/course/module3/3.2.1.1/3.2.1.1.html) | a normál VLAN-ok a vlan.dat fájlban vannak |
 | F9 | [KSU – Lab 02: Switch Configuration](https://faculty.ksu.edu.sa/sites/default/files/lab02_switchconfig_0.pdf) | promptok, „Enter configuration commands …”, %SYS-5-CONFIG_I, „con0 is now available”, „Press RETURN …” |
 | F10 | [Cisco Community – VLAN description, 2960](https://community.cisco.com/t5/switching/vlan-description-switch-2960/m-p/3693786) | alapértelmezett VLAN-név (VLAN0010), a név legfeljebb 32 karakter |
+| F11 | [Cisco Community – trunk portok egy Catalyst 2960-on](https://community.cisco.com/t5/switching/create-trunkports-on-catalyst-2960/m-p/2159710) | show interfaces trunk: a négy szakasz; link nélküli trunk port: status „other”, VLAN-listák „none” |
+| F12 | [administrator.de – show mac address-table IOS 15-ön](https://administrator.de/forum/cisco-switch-ios-15-show-mac-address-table-249926.html) | show mac address-table: fejléc, STATIC/CPU és DYNAMIC sorok, összesítő sor |
+| F13 | [Cisco Community – auto/auto: a-full, a-100](https://community.cisco.com/t5/switching/default-auto-negotiate-shows-a-full-a-100/td-p/4747925) | show interfaces status: valódi eszközön a-full / a-100 (a Packet Tracer itt „auto”-t mutat) |
 | E | Saját emlékezet (CCNA-oktatás, Packet Tracer-gyakorlat) | csak kiegészítésként; egyedül nem elég |
 
 ## Parancsok és üzenetek
@@ -51,7 +54,26 @@ ezeket érdemes elsőként összevetni egy valódi eszközzel vagy újabb forrá
 | `show vlan brief` | üres sor; fejléc; elválasztó 4-32-9-31 kötőjellel; portok vesszővel, soronként ≤31 karakter (4 port), folytatás a Ports oszlop alatt (48 szóköz); 1002–1005 `act/unsup` | F3, F4, F5 | rendben |
 | `show running-config` | `Building configuration...`, üres sor, `Current configuration : N bytes`, majd a konfiguráció `!`-ekkel tagolva, `end`; a sorrend F6 szerint | F6, F7, F8, E | a `version 15.0` és a pontos `!`-számok: ellenőrizendő |
 | VLAN-ok a running-configban | VTP server módban NEM látszanak (vlan.dat), transparent módban igen | F7, F8 | rendben |
+| `switchport mode access/trunk/dynamic …` | a running-configban: ` switchport access vlan N`, utána ` switchport mode access`; trunknál ` switchport mode trunk`; a gyári dynamic auto nem látszik | E | ellenőrizendő |
+| `switchport access vlan` nem létező VLAN-nal | `% Access VLAN does not exist. Creating vlan N`, és a VLAN létrejön (VLAN00NN névvel) | E | ellenőrizendő |
+| `show interfaces trunk` | üres sor; 4 szakasz (Mode/Encapsulation/Status/Native vlan; allowed; allowed and active; forwarding), Port oszlop 12 karakter; mód: on / auto / desirable; `802.1q`; ha nincs trunk: üres kimenet | F11, E | az oszlopszélességek: ellenőrizendő |
+| `show interfaces status` | Port (9+1), Name (18+1), Status (12+1), Vlan (10+1), Duplex (6, jobbra), Speed (6, jobbra), Type; connected / notconnect / disabled; trunk portnál Vlan = `trunk` | F13, E | az oszlopszélességek: ellenőrizendő |
+| `show mac address-table` | cím, 43 kötőjel, üres sor, fejléc; sor: VLAN jobbra 4 karakteren, 4 szóköz, MAC, 4 szóköz, típus 8 karakteren, 4 szóköz, port; előbb a 20 STATIC/CPU sor; végül `Total Mac Addresses for this criterion: N` | F12, E | a dinamikus sor: rendben; a statikus sorok listája: ellenőrizendő |
+| `show vlan brief` trunk porttal | a trunkként működő port nem szerepel | F3 | rendben |
+| Link le / fel | `%LINK-3-UPDOWN: Interface …, changed state to down/up`, utána `%LINEPROTO-5-UPDOWN: Line protocol on Interface …, changed state to down/up` (a szimulátorban 1 s, illetve 2 s múlva) | E | az időzítés: ellenőrizendő |
+| PC: `ping` | üres sor, `Pinging X with 32 bytes of data:`, `Reply from X: bytes=32 time<1ms TTL=128` / `Request timed out.` / `Reply from <saját IP>: Destination host unreachable.` / `PING: transmit failed. General failure.`; statisztika (`Packets: Sent = …, Received = …, Lost = … (…% loss),`) | E | ellenőrizendő (asztali gépek parancssorának formája; gyártónév nélkül) |
+| PC: `ipconfig`, `arp -a` | `Ethernet adapter FastEthernet0:`, pontozott címkék; `Interface: IP --- 0x2`, `Internet Address / Physical Address / Type` | E | ellenőrizendő |
 | `--More--` | 24 soros terminál: 23 sor, majd ` --More-- `; szóköz = oldal, Enter = sor, más = vége | E | ellenőrizendő |
+
+## Szándékos egyszerűsítések (v0.2-től)
+
+- Feszítőfa (STP) még nincs: a port a link feljötte után azonnal továbbít (a valódi eszközön portfast nélkül kb. 30 s).
+- DTP egyszerűsítve: dynamic auto + trunk/desirable → trunk; auto + auto → access. A trunkon minden VLAN átmegy
+  (1–4094), a natív VLAN mindig 1 (a `switchport trunk …` parancsok még nincsenek meg).
+- VTP-terjesztés nincs (gyári állapotban, üres tartománynévvel a valódi eszközök sem terjesztenek).
+- A ping ideje mindig `time<1ms`: az animáció miatti késleltetés nem számít bele.
+- Access portra érkező címkés keretet a switch eldob.
+- Az üzemmód (access/trunk) váltásakor a link nem „pattan” le és fel.
 
 ## Szándékos egyszerűsítések (v0.1)
 

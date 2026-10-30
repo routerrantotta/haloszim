@@ -41,6 +41,9 @@ export function konfiguracioTorzs(sw) {
   for (const p of sw.portok) {
     s.push(`interface ${p.nev}`);
     if (p.accessVlan !== 1) s.push(` switchport access vlan ${p.accessVlan}`);
+    if (p.mod === 'access') s.push(' switchport mode access');
+    else if (p.mod === 'trunk') s.push(' switchport mode trunk');
+    else if (p.mod === 'dinamikus-kezdemenyezo') s.push(' switchport mode dynamic desirable');
     if (p.leallitva) s.push(' shutdown');
     s.push('!');
   }

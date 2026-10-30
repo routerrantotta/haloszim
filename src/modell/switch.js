@@ -20,6 +20,18 @@
  * @property {string} szam      – pl. "0/1"
  * @property {boolean} leallitva – adminisztratívan le van-e kapcsolva (shutdown)
  * @property {number} accessVlan – melyik VLAN-ba tartozik access módban
+ * @property {'dinamikus-auto'|'dinamikus-kezdemenyezo'|'access'|'trunk'} mod – a beállított üzemmód
+ *           (switchport mode …; a 2960 gyári értéke a dynamic auto)
+ * @property {number} nativVlan  – trunk módban a címke nélküli keretek VLAN-ja (gyárilag 1)
+ * @property {boolean} fent      – üzemi állapot: van kábel, mindkét vége bekapcsolva (a mag állítja)
+ */
+
+/**
+ * @typedef {Object} MacBejegyzes
+ * @property {number} vlan
+ * @property {string} mac  – 12 hexa számjegy
+ * @property {string} port – a port teljes neve
+ * @property {number} ido  – mikor látta utoljára (szimulált ms)
  */
 
 /**
@@ -30,6 +42,7 @@
  * @property {string} vtpMod    – "server" (gyári), később "transparent", "client"
  * @property {Object<number, Vlan>} vlanok – VLAN-szám → adatok
  * @property {Port[]} portok    – a portok a fizikai sorrendjükben
+ * @property {MacBejegyzes[]} macTabla – a megtanult MAC-címek (MAC address table)
  */
 
 /** Az alapértelmezett gépnév. */
@@ -57,6 +70,9 @@ function ujPort(tipus, szam) {
     szam,
     leallitva: false,
     accessVlan: 1,
+    mod: 'dinamikus-auto',
+    nativVlan: 1,
+    fent: false,
   };
 }
 
@@ -76,6 +92,7 @@ export function ujSwitch2960(beallitasok = {}) {
     vtpMod: 'server',
     vlanok: gyariVlanok(),
     portok,
+    macTabla: [],
   };
 }
 

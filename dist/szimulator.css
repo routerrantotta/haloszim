@@ -32,7 +32,7 @@
   border-radius: 1rem;
   padding: .5rem;
 }
-.hsz-topologia__rajz { display: block; width: 100%; height: auto; max-height: 210px; }
+.hsz-topologia__rajz { display: block; width: 100%; height: auto; }
 .hsz-eszkoz { cursor: pointer; }
 .hsz-eszkoz:focus { outline: none; }
 .hsz-eszkoz:focus-visible .hsz-eszkoz__haz { stroke: var(--hsz-yolk); stroke-width: 4; }
@@ -40,14 +40,145 @@
 .hsz-eszkoz__haz { fill: var(--hsz-tinta); stroke: var(--hsz-fekete); stroke-width: 2; }
 .hsz-eszkoz__elolap { fill: #2c2918; }
 .hsz-eszkoz__apro { fill: #cfc8ae; font: 9px var(--hsz-betu); }
-.hsz-eszkoz__nev { fill: var(--hsz-fekete); font: 900 20px var(--hsz-cimbetu); }
-.hsz-eszkoz__tipus { fill: var(--hsz-tinta); font: 13px var(--hsz-betu); }
+.hsz-eszkoz__nev { fill: var(--hsz-fekete); font: 900 17px var(--hsz-cimbetu); }
+.hsz-eszkoz__tipus { fill: var(--hsz-tinta); font: 400 12px var(--hsz-betu); }
+.hsz-eszkoz__ip { fill: var(--hsz-tinta); font: 13px var(--hsz-mono); }
+.hsz-eszkoz__ip--nincs { fill: #8a836b; font-style: italic; font-family: var(--hsz-betu); }
+.hsz-eszkoz--kijelolt .hsz-eszkoz__haz { stroke: var(--hsz-yolk); stroke-width: 5; }
+.hsz-pc__kepernyo { fill: #0d0c07; }
+.hsz-pc__prompt { fill: var(--hsz-sarga); font: 9px var(--hsz-mono); }
 .hsz-kozep { text-anchor: middle; }
 .hsz-port__aljzat { fill: #0d0c07; stroke: #6b6650; stroke-width: 1; }
 .hsz-port__nyelv { fill: #3b3826; }
 .hsz-led { fill: #45412f; }
 .hsz-led--be { fill: #3ccf4e; }
 .hsz-port--lekapcsolva .hsz-port__aljzat { stroke: var(--hsz-yolk); stroke-width: 2; }
+
+/* kábelek */
+.hsz-kabel { fill: none; stroke: var(--hsz-tinta); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+.hsz-kabel--le { stroke: #a39c80; stroke-dasharray: 6 6; }
+.hsz-kabel--trunk { stroke: var(--hsz-yolk); stroke-width: 6; }
+.hsz-kabel__cimke { fill: var(--hsz-tinta); font: 11px var(--hsz-mono); }
+
+/* mozgó csomagok, eldobott keret */
+.hsz-anim { pointer-events: none; }
+.hsz-csomag--arp circle { fill: var(--hsz-yolk); stroke: var(--hsz-fekete); stroke-width: 2; }
+.hsz-csomag--icmp circle { fill: var(--hsz-fekete); stroke: var(--hsz-sarga); stroke-width: 2.5; }
+.hsz-csomag__cimke rect { fill: var(--hsz-feher); stroke: var(--hsz-fekete); stroke-width: 1.5; }
+.hsz-csomag__cimke text { fill: var(--hsz-fekete); font: 700 11px var(--hsz-betu); }
+.hsz-eldobva circle { fill: #b3261e; }
+.hsz-eldobva text { fill: #fff; font: 700 13px var(--hsz-betu); }
+.hsz-eldobva { animation: hsz-elhalvanyul 2.5s ease-in forwards; }
+@keyframes hsz-elhalvanyul { 0%, 60% { opacity: 1; } 100% { opacity: 0; } }
+
+/* jelmagyarázat */
+.hsz-jelmagyarazat { display: flex; flex-wrap: wrap; gap: .3rem 1rem; margin: .3rem .4rem 0; font-size: .85rem; color: var(--hsz-tinta); }
+.hsz-jelmagyarazat span { display: inline-flex; align-items: center; gap: .35rem; }
+.hsz-potty { display: inline-block; width: .8rem; height: .8rem; border-radius: 50%; }
+.hsz-potty--arp { background: var(--hsz-yolk); border: 2px solid var(--hsz-fekete); }
+.hsz-potty--icmp { background: var(--hsz-fekete); border: 2px solid var(--hsz-sarga); }
+.hsz-cimke-minta { font-size: .75rem; border: 1.5px solid var(--hsz-fekete); border-radius: .3rem; padding: 0 .25rem; background: var(--hsz-feher); }
+.hsz-x-minta { display: inline-grid; place-items: center; width: 1rem; height: 1rem; border-radius: 50%; background: #b3261e; color: #fff; font-size: .65rem; }
+.hsz-vonal-minta { display: inline-block; width: 1.6rem; height: 5px; border-radius: 3px; background: var(--hsz-yolk); }
+
+/* ---------- elrendezés ---------- */
+.hsz-felso { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+.hsz-topologia { display: flex; flex-direction: column; justify-content: center; }
+@media (min-width: 960px) {
+  .hsz-felso { grid-template-columns: minmax(0, 1.75fr) minmax(17rem, 1fr); }
+  .hsz-felso--egy { grid-template-columns: minmax(0, 1fr); }
+  .hsz-panel { max-height: 34rem; overflow: auto; }
+  /* A gomb és az összegzés görgetéskor is látszik a panel alján. */
+  .hsz-panel__lab { position: sticky; bottom: 0; }
+}
+.hsz-munka { margin-top: 1rem; }
+.hsz-rejtett { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------- gombok, fülek ---------- */
+.hsz-gomb {
+  font: 700 .95rem var(--hsz-betu);
+  color: var(--hsz-sarga); background: var(--hsz-fekete);
+  border: 2px solid var(--hsz-fekete); border-radius: 999px;
+  padding: .4rem 1.1rem; cursor: pointer;
+}
+.hsz-gomb:hover:not(:disabled) { background: var(--hsz-tinta); }
+.hsz-gomb:disabled { opacity: .55; cursor: default; }
+.hsz-gomb:focus-visible { outline: 3px solid var(--hsz-yolk); outline-offset: 2px; }
+.hsz-gomb--fo { font-family: var(--hsz-cimbetu); font-size: 1rem; padding: .55rem 1.4rem; }
+.hsz-fulek { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .6rem; }
+.hsz-ful {
+  font: 900 .9rem var(--hsz-cimbetu);
+  background: var(--hsz-feher); color: var(--hsz-fekete);
+  border: 2px solid var(--hsz-fekete); border-radius: 999px;
+  padding: .3rem .95rem; cursor: pointer;
+}
+.hsz-ful:hover { background: #fff; }
+.hsz-ful--aktiv, .hsz-ful--aktiv:hover { background: var(--hsz-fekete); color: var(--hsz-sarga); }
+.hsz-ful:focus-visible { outline: 3px solid var(--hsz-yolk); outline-offset: 2px; }
+.hsz-nezet[hidden], .hsz-pc-ablak[hidden] { display: none; }
+
+/* ---------- feladatpanel ---------- */
+.hsz-panel {
+  background: var(--hsz-feher);
+  border: 2px solid var(--hsz-fekete);
+  border-radius: 1rem;
+  padding: .9rem 1rem 1rem;
+  font-size: .95rem; line-height: 1.45;
+}
+.hsz-panel__fej { display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem .6rem; }
+.hsz-panel__cim { font: 900 1.15rem/1.2 var(--hsz-cimbetu); margin: 0; }
+.hsz-panel__szint { font-size: .75rem; background: var(--hsz-sarga); border: 1.5px solid var(--hsz-fekete); border-radius: 999px; padding: 0 .55rem; }
+.hsz-panel__szoveg { margin: .5rem 0; }
+.hsz-panel__alcim { font: 900 .95rem var(--hsz-cimbetu); margin: .9rem 0 .3rem; }
+.hsz-panel__lepesek { margin: 0; padding-left: 1.3rem; }
+.hsz-panel__lepesek li { margin-bottom: .25rem; }
+.hsz-panel__tablahely { overflow-x: auto; }
+.hsz-panel__tabla { border-collapse: collapse; font-size: .85rem; width: 100%; }
+.hsz-panel__tabla th, .hsz-panel__tabla td { text-align: left; padding: .2rem .45rem; border-bottom: 1px solid #d8d1b5; white-space: nowrap; }
+.hsz-panel__tabla td:nth-child(2), .hsz-panel__tabla td:nth-child(3) { font-family: var(--hsz-mono); }
+.hsz-panel { position: relative; padding-bottom: 0; }
+.hsz-panel__lab {
+  background: var(--hsz-feher);
+  border-top: 2px solid var(--hsz-fekete);
+  margin: .8rem -1rem 0; padding: .7rem 1rem .9rem;
+}
+.hsz-panel__osszegzes { margin: 0 0 .55rem; font-weight: bold; }
+.hsz-panel__osszegzes:empty { display: none; }
+.hsz-panel__osszegzes--siker { background: var(--hsz-sarga); border-radius: .5rem; padding: .4rem .6rem; }
+.hsz-celok { list-style: none; margin: .4rem 0 0; padding: 0; }
+.hsz-cel { display: grid; grid-template-columns: 1.4rem minmax(0, 1fr); gap: .3rem; padding: .35rem 0; border-top: 1px solid #e6dfc4; }
+.hsz-cel__jel { font-weight: 900; text-align: center; }
+.hsz-cel__cim { display: block; }
+.hsz-cel__cim--ellenproba { font-style: italic; }
+.hsz-cel__megj { display: block; font-size: .82rem; color: #57513c; }
+.hsz-cel--var { opacity: .55; }
+.hsz-cel--fut .hsz-cel__jel { color: var(--hsz-yolk); }
+.hsz-cel--fut { background: #fff6cf; }
+.hsz-cel--ok .hsz-cel__jel { color: #1e7d32; }
+.hsz-cel--hiba .hsz-cel__jel, .hsz-cel--hiba .hsz-cel__megj { color: #b3261e; }
+
+/* ---------- PC-ablak ---------- */
+.hsz-pc-ablak { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 900px) { .hsz-pc-ablak { grid-template-columns: 17rem minmax(0, 1fr); } }
+.hsz-pc-urlap {
+  background: var(--hsz-feher);
+  border: 2px solid var(--hsz-fekete);
+  border-radius: 1rem;
+  padding: .8rem 1rem 1rem;
+}
+.hsz-pc-urlap__cim { font: 900 1rem var(--hsz-cimbetu); margin: 0 0 .5rem; }
+.hsz-pc-urlap__mezo { display: block; margin-bottom: .55rem; font-size: .9rem; }
+.hsz-pc-urlap__mezo span { display: block; margin-bottom: .15rem; }
+.hsz-pc-urlap__mezo input {
+  width: 100%; font: 1rem var(--hsz-mono);
+  padding: .35rem .5rem; border: 2px solid var(--hsz-fekete); border-radius: .5rem; background: #fff;
+}
+.hsz-pc-urlap__mezo input:focus { outline: 3px solid var(--hsz-yolk); outline-offset: 0; }
+.hsz-pc-urlap__mezo input[aria-invalid="true"] { border-color: #b3261e; }
+.hsz-pc-urlap__gombsor { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .8rem; margin-top: .3rem; }
+.hsz-pc-urlap__uzenet { font-size: .85rem; }
+.hsz-pc-urlap__uzenet--hiba { color: #b3261e; font-weight: bold; }
+.hsz-pc-ablak__terminal .hsz-terminal__kepernyo { height: min(50vh, 24rem); }
 
 /* ---------- terminál ---------- */
 .hsz-terminal {

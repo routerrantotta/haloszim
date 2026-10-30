@@ -2,6 +2,30 @@
 
 A legújabb van felül.
 
+## v0.2 – 2026-10-30 – Az első feladat: VLAN-ok két switchen, trunkkel
+
+- **Első feladat** (`feladatok/vlan-1.js`): 2 switch, 4 PC, 2 VLAN (10 IRODA, 20 RAKTAR), trunk a két switch között.
+  A feladatpanelen leírás, teendők, címterv és **Ellenőrzés** gomb.
+- **A hálózat magja** (`src/mag/`): kábelek, Ethernet-keretek, 802.1Q-címke (access / trunk, natív VLAN),
+  MAC-tábla tanulása és öregedése (300 s), elárasztás, egyszerűsített DTP (dynamic auto / desirable), ARP, IPv4, ping.
+  Minden egy közös szimulált órán fut.
+- **Eredményalapú ellenőrzés ellenpróbával:** állapot (VLAN-ok, portok, trunk, IP-címek), valódi ping-próbák,
+  és ellenpróbák: a szórás (broadcast) nem juthat át másik VLAN-ba, a különböző VLAN-ú gépek nem érik el egymást.
+  Minden cél mellett rövid magyarázat, mi a gond.
+- **Ping-animáció:** a csomagok végigcsúsznak a kábeleken (ARP = narancs, ping = fekete-sárga), a trunkon a
+  VLAN-címke is látszik, az eldobott keret helyén ✕ jel.
+- **Topológia:** két switch és négy PC saját rajzzal, kábelek portcímkékkel, link-LED-ek, a trunk kiemelve;
+  kattintásra (vagy a fülekkel) választható, melyik eszközt kezeled.
+- **PC-ablak:** IP-cím, maszk, átjáró beállítása (ellenőrzéssel), és parancssor: `ping` (`-n`), `ipconfig` (`/all`),
+  `arp -a`, `arp -d`, `hostname`, `cls`, `help`.
+- **Új IOS-szerű parancsok:** `switchport mode access | trunk | dynamic auto | dynamic desirable`, `no switchport mode`,
+  `switchport access vlan` (nem létező VLAN-t létrehoz), `no switchport access vlan`, `show interfaces trunk`,
+  `show interfaces status`, `show mac address-table` (`dynamic`).
+- **Valódi viselkedés:** a `show vlan brief` nem mutatja a trunk portokat; `shutdown` / `no shutdown` után
+  `%LINK-3-UPDOWN` és `%LINEPROTO-5-UPDOWN` üzenetek mindkét switch konzolján; a túloldali VLAN hiányában a
+  trunk eldobja a keretet.
+- 93 automatikus teszt (29 új a hálózatra, a switchport-parancsokra, a PC-re és az ellenőrzésre).
+
 ## v0.1 – 2026-10-29 – A váz
 
 Az első kipróbálható változat: egy switch és egy IOS-szerű parancssor.

@@ -1,0 +1,86 @@
+/*
+ * Haloszim feladat: VLAN-ok két switchen, trunkkel (vlan-1)
+ *
+ * Egy feladat = egy fájl. Sima <script>-ként töltődik be a dist/szimulator.js UTÁN,
+ * és hozzáadja magát a HaloszimFeladatok listához. A szimulátort nem kell újraépíteni hozzá.
+ *
+ * Felépítés:
+ *   azon, cim, szint, leiras, lepesek – a feladatpanel szövegei
+ *   cimterv   – a PC-k tervezett címei (a panel táblázata és a ping-próbák célcímei)
+ *   topologia – eszközök (típus, hely a rajzon: x, y) és kábelek [eszköz, port, eszköz, port]
+ *   kiindulo  – kiinduló beállítások (itt nincs: a PC-k üresek, a switchek gyáriak)
+ *   celok     – az ellenőrzés céljai: állapot (vlan, access-port, trunk, pc-ip) és próbák
+ *               (ping, szoras); az „ellenproba: true” jelöli, aminek NEM szabad működnie
+ */
+(function (g) {
+  (g.HaloszimFeladatok = g.HaloszimFeladatok || []).push({
+    azon: 'vlan-1',
+    cim: 'VLAN-ok két switchen, trunkkel',
+    szint: 'kezdő',
+    leiras: [
+      'Egy kis cég két szintjén egy-egy switch van (SW1, SW2). Az irodai gépek (PC1, PC3) a 10-es, '
+        + 'a raktári gépek (PC2, PC4) a 20-as VLAN-ba kerüljenek.',
+      'Az azonos VLAN-ban lévő gépek a két switchen át is érjék el egymást, a különböző VLAN-ban lévők ne. '
+        + 'Ehhez a két switch közötti kábelnek trunknak kell lennie: az viszi át mindkét VLAN forgalmát, '
+        + '802.1Q-címkével megjelölve.',
+    ],
+    lepesek: [
+      'Mindkét switchen hozd létre a VLAN-okat: 10 – IRODA, 20 – RAKTAR.',
+      'Mindkét switchen: Fa0/1 → access port a 10-es VLAN-ban, Fa0/2 → access port a 20-as VLAN-ban.',
+      'A két switch közötti Gi0/1 port legyen trunk.',
+      'Kattints a PC-kre, és állítsd be az IP-címüket a táblázat szerint.',
+      'Próbáld ki: PC1-ről pingeld PC3-at, PC2-ről PC4-et. Végül nyomd meg az Ellenőrzés gombot.',
+    ],
+    cimterv: [
+      { eszkoz: 'PC1', ip: '192.168.10.11', maszk: '255.255.255.0', vlan: 10, hova: 'SW1 Fa0/1' },
+      { eszkoz: 'PC2', ip: '192.168.20.12', maszk: '255.255.255.0', vlan: 20, hova: 'SW1 Fa0/2' },
+      { eszkoz: 'PC3', ip: '192.168.10.13', maszk: '255.255.255.0', vlan: 10, hova: 'SW2 Fa0/1' },
+      { eszkoz: 'PC4', ip: '192.168.20.14', maszk: '255.255.255.0', vlan: 20, hova: 'SW2 Fa0/2' },
+    ],
+    topologia: {
+      meret: { szel: 800, mag: 400 },
+      eszkozok: [
+        { nev: 'SW1', tipus: 'switch', x: 40, y: 70 },
+        { nev: 'SW2', tipus: 'switch', x: 448, y: 70 },
+        { nev: 'PC1', tipus: 'pc', x: 40, y: 270 },
+        { nev: 'PC2', tipus: 'pc', x: 210, y: 270 },
+        { nev: 'PC3', tipus: 'pc', x: 448, y: 270 },
+        { nev: 'PC4', tipus: 'pc', x: 618, y: 270 },
+      ],
+      kabelek: [
+        ['SW1', 'FastEthernet0/1', 'PC1', 'FastEthernet0'],
+        ['SW1', 'FastEthernet0/2', 'PC2', 'FastEthernet0'],
+        ['SW2', 'FastEthernet0/1', 'PC3', 'FastEthernet0'],
+        ['SW2', 'FastEthernet0/2', 'PC4', 'FastEthernet0'],
+        ['SW1', 'GigabitEthernet0/1', 'SW2', 'GigabitEthernet0/1'],
+      ],
+    },
+    kiindulo: {},
+    celok: [
+      { tipus: 'vlan', eszkoz: 'SW1', vlan: 10, nev: 'IRODA', szoveg: 'SW1: van 10-es VLAN, a neve IRODA' },
+      { tipus: 'vlan', eszkoz: 'SW1', vlan: 20, nev: 'RAKTAR', szoveg: 'SW1: van 20-as VLAN, a neve RAKTAR' },
+      { tipus: 'vlan', eszkoz: 'SW2', vlan: 10, nev: 'IRODA', szoveg: 'SW2: van 10-es VLAN, a neve IRODA' },
+      { tipus: 'vlan', eszkoz: 'SW2', vlan: 20, nev: 'RAKTAR', szoveg: 'SW2: van 20-as VLAN, a neve RAKTAR' },
+      { tipus: 'access-port', eszkoz: 'SW1', port: 'FastEthernet0/1', vlan: 10, szoveg: 'SW1 Fa0/1 (PC1): access port, VLAN 10' },
+      { tipus: 'access-port', eszkoz: 'SW1', port: 'FastEthernet0/2', vlan: 20, szoveg: 'SW1 Fa0/2 (PC2): access port, VLAN 20' },
+      { tipus: 'access-port', eszkoz: 'SW2', port: 'FastEthernet0/1', vlan: 10, szoveg: 'SW2 Fa0/1 (PC3): access port, VLAN 10' },
+      { tipus: 'access-port', eszkoz: 'SW2', port: 'FastEthernet0/2', vlan: 20, szoveg: 'SW2 Fa0/2 (PC4): access port, VLAN 20' },
+      { tipus: 'trunk', eszkoz: 'SW1', port: 'GigabitEthernet0/1', szoveg: 'SW1 Gi0/1 – SW2 Gi0/1: működő trunk' },
+      { tipus: 'pc-ip', eszkoz: 'PC1', ip: '192.168.10.11', maszk: '255.255.255.0', szoveg: 'PC1 IP-címe: 192.168.10.11 /24' },
+      { tipus: 'pc-ip', eszkoz: 'PC2', ip: '192.168.20.12', maszk: '255.255.255.0', szoveg: 'PC2 IP-címe: 192.168.20.12 /24' },
+      { tipus: 'pc-ip', eszkoz: 'PC3', ip: '192.168.10.13', maszk: '255.255.255.0', szoveg: 'PC3 IP-címe: 192.168.10.13 /24' },
+      { tipus: 'pc-ip', eszkoz: 'PC4', ip: '192.168.20.14', maszk: '255.255.255.0', szoveg: 'PC4 IP-címe: 192.168.20.14 /24' },
+      { tipus: 'ping', honnan: 'PC1', cel: 'PC3', vart: true, szoveg: 'Ping PC1 → PC3 megy (VLAN 10, a trunkon át)' },
+      { tipus: 'ping', honnan: 'PC2', cel: 'PC4', vart: true, szoveg: 'Ping PC2 → PC4 megy (VLAN 20, a trunkon át)' },
+      {
+        tipus: 'szoras', honnan: 'PC1', elerje: ['PC3'], neErje: ['PC2', 'PC4'], ellenproba: true,
+        szoveg: 'Ellenpróba: PC1 szórása (broadcast) csak PC3-hoz jut el, PC2-höz és PC4-hez nem',
+      },
+      {
+        tipus: 'szoras', honnan: 'PC2', elerje: ['PC4'], neErje: ['PC1', 'PC3'], ellenproba: true,
+        szoveg: 'Ellenpróba: PC2 szórása csak PC4-hez jut el, PC1-hez és PC3-hoz nem',
+      },
+      { tipus: 'ping', honnan: 'PC1', cel: 'PC2', vart: false, ellenproba: true, szoveg: 'Ellenpróba: ping PC1 → PC2 NEM megy (különböző VLAN)' },
+    ],
+  });
+})(typeof window !== 'undefined' ? window : globalThis);

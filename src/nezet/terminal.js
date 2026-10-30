@@ -153,17 +153,32 @@ export class Terminal {
   /** @private */
   gombAllapot() {
     const lapoz = !!this.lapozas;
+    // A PC parancssorában nincs ?-súgó, Tab és Ctrl+Z: ezek gombjai ott nem kellenek.
+    const nincs = {
+      sugo: this.mm.sugoBillentyu === false,
+      tab: this.mm.vanTab === false,
+      ctrlz: this.mm.vanCtrlZ === false,
+    };
     for (const [nev, g] of Object.entries(this.gombok)) {
       const lapozoGomb = nev === 'tovabb' || nev === 'kilep';
-      g.hidden = lapoz ? !lapozoGomb : lapozoGomb;
+      g.hidden = lapoz ? !lapozoGomb : lapozoGomb || !!nincs[nev];
       g.disabled = this.foglalt && !lapoz;
     }
   }
 
   /**
-   * Kimenet kiírása sorban. A { varj: ms } elemeknél vár; lapozható kimenetnél
+   * Magától érkező sor (pl. az eszköz naplóüzenete, %LINK-3-UPDOWN): a beírás alatt álló
+   * sor fölé kerül, a gépelést nem zavarja.
+   */
+  aszinkronSor(szoveg) {
+    this.kiirSor(szoveg);
+  }
+
+  /**
+   * Kimenet kiírása sorban. A { varj: ms } elemeknél vár; a { folyamat } elem fokozatosan ír
+   * (pl. a ping válaszai, ahogy megérkeznek); { torles } = képernyőtörlés. Lapozható kimenetnél
    * oldalanként megáll (--More--).
-   * @param {Array<string|{varj:number}>} elemek
+   * @param {Array<string|{varj:number}|{folyamat: Function}|{torles: true}>} elemek
    * @param {boolean} lapozhato
    */
   async kiirMind(elemek, lapozhato) {
@@ -175,6 +190,8 @@ export class Terminal {
     } else {
       for (const e of elemek) {
         if (typeof e === 'string') this.kiirSor(e);
+        else if (e.folyamat) await new Promise((kesz) => e.folyamat((sor) => this.kiirSor(sor), kesz));
+        else if (e.torles) this.kimenet.textContent = '';
         else await new Promise((r) => setTimeout(r, e.varj));
       }
     }
@@ -253,7 +270,7 @@ export class Terminal {
     } else if (k === 'Tab') {
       e.preventDefault();
       this.tab();
-    } else if (k === '?') {
+    } else if (k === '?' && this.mm.sugoBillentyu !== false) {
       e.preventDefault();
       this.sugo();
     } else if (k === 'ArrowUp' || (ctrl && (k === 'p' || k === 'P'))) {
@@ -277,6 +294,7 @@ export class Terminal {
 
   /** Telefonon a ? nem mindig jön billentyűeseményként: itt kapjuk el. */
   bevitelValtozott() {
+    if (this.mm.sugoBillentyu === false) return;
     const v = this.bevitel.value;
     const hol = v.indexOf('?');
     if (hol >= 0) {
@@ -323,7 +341,7 @@ export class Terminal {
 
   /** Ctrl+Z – vissza a privilegizált módba. */
   ctrlZ() {
-    if (this.foglalt) return;
+    if (this.foglalt || this.mm.vanCtrlZ === false) return;
     const prompt = this.mm.prompt();
     const szoveg = this.bevitel.value;
     this.bevitel.value = '';

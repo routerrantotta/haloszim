@@ -10,6 +10,7 @@ import { alapParancsok } from './parancsok/alap.js';
 import { vlanParancsok } from './parancsok/vlan.js';
 import { interfeszParancsok } from './parancsok/interfesz.js';
 import { showParancsok } from './parancsok/show.js';
+import { switchportParancsok } from './parancsok/switchport.js';
 import { megNincsParancsok } from './parancsok/meg-nincs.js';
 import { portTipusok } from '../../modell/switch.js';
 
@@ -24,7 +25,7 @@ export const ios = {
   felirat: 'IOS-szerű parancssor',
   modok: MODOK,
   kezdoMod: 'felhasznalo',
-  parancsok: [...alapParancsok, ...vlanParancsok, ...interfeszParancsok, ...showParancsok, ...megNincsParancsok],
+  parancsok: [...alapParancsok, ...vlanParancsok, ...interfeszParancsok, ...switchportParancsok, ...showParancsok, ...megNincsParancsok],
   formazHiba,
   formazSugo,
 

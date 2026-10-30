@@ -4,8 +4,11 @@
  * Forma (lásd docs/forrasok.md): négy oszlop – VLAN (4), Name (32), Status (9), Ports.
  * A portok vesszővel elválasztva, egy sorba annyi fér, amennyi 31 karakterbe belefér
  * (a 2960-on ez soronként 4 port), a folytatósorok a Ports oszlop alá kerülnek.
+ * A trunk portok nem szerepelnek benne (F3).
  * A 1002–1005-ös gyári VLAN-ok állapota „act/unsup”.
  */
+
+import { uzemmod } from '../../../mag/kapcsolas.js';
 
 const PORT_OSZLOP_SZELESSEG = 31;
 const BEHUZAS = ' '.repeat(4 + 1 + 32 + 1 + 9 + 1);
@@ -45,8 +48,8 @@ export function showVlanBrief(sw) {
   for (const szam of szamok) {
     const vlan = sw.vlanok[szam];
     const allapot = vlan.tamogatott === false ? 'act/unsup' : 'active';
-    // Később: a trunk portok nem jelennek meg itt (csak az access/dinamikus portok).
-    const portok = sw.portok.filter((p) => p.accessVlan === szam).map((p) => p.rovid);
+    // A trunkként működő portok itt nem jelennek meg (csak az access portok).
+    const portok = sw.portok.filter((p) => p.accessVlan === szam && uzemmod(sw, p) !== 'trunk').map((p) => p.rovid);
     const elso = `${String(szam).padEnd(4)} ${vlan.nev.padEnd(32)} ${allapot.padEnd(9)} `;
     const ps = portSorok(portok);
     sorok.push((elso + (ps[0] || '')).trimEnd());

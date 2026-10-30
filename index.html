@@ -20,7 +20,7 @@
   }
   *{box-sizing:border-box}
   body{margin:0;font-family:var(--font);color:var(--black);background:var(--yellow);line-height:1.6;font-size:1.0625rem}
-  .wrap{max-width:62rem;margin:0 auto;padding:0 1.25rem}
+  .wrap{max-width:76rem;margin:0 auto;padding:0 1.25rem}
   header{padding:1.25rem 0 .5rem}
   h1{font-family:var(--display);font-size:clamp(2rem,8vw,3.4rem);line-height:1;letter-spacing:-.02em;margin:0 0 .5rem}
   .alcim{margin:0 0 1rem;font-size:1.1rem}
@@ -40,7 +40,8 @@
   <div class="wrap">
     <h1>Haloszim</h1>
     <p class="alcim">Hálózati szimulátor a routerrantotta.hu-hoz – <span class="figyelem">fejlesztői kipróbáló oldal</span></p>
-    <p>Ez még csak a váz: egy switch és egy IOS-szerű parancssor néhány paranccsal. Kattints a terminálba, és gépelj!</p>
+    <p>Az első feladat: két switch, négy PC, két VLAN és egy trunk. Kattints egy eszközre a rajzon (vagy a fülekre),
+       és gépelj a parancssorába. A PC-knél az IP-címet is ott állíthatod be.</p>
   </div>
 </header>
 
@@ -49,18 +50,18 @@
 
   <h2>Mit próbálj ki?</h2>
   <ul class="probak">
-    <li><code>enable</code> vagy röviden <code>en</code></li>
-    <li><code>configure terminal</code> = <code>conf t</code></li>
-    <li><code>hostname SW1</code></li>
-    <li><code>vlan 10</code>, majd <code>name IRODA</code></li>
-    <li><code>do show vlan brief</code> = <code>do sh vl br</code></li>
-    <li><code>interface fa0/1</code>, <code>shutdown</code>, <code>no shutdown</code></li>
-    <li><code>interface range fa0/1 - 4</code></li>
-    <li><code>end</code> vagy Ctrl+Z, utána <code>show running-config</code></li>
-    <li><code>?</code> bárhol (pl. <code>show ?</code> vagy <code>sh?</code>)</li>
-    <li>Tab: <code>conf</code> + Tab → <code>configure</code></li>
-    <li>↑ / ↓: az előző parancsok</li>
-    <li>Hibák: <code>s</code>, <code>hostname</code>, <code>vlan 5000</code>, <code>asdf</code></li>
+    <li>SW1-en: <code>en</code>, <code>conf t</code>, <code>vlan 10</code>, <code>name IRODA</code></li>
+    <li><code>int fa0/1</code>, <code>sw mo acc</code>, <code>sw acc vl 10</code></li>
+    <li><code>int g0/1</code>, <code>switchport mode trunk</code></li>
+    <li><code>do sh vl br</code>, <code>do sh int trunk</code></li>
+    <li><code>show interfaces status</code></li>
+    <li>ping után: <code>show mac address-table</code></li>
+    <li>PC1: IP-cím, maszk, Mentés, majd <code>ping 192.168.10.13</code></li>
+    <li>PC-n: <code>ipconfig</code>, <code>arp -a</code>, <code>help</code></li>
+    <li>Figyeld a rajzon: ARP-szórás, ping, VLAN-címke a trunkon</li>
+    <li><code>shutdown</code> a trunk porton – mi lesz a pinggel?</li>
+    <li>Csak az egyik oldalon trunk? Nézd meg: <code>sh int tr</code> a másikon</li>
+    <li>Végül: <b>Ellenőrzés</b> gomb a feladatpanelen</li>
   </ul>
 </main>
 
@@ -72,6 +73,7 @@
 </footer>
 
 <script src="dist/szimulator.js"></script>
-<script>Haloszim.indit(document.getElementById('hsz'));</script>
+<script src="feladatok/vlan-1.js"></script>
+<script>Haloszim.indit(document.getElementById('hsz'), { feladat: 'vlan-1' });</script>
 </body>
 </html>
