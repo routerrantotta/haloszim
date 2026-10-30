@@ -6,7 +6,7 @@ Böngészőben futó, feladat-alapú hálózati szimulátor a [routerrantotta.hu
 
 Jelenleg (v0.3) két feladat van, legördülő listából választhatók: **VLAN-ok két switchen, trunkkel**
 (2 switch, 4 PC) és **VTP: server, transparent, client** (3 switch, 4 PC). Minden feladat három módban
-játszható: **Oktató** (parancsokkal), **Gyakorló** (csak a cél, tippekkel), **Vizsga** (önellenőrzés, időméréssel,
+játszható: **Oktató** (parancsokkal és lépésről lépésre vezető buborékokkal), **Gyakorló** (csak a cél, tippekkel), **Vizsga** (önellenőrzés, időméréssel,
 Beadás gombbal); gyakorló és vizsga módban minden indításkor más adatokkal, megosztható változatlinkkel.
 Minden feladat végén magyarázat van. A switchek
 IOS-szerű parancssorral kezelhetők (módok, rövidítés, `?` súgó, Tab, előzmények, valódi hibaüzenetek), a PC-k egy
@@ -44,8 +44,8 @@ src/mag/          gyártófüggetlen motor: szimulált óra, hálózat és kábe
 src/modell/       az eszközök állapota adatként (switch.js, pc.js)
 src/cli/          parancssor-értelmező, interfésznevek, switch- és PC-munkamenet
 src/gyartok/ios/  az IOS-szerű parancssor: módok, parancsok (adatként), hibaüzenetek, kimenetek
-src/feladat/      feladat betöltése, eredményalapú ellenőrzés
-src/nezet/        terminál, SVG-topológia animációval, PC-ablak, feladatpanel
+src/feladat/      feladat betöltése, eredményalapú ellenőrzés, véletlen adatok, bemutató (vezetett.js)
+src/nezet/        terminál, SVG-topológia animációval, PC-ablak, feladatpanel, bemutató-buborék
 feladatok/        egy feladat = egy fájl (vlan-1.js, vtp-1.js); az index.html-ben a betöltés sorrendje
                   a választó sorrendje
 css/              a szimulátor stílusa (csak .hsz- osztályok)

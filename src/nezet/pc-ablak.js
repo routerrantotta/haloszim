@@ -26,15 +26,16 @@ function maszkAlak(szoveg) {
 export class PcAblak {
   /**
    * @param {HTMLElement} szulo
-   * @param {{eszkoz: Object, halozat: Object, valtozott?: () => void}} p
+   * @param {{eszkoz: Object, halozat: Object, valtozott?: () => void, parancsUtan?: (sor: string) => void}} p
    */
-  constructor(szulo, { eszkoz, halozat, valtozott = () => {} }) {
+  constructor(szulo, { eszkoz, halozat, valtozott = () => {}, parancsUtan }) {
     this.pc = eszkoz;
     this.valtozott = valtozott;
     this.doboz = elem('section', 'hsz-pc-ablak');
     this.doboz.setAttribute('aria-label', `${eszkoz.hostname} – IP-beállítások és parancssor`);
 
     const urlap = elem('form', 'hsz-pc-urlap');
+    this.urlap = urlap;
     urlap.noValidate = true;
     const cim = elem('h3', 'hsz-pc-urlap__cim', 'IP-beállítások');
     urlap.append(cim);
@@ -60,7 +61,7 @@ export class PcAblak {
     szulo.append(this.doboz);
 
     this.munkamenet = new PcMunkamenet({ eszkoz, halozat });
-    this.terminal = new Terminal(this.terminalHely, this.munkamenet);
+    this.terminal = new Terminal(this.terminalHely, this.munkamenet, { parancsUtan });
     this.terminal.cim(`${eszkoz.hostname} – parancssor`);
     this.betolt();
   }

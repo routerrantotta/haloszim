@@ -1,4 +1,4 @@
-/* Haloszim v0.5.0 – routerrantotta.hu – minden jog fenntartva. */
+/* Haloszim v0.6.0 – routerrantotta.hu – minden jog fenntartva. */
 (() => {
   // src/mag/ido.js
   var Ora = class {
@@ -259,22 +259,22 @@
     for (const parancs of parancsok) {
       for (const mod of parancs.modok) {
         let cs = fak[mod] = fak[mod] || ujCsomopont();
-        for (const elem5 of parancs.szavak) {
-          if (elem5.tovabb) {
-            cs.tovabb = elem5.tovabb;
+        for (const elem6 of parancs.szavak) {
+          if (elem6.tovabb) {
+            cs.tovabb = elem6.tovabb;
             break;
           }
-          if (elem5.szo) {
-            let gy = cs.kulcsszavak.find((k) => k.elem.szo.toLowerCase() === elem5.szo.toLowerCase());
-            if (!gy) cs.kulcsszavak.push(gy = { elem: elem5, csomopont: ujCsomopont() });
+          if (elem6.szo) {
+            let gy = cs.kulcsszavak.find((k) => k.elem.szo.toLowerCase() === elem6.szo.toLowerCase());
+            if (!gy) cs.kulcsszavak.push(gy = { elem: elem6, csomopont: ujCsomopont() });
             cs = gy.csomopont;
-          } else if (elem5.param) {
-            if (!PARAM_TIPUSOK[elem5.param]) throw new Error(`Ismeretlen paramétertípus: ${elem5.param}`);
-            let gy = cs.parameterek.find((p) => azonosParam(p.elem, elem5));
-            if (!gy) cs.parameterek.push(gy = { elem: elem5, csomopont: ujCsomopont() });
+          } else if (elem6.param) {
+            if (!PARAM_TIPUSOK[elem6.param]) throw new Error(`Ismeretlen paramétertípus: ${elem6.param}`);
+            let gy = cs.parameterek.find((p) => azonosParam(p.elem, elem6));
+            if (!gy) cs.parameterek.push(gy = { elem: elem6, csomopont: ujCsomopont() });
             cs = gy.csomopont;
           } else {
-            throw new Error("Hibás parancsleírás: " + JSON.stringify(elem5));
+            throw new Error("Hibás parancsleírás: " + JSON.stringify(elem6));
           }
         }
         if (!parancs.szavak.some((e) => e.tovabb)) {
@@ -2546,7 +2546,7 @@
      * @param {HTMLElement} szulo
      * @param {{elemek: {eszkoz: Object, x: number, y: number, tipus: string}[], halozat: Object,
      *          meret?: {szel: number, mag: number}}} adat
-     * @param {{valaszt?: (eszkoz: Object) => void}} [beallitasok]
+     * @param {{valaszt?: (eszkoz: Object) => void, sebesseg?: () => number}} [beallitasok]
      */
     constructor(szulo, { elemek, halozat, meret }, beallitasok = {}) {
       this.elemek = elemek;
@@ -2746,7 +2746,8 @@
       }
       g.append(svg("title", {}, csomagLeiras(e.keret)));
       this.animReteg.append(g);
-      const m = { g, ut: kr.ut, hossz: kr.ut.getTotalLength(), elore, kezd: performance.now(), ido: Math.max(1, e.idotartam) };
+      const sebesseg = this.beallitasok.sebesseg ? this.beallitasok.sebesseg() : 1;
+      const m = { g, ut: kr.ut, hossz: kr.ut.getTotalLength(), elore, kezd: performance.now(), ido: Math.max(1, e.idotartam / sebesseg) };
       this.mozgok.push(m);
       this.helyez(m, 0);
       setTimeout(() => this.torolMozgo(m), m.ido + 100);
@@ -2806,6 +2807,384 @@
     }
     return `keret${cimke}`;
   }
+
+  // src/nezet/buborek.js
+  function elem2(tag, osztaly, szoveg) {
+    const e = document.createElement(tag);
+    if (osztaly) e.className = osztaly;
+    if (szoveg !== void 0) e.textContent = szoveg;
+    return e;
+  }
+  function szovegbe(cel, szoveg) {
+    String(szoveg || "").split("`").forEach((resz, i) => {
+      if (resz === "") return;
+      cel.append(i % 2 === 1 ? elem2("code", "hsz-kod", resz) : document.createTextNode(resz));
+    });
+    return cel;
+  }
+  var KOZ = 14;
+  var Buborek = class {
+    /** @param {HTMLElement} szulo */
+    constructor(szulo) {
+      this.doboz = elem2("div", "hsz-buborek");
+      this.doboz.setAttribute("role", "dialog");
+      this.doboz.setAttribute("aria-label", "Bemutató");
+      this.doboz.hidden = true;
+      this.nyil = elem2("div", "hsz-buborek__nyil");
+      this.fej = elem2("div", "hsz-buborek__fej");
+      this.szamlalo = elem2("span", "hsz-buborek__szamlalo");
+      this.bezar = elem2("button", "hsz-buborek__x", "×");
+      this.bezar.type = "button";
+      this.bezar.title = "A bemutató bezárása";
+      this.bezar.setAttribute("aria-label", "A bemutató bezárása");
+      this.fej.append(this.szamlalo, this.bezar);
+      this.szoveg = elem2("p", "hsz-buborek__szoveg");
+      this.szoveg.setAttribute("aria-live", "polite");
+      this.miert = elem2("p", "hsz-buborek__miert");
+      this.gombok = elem2("div", "hsz-buborek__gombok");
+      this.doboz.append(this.nyil, this.fej, this.szoveg, this.miert, this.gombok);
+      szulo.append(this.doboz);
+      this.cel = null;
+      this.helyezFn = () => this.helyez();
+      window.addEventListener("resize", this.helyezFn);
+      window.addEventListener("scroll", this.helyezFn, true);
+      this.idozito = setInterval(this.helyezFn, 400);
+    }
+    /**
+     * @param {{cel: Element|null, szamlalo: string, szoveg: string, miert?: string,
+     *          gombok: {felirat: string, fn: () => void, fo?: boolean}[], bezar: () => void, gorget?: boolean}} p
+     */
+    mutat(p) {
+      if (this.cel && this.cel !== p.cel) this.cel.classList.remove("hsz-kiemelt");
+      this.cel = p.cel;
+      if (this.cel) this.cel.classList.add("hsz-kiemelt");
+      this.szamlalo.textContent = p.szamlalo;
+      this.szoveg.textContent = "";
+      szovegbe(this.szoveg, p.szoveg);
+      this.miert.textContent = "";
+      if (p.miert) {
+        this.miert.append(elem2("b", "", "Miért? "));
+        szovegbe(this.miert, p.miert);
+      }
+      this.miert.hidden = !p.miert;
+      this.gombok.textContent = "";
+      for (const g of p.gombok) {
+        const b = elem2("button", g.fo ? "hsz-gomb hsz-gomb--kicsi" : "hsz-tippgomb", g.felirat);
+        b.type = "button";
+        b.addEventListener("click", g.fn);
+        this.gombok.append(b);
+      }
+      this.bezar.onclick = p.bezar;
+      this.doboz.hidden = false;
+      if (p.gorget && this.cel && this.cel.scrollIntoView) {
+        const r = this.cel.getBoundingClientRect();
+        if (r.bottom < 0 || r.top > window.innerHeight) this.cel.scrollIntoView({ block: "center", behavior: "smooth" });
+      }
+      this.helyez();
+    }
+    /** Elhelyezés a cél alá (ha nem fér, fölé), vízszintesen a nézetablakon belül. */
+    helyez() {
+      if (this.doboz.hidden) return;
+      const w = this.doboz.offsetWidth;
+      const h = this.doboz.offsetHeight;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      if (!this.cel || !this.cel.isConnected) {
+        this.doboz.style.left = `${Math.max(8, (vw - w) / 2)}px`;
+        this.doboz.style.top = `${Math.max(8, vh - h - 16)}px`;
+        this.nyil.hidden = true;
+        return;
+      }
+      const r = this.cel.getBoundingClientRect();
+      let top;
+      let lent = true;
+      if (r.bottom + KOZ + h <= vh - 8) top = r.bottom + KOZ;
+      else if (r.top - KOZ - h >= 8) {
+        top = r.top - KOZ - h;
+        lent = false;
+      } else top = Math.max(8, vh - h - 8);
+      const kozep = r.left + r.width / 2;
+      const left = Math.min(Math.max(8, kozep - w / 2), Math.max(8, vw - w - 8));
+      this.doboz.style.left = `${left}px`;
+      this.doboz.style.top = `${top}px`;
+      const latszik = r.bottom > 0 && r.top < vh;
+      this.nyil.hidden = !latszik;
+      this.nyil.className = `hsz-buborek__nyil hsz-buborek__nyil--${lent ? "fent" : "lent"}`;
+      this.nyil.style.left = `${Math.min(Math.max(14, kozep - left), w - 14)}px`;
+    }
+    elrejt() {
+      this.doboz.hidden = true;
+      if (this.cel) this.cel.classList.remove("hsz-kiemelt");
+      this.cel = null;
+    }
+    /** Végleges eltávolítás (feladatváltáskor). */
+    megszuntet() {
+      this.elrejt();
+      clearInterval(this.idozito);
+      window.removeEventListener("resize", this.helyezFn);
+      window.removeEventListener("scroll", this.helyezFn, true);
+      this.doboz.remove();
+    }
+  };
+
+  // src/feladat/ellenorzo.js
+  var aVlan = (n) => `${nevelo(n)} ${esRag(n)}`;
+  var AVlan = (n) => {
+    const t = aVlan(n);
+    return t[0].toUpperCase() + t.slice(1);
+  };
+  var MOD_SZOVEG2 = { access: "access", trunk: "trunk", "dinamikus-auto": "dynamic auto", "dinamikus-kezdemenyezo": "dynamic desirable" };
+  function rovid(nev) {
+    return nev.replace(/^FastEthernet/, "Fa").replace(/^GigabitEthernet/, "Gi");
+  }
+  var ALLAPOT_CELOK = {
+    vlan(f, c) {
+      const sw = f.eszkoz(c.eszkoz);
+      const v = sw.vlanok[c.vlan];
+      if (!v) return { ok: false, megjegyzes: `${AVlan(c.vlan)} VLAN nincs létrehozva (${c.eszkoz}).` };
+      if (c.nev && v.nev !== c.nev) return { ok: false, megjegyzes: `A VLAN neve most: ${v.nev} (${c.nev} kellene).` };
+      return { ok: true, megjegyzes: `Megvan: ${c.vlan} ${v.nev}` };
+    },
+    "access-port"(f, c) {
+      const sw = f.eszkoz(c.eszkoz);
+      const p = portKeres(sw, c.port);
+      const hibak = [];
+      if (p.mod !== "access") hibak.push(`a port üzemmódja most ${MOD_SZOVEG2[p.mod]} (access kellene)`);
+      if (p.accessVlan !== c.vlan) hibak.push(`a port most ${aVlan(p.accessVlan)} VLAN-ban van`);
+      else if (!sw.vlanok[c.vlan]) hibak.push(`${aVlan(c.vlan)} VLAN nem létezik ezen a switchen`);
+      if (p.leallitva) hibak.push("a port le van kapcsolva (shutdown)");
+      if (hibak.length) return { ok: false, megjegyzes: hibak.join("; ") + "." };
+      return { ok: true, megjegyzes: `access, VLAN ${c.vlan}` };
+    },
+    trunk(f, c) {
+      const sw = f.eszkoz(c.eszkoz);
+      const p = portKeres(sw, c.port);
+      if (!p.fent) return { ok: false, megjegyzes: `Nincs link a(z) ${rovid(p.nev)} porton (le van kapcsolva?).` };
+      const tul = sw.halozat.szomszed(sw, p);
+      const vegek = [[sw, p], [tul.eszkoz, tul.port]];
+      const rossz = vegek.filter(([e, pp]) => uzemmod(e, pp) !== "trunk");
+      if (rossz.length) {
+        const leiras = rossz.map(([e, pp]) => `${e.hostname} ${rovid(pp.nev)}: ${MOD_SZOVEG2[pp.mod]}`).join(", ");
+        return { ok: false, megjegyzes: `Nem lett trunk (${leiras}). Két „dynamic auto” port nem kezdeményez trunkot.` };
+      }
+      const modok = vegek.map(([e, pp]) => `${e.hostname}: ${MOD_SZOVEG2[pp.mod]}`).join(", ");
+      return { ok: true, megjegyzes: `Mindkét vég trunkként működik (${modok}).` };
+    },
+    "vlan-nincs"(f, c) {
+      const sw = f.eszkoz(c.eszkoz);
+      const v = sw.vlanok[c.vlan];
+      if (v) return { ok: false, megjegyzes: `${AVlan(c.vlan)} VLAN (${v.nev}) megvan ezen: ${c.eszkoz}, pedig itt nem szabadna lennie.` };
+      return { ok: true, megjegyzes: `${AVlan(c.vlan)} VLAN nincs ezen: ${c.eszkoz} – ahogy kell.` };
+    },
+    vtp(f, c) {
+      const sw = f.eszkoz(c.eszkoz);
+      const hibak = [];
+      if (c.mod && sw.vtpMod !== c.mod) hibak.push(`a szerep most ${sw.vtpMod} (${c.mod} kellene)`);
+      if (c.tartomany !== void 0 && sw.vtpTartomany !== c.tartomany) {
+        hibak.push(`a tartomány most ${sw.vtpTartomany ? `„${sw.vtpTartomany}”` : "nincs megadva"} („${c.tartomany}” kellene; kis- és nagybetű számít)`);
+      }
+      if (c.jelszo !== void 0 && sw.vtpJelszo !== c.jelszo) hibak.push(sw.vtpJelszo ? "a jelszó nem egyezik" : "nincs jelszó");
+      if (c.verzio && sw.vtpVerzio !== c.verzio) hibak.push(`a verzió most ${sw.vtpVerzio} (${c.verzio} kellene)`);
+      if (c.revizio !== void 0 && sw.vtpRevizio !== c.revizio) hibak.push(`a revízió most ${sw.vtpRevizio} (${c.revizio} kellene)`);
+      if (hibak.length) return { ok: false, megjegyzes: hibak.join("; ") + "." };
+      return { ok: true, megjegyzes: `${sw.vtpMod}, tartomány: ${sw.vtpTartomany}, verzió: ${sw.vtpVerzio}, revízió: ${sw.vtpMod === "transparent" ? 0 : sw.vtpRevizio}` };
+    },
+    "vtp-szinkron"(f, c) {
+      const sw = f.eszkoz(c.eszkoz);
+      const forras = f.eszkoz(c.forras);
+      const lista = (e) => Object.entries(e.vlanok).filter(([, v]) => !v.gyari).map(([n, v]) => `${n} ${v.nev}`).sort().join(", ");
+      const sajat = lista(sw);
+      const ott = lista(forras);
+      if (sw.vtpRevizio === forras.vtpRevizio && sajat === ott) {
+        return { ok: true, megjegyzes: `Azonos revízió (${sw.vtpRevizio}) és azonos VLAN-ok: ${sajat || "–"}.` };
+      }
+      let megj = `${c.eszkoz}: revízió ${sw.vtpRevizio}, VLAN-ok: ${sajat || "–"}. ${c.forras}: revízió ${forras.vtpRevizio}, VLAN-ok: ${ott || "–"}.`;
+      if (sw.vtpRevizio > forras.vtpRevizio) megj += ` ${c.eszkoz} revíziója nagyobb – ő írná felül a többieket!`;
+      else if (sw.vtpRevizio === forras.vtpRevizio) megj += " Egyenlő revíziónál nincs átvétel: módosíts valamit a serveren (pl. hozz létre és törölj egy VLAN-t).";
+      else megj += " A hirdetés nem ért ide: nézd meg a trunkokat, a tartománynevet, a jelszót és a köztes switch verzióját.";
+      return { ok: false, megjegyzes: megj };
+    },
+    "pc-ip"(f, c) {
+      const pc = f.eszkoz(c.eszkoz);
+      if (!pc.ip) return { ok: false, megjegyzes: `${c.eszkoz}-nek még nincs IP-címe (kattints a gépre).` };
+      const hibak = [];
+      if (pc.ip !== c.ip) hibak.push(`IP-cím most: ${pc.ip} (${c.ip} kellene)`);
+      if (pc.maszk !== c.maszk) hibak.push(`maszk most: ${pc.maszk || "nincs"} (${c.maszk} kellene)`);
+      if (hibak.length) return { ok: false, megjegyzes: hibak.join("; ") + "." };
+      return { ok: true, megjegyzes: `${pc.ip} / ${pc.maszk}` };
+    }
+  };
+  function tervezettIp(f, nev) {
+    const sor2 = (f.feladat.cimterv || []).find((s) => s.eszkoz === nev);
+    return sor2 ? sor2.ip : f.eszkoz(nev).ip;
+  }
+  var PING_SZOVEG = {
+    valasz: "Megjött a válasz.",
+    idotullepes: "Nem jött válasz (Request timed out).",
+    elerhetetlen: "Nem jött ARP-válasz: a cél nem érhető el ebben a szórási tartományban (Destination host unreachable).",
+    hiba: "A ping el sem indult: nincs IP-cím, vagy a cél másik hálózatban van, és nincs alapértelmezett átjáró."
+  };
+  var PROBA_CELOK = {
+    ping(f, c, kesz) {
+      const ip = tervezettIp(f, c.cel);
+      egyPing(f.halozat, f.eszkoz(c.honnan), ip, (e) => {
+        const ment = e.fajta === "valasz";
+        const vart = c.vart !== false;
+        let megjegyzes = `${c.honnan} → ${ip}: ${PING_SZOVEG[e.fajta]}`;
+        if (!vart && ment) megjegyzes += " Pedig ennek nem szabadna sikerülnie!";
+        kesz({ ok: ment === vart, megjegyzes });
+      });
+    },
+    szoras(f, c, kesz) {
+      szorasProba(f.halozat, f.eszkoz(c.honnan), (kik) => {
+        const nevek = c.elerje.concat(c.neErje);
+        const elerte = nevek.filter((n) => kik.includes(f.eszkoz(n)));
+        const hianyzik = (c.elerje || []).filter((n) => !elerte.includes(n));
+        const tilos = (c.neErje || []).filter((n) => elerte.includes(n));
+        const reszek = [`Eljutott ide: ${elerte.length ? elerte.join(", ") : "senkihez"}.`];
+        if (hianyzik.length) reszek.push(`Nem jutott el ide, pedig kellene: ${hianyzik.join(", ")}.`);
+        if (tilos.length) reszek.push(`Ide nem szabadna eljutnia (más VLAN): ${tilos.join(", ")}.`);
+        kesz({ ok: hianyzik.length === 0 && tilos.length === 0, megjegyzes: reszek.join(" ") });
+      });
+    }
+  };
+  function allapotCel(f, c) {
+    const fn = ALLAPOT_CELOK[c.tipus];
+    return fn ? fn(f, c) : null;
+  }
+  function probaE(cel) {
+    return !!PROBA_CELOK[cel.tipus];
+  }
+  function ellenoriz(f, { indul = () => {
+  }, lepes = () => {
+  }, kesz = () => {
+  }, szunet = 0 } = {}) {
+    const celok = f.feladat.celok;
+    const eredmenyek = new Array(celok.length).fill(null);
+    const probak = [];
+    celok.forEach((c, i) => {
+      if (ALLAPOT_CELOK[c.tipus]) {
+        eredmenyek[i] = ALLAPOT_CELOK[c.tipus](f, c);
+        lepes(i, eredmenyek[i]);
+      } else if (PROBA_CELOK[c.tipus]) {
+        probak.push(i);
+      } else {
+        throw new Error(`Ismeretlen céltípus: ${c.tipus}`);
+      }
+    });
+    const kovetkezo = (k) => {
+      if (k >= probak.length) return kesz(eredmenyek);
+      const i = probak[k];
+      indul(i);
+      PROBA_CELOK[celok[i].tipus](f, celok[i], (e) => {
+        eredmenyek[i] = e;
+        lepes(i, e);
+        f.halozat.ora.utemez(szunet, () => kovetkezo(k + 1));
+      });
+    };
+    kovetkezo(0);
+    return eredmenyek;
+  }
+
+  // src/feladat/vezetett.js
+  var MOD_SZINT = { felhasznalo: 0, priv: 1, konfig: 2 };
+  function modSzint(mod) {
+    return mod in MOD_SZINT ? MOD_SZINT[mod] : 3;
+  }
+  var ATMENETI = ["kivalasztva", "mod", "parancs"];
+  function atmeneti(lepes) {
+    const k = Array.isArray(lepes.kesz) ? lepes.kesz : [lepes.kesz];
+    return k.every((c) => ATMENETI.includes(c.tipus));
+  }
+  function parancsIllik(sor2, szavak) {
+    let t = String(sor2 || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (t[0] === "do" && szavak[0] !== "do") t = t.slice(1);
+    if (t.length < szavak.length) return false;
+    return szavak.every((sz, i) => sz.toLowerCase().startsWith(t[i]) || t[i] === sz.toLowerCase());
+  }
+  var Vezeto = class {
+    /**
+     * @param {Object[]} lepesek – a feladat „bemutato” mezője (már a változat értékeivel)
+     * @param {Object} k – a környezet:
+     *   f: a betöltött feladat; valasztott(): a kiválasztott eszköz neve;
+     *   munkamenet(nev): az eszköz parancssori munkamenete; utolsoParancs(nev): az utolsó beírt sor;
+     *   ellenorzesKesz(): igaz, ha az utolsó Ellenőrzés hibátlan volt;
+     *   foglalt(nev) (nem kötelező): az eszköz terminálja éppen ír (pl. fut a ping)
+     */
+    constructor(lepesek, k) {
+      this.lepesek = lepesek;
+      this.k = k;
+      this.index = 0;
+    }
+    /** Az aktuális lépés (vagy null, ha a bemutató végére értünk). */
+    aktualis() {
+      return this.index < this.lepesek.length ? this.lepesek[this.index] : null;
+    }
+    vege() {
+      return this.index >= this.lepesek.length;
+    }
+    /** Egy feltétel teljesül-e. */
+    feltetel(c) {
+      const k = this.k;
+      switch (c.tipus) {
+        case "kivalasztva":
+          return k.valasztott() === c.eszkoz;
+        case "mod": {
+          const mm = k.munkamenet(c.eszkoz);
+          if (!mm || mm.mod === void 0) return false;
+          if (modSzint(mm.mod) < modSzint(c.mod)) return false;
+          if (c.port) return modSzint(mm.mod) === 3 && (mm.kontextus.portok || []).includes(c.port);
+          return true;
+        }
+        case "parancs":
+          return parancsIllik(k.utolsoParancs(c.eszkoz), c.szavak) && !(k.foglalt && k.foglalt(c.eszkoz));
+        case "ellenorzes":
+          return !!k.ellenorzesKesz();
+        default: {
+          const e = allapotCel(k.f, c);
+          return !!(e && e.ok);
+        }
+      }
+    }
+    /** A lépés teljesült-e (több feltételnél mindegyiknek teljesülnie kell). */
+    kesz(lepes) {
+      const k = Array.isArray(lepes.kesz) ? lepes.kesz : [lepes.kesz];
+      return k.every((c) => this.feltetel(c));
+    }
+    /**
+     * Továbblépés, amíg a lépések teljesülnek. Visszaadja, hogy változott-e az aktuális lépés.
+     * @returns {boolean}
+     */
+    frissit() {
+      const regi = this.index;
+      for (; ; ) {
+        const l = this.aktualis();
+        if (!l) break;
+        if (this.kesz(l)) {
+          this.index++;
+          continue;
+        }
+        if (atmeneti(l)) {
+          let j = this.index + 1;
+          while (j < this.lepesek.length && atmeneti(this.lepesek[j])) j++;
+          if (j < this.lepesek.length && this.kesz(this.lepesek[j])) {
+            this.index = j + 1;
+            continue;
+          }
+        }
+        break;
+      }
+      return this.index !== regi;
+    }
+    /** A lépés kihagyása (a tanuló „Tovább” gombja). */
+    kihagy() {
+      if (!this.vege()) this.index++;
+    }
+    /** Vissza az előző lépéshez. */
+    vissza() {
+      if (this.index > 0) this.index--;
+    }
+  };
 
   // src/cli/pc-munkamenet.js
   var PROMPT = "C:\\>";
@@ -3022,7 +3401,7 @@
   }
 
   // src/nezet/pc-ablak.js
-  function elem2(tag, osztaly, szoveg) {
+  function elem3(tag, osztaly, szoveg) {
     const e = document.createElement(tag);
     if (osztaly) e.className = osztaly;
     if (szoveg !== void 0) e.textContent = szoveg;
@@ -3037,27 +3416,28 @@
   var PcAblak = class {
     /**
      * @param {HTMLElement} szulo
-     * @param {{eszkoz: Object, halozat: Object, valtozott?: () => void}} p
+     * @param {{eszkoz: Object, halozat: Object, valtozott?: () => void, parancsUtan?: (sor: string) => void}} p
      */
     constructor(szulo, { eszkoz, halozat, valtozott = () => {
-    } }) {
+    }, parancsUtan }) {
       this.pc = eszkoz;
       this.valtozott = valtozott;
-      this.doboz = elem2("section", "hsz-pc-ablak");
+      this.doboz = elem3("section", "hsz-pc-ablak");
       this.doboz.setAttribute("aria-label", `${eszkoz.hostname} – IP-beállítások és parancssor`);
-      const urlap = elem2("form", "hsz-pc-urlap");
+      const urlap = elem3("form", "hsz-pc-urlap");
+      this.urlap = urlap;
       urlap.noValidate = true;
-      const cim = elem2("h3", "hsz-pc-urlap__cim", "IP-beállítások");
+      const cim = elem3("h3", "hsz-pc-urlap__cim", "IP-beállítások");
       urlap.append(cim);
       this.mezok = {
         ip: this.mezo(urlap, "IP-cím", "pl. 192.168.10.11"),
         maszk: this.mezo(urlap, "Alhálózati maszk", "pl. 255.255.255.0"),
         atjaro: this.mezo(urlap, "Alapértelmezett átjáró", "most nem kell")
       };
-      const sor2 = elem2("div", "hsz-pc-urlap__gombsor");
-      const mentes = elem2("button", "hsz-gomb", "Mentés");
+      const sor2 = elem3("div", "hsz-pc-urlap__gombsor");
+      const mentes = elem3("button", "hsz-gomb", "Mentés");
       mentes.type = "submit";
-      this.uzenet = elem2("span", "hsz-pc-urlap__uzenet");
+      this.uzenet = elem3("span", "hsz-pc-urlap__uzenet");
       this.uzenet.setAttribute("role", "status");
       sor2.append(mentes, this.uzenet);
       urlap.append(sor2);
@@ -3065,19 +3445,19 @@
         e.preventDefault();
         this.ment();
       });
-      this.terminalHely = elem2("div", "hsz-pc-ablak__terminal");
+      this.terminalHely = elem3("div", "hsz-pc-ablak__terminal");
       this.doboz.append(urlap, this.terminalHely);
       szulo.append(this.doboz);
       this.munkamenet = new PcMunkamenet({ eszkoz, halozat });
-      this.terminal = new Terminal(this.terminalHely, this.munkamenet);
+      this.terminal = new Terminal(this.terminalHely, this.munkamenet, { parancsUtan });
       this.terminal.cim(`${eszkoz.hostname} – parancssor`);
       this.betolt();
     }
     /** @private */
     mezo(urlap, felirat, pelda) {
-      const l = elem2("label", "hsz-pc-urlap__mezo");
-      const t = elem2("span", "", felirat);
-      const i = elem2("input");
+      const l = elem3("label", "hsz-pc-urlap__mezo");
+      const t = elem3("span", "", felirat);
+      const i = elem3("input");
       Object.assign(i, { type: "text", inputMode: "decimal", autocomplete: "off", spellcheck: false, placeholder: pelda });
       l.append(t, i);
       urlap.append(l);
@@ -3130,171 +3510,17 @@
     }
   };
 
-  // src/feladat/ellenorzo.js
-  var aVlan = (n) => `${nevelo(n)} ${esRag(n)}`;
-  var AVlan = (n) => {
-    const t = aVlan(n);
-    return t[0].toUpperCase() + t.slice(1);
-  };
-  var MOD_SZOVEG2 = { access: "access", trunk: "trunk", "dinamikus-auto": "dynamic auto", "dinamikus-kezdemenyezo": "dynamic desirable" };
-  function rovid(nev) {
-    return nev.replace(/^FastEthernet/, "Fa").replace(/^GigabitEthernet/, "Gi");
-  }
-  var ALLAPOT_CELOK = {
-    vlan(f, c) {
-      const sw = f.eszkoz(c.eszkoz);
-      const v = sw.vlanok[c.vlan];
-      if (!v) return { ok: false, megjegyzes: `${AVlan(c.vlan)} VLAN nincs létrehozva (${c.eszkoz}).` };
-      if (c.nev && v.nev !== c.nev) return { ok: false, megjegyzes: `A VLAN neve most: ${v.nev} (${c.nev} kellene).` };
-      return { ok: true, megjegyzes: `Megvan: ${c.vlan} ${v.nev}` };
-    },
-    "access-port"(f, c) {
-      const sw = f.eszkoz(c.eszkoz);
-      const p = portKeres(sw, c.port);
-      const hibak = [];
-      if (p.mod !== "access") hibak.push(`a port üzemmódja most ${MOD_SZOVEG2[p.mod]} (access kellene)`);
-      if (p.accessVlan !== c.vlan) hibak.push(`a port most ${aVlan(p.accessVlan)} VLAN-ban van`);
-      else if (!sw.vlanok[c.vlan]) hibak.push(`${aVlan(c.vlan)} VLAN nem létezik ezen a switchen`);
-      if (p.leallitva) hibak.push("a port le van kapcsolva (shutdown)");
-      if (hibak.length) return { ok: false, megjegyzes: hibak.join("; ") + "." };
-      return { ok: true, megjegyzes: `access, VLAN ${c.vlan}` };
-    },
-    trunk(f, c) {
-      const sw = f.eszkoz(c.eszkoz);
-      const p = portKeres(sw, c.port);
-      if (!p.fent) return { ok: false, megjegyzes: `Nincs link a(z) ${rovid(p.nev)} porton (le van kapcsolva?).` };
-      const tul = sw.halozat.szomszed(sw, p);
-      const vegek = [[sw, p], [tul.eszkoz, tul.port]];
-      const rossz = vegek.filter(([e, pp]) => uzemmod(e, pp) !== "trunk");
-      if (rossz.length) {
-        const leiras = rossz.map(([e, pp]) => `${e.hostname} ${rovid(pp.nev)}: ${MOD_SZOVEG2[pp.mod]}`).join(", ");
-        return { ok: false, megjegyzes: `Nem lett trunk (${leiras}). Két „dynamic auto” port nem kezdeményez trunkot.` };
-      }
-      const modok = vegek.map(([e, pp]) => `${e.hostname}: ${MOD_SZOVEG2[pp.mod]}`).join(", ");
-      return { ok: true, megjegyzes: `Mindkét vég trunkként működik (${modok}).` };
-    },
-    "vlan-nincs"(f, c) {
-      const sw = f.eszkoz(c.eszkoz);
-      const v = sw.vlanok[c.vlan];
-      if (v) return { ok: false, megjegyzes: `${AVlan(c.vlan)} VLAN (${v.nev}) megvan ezen: ${c.eszkoz}, pedig itt nem szabadna lennie.` };
-      return { ok: true, megjegyzes: `${AVlan(c.vlan)} VLAN nincs ezen: ${c.eszkoz} – ahogy kell.` };
-    },
-    vtp(f, c) {
-      const sw = f.eszkoz(c.eszkoz);
-      const hibak = [];
-      if (c.mod && sw.vtpMod !== c.mod) hibak.push(`a szerep most ${sw.vtpMod} (${c.mod} kellene)`);
-      if (c.tartomany !== void 0 && sw.vtpTartomany !== c.tartomany) {
-        hibak.push(`a tartomány most ${sw.vtpTartomany ? `„${sw.vtpTartomany}”` : "nincs megadva"} („${c.tartomany}” kellene; kis- és nagybetű számít)`);
-      }
-      if (c.jelszo !== void 0 && sw.vtpJelszo !== c.jelszo) hibak.push(sw.vtpJelszo ? "a jelszó nem egyezik" : "nincs jelszó");
-      if (c.verzio && sw.vtpVerzio !== c.verzio) hibak.push(`a verzió most ${sw.vtpVerzio} (${c.verzio} kellene)`);
-      if (hibak.length) return { ok: false, megjegyzes: hibak.join("; ") + "." };
-      return { ok: true, megjegyzes: `${sw.vtpMod}, tartomány: ${sw.vtpTartomany}, verzió: ${sw.vtpVerzio}, revízió: ${sw.vtpMod === "transparent" ? 0 : sw.vtpRevizio}` };
-    },
-    "vtp-szinkron"(f, c) {
-      const sw = f.eszkoz(c.eszkoz);
-      const forras = f.eszkoz(c.forras);
-      const lista = (e) => Object.entries(e.vlanok).filter(([, v]) => !v.gyari).map(([n, v]) => `${n} ${v.nev}`).sort().join(", ");
-      const sajat = lista(sw);
-      const ott = lista(forras);
-      if (sw.vtpRevizio === forras.vtpRevizio && sajat === ott) {
-        return { ok: true, megjegyzes: `Azonos revízió (${sw.vtpRevizio}) és azonos VLAN-ok: ${sajat || "–"}.` };
-      }
-      let megj = `${c.eszkoz}: revízió ${sw.vtpRevizio}, VLAN-ok: ${sajat || "–"}. ${c.forras}: revízió ${forras.vtpRevizio}, VLAN-ok: ${ott || "–"}.`;
-      if (sw.vtpRevizio > forras.vtpRevizio) megj += ` ${c.eszkoz} revíziója nagyobb – ő írná felül a többieket!`;
-      else if (sw.vtpRevizio === forras.vtpRevizio) megj += " Egyenlő revíziónál nincs átvétel: módosíts valamit a serveren (pl. hozz létre és törölj egy VLAN-t).";
-      else megj += " A hirdetés nem ért ide: nézd meg a trunkokat, a tartománynevet, a jelszót és a köztes switch verzióját.";
-      return { ok: false, megjegyzes: megj };
-    },
-    "pc-ip"(f, c) {
-      const pc = f.eszkoz(c.eszkoz);
-      if (!pc.ip) return { ok: false, megjegyzes: `${c.eszkoz}-nek még nincs IP-címe (kattints a gépre).` };
-      const hibak = [];
-      if (pc.ip !== c.ip) hibak.push(`IP-cím most: ${pc.ip} (${c.ip} kellene)`);
-      if (pc.maszk !== c.maszk) hibak.push(`maszk most: ${pc.maszk || "nincs"} (${c.maszk} kellene)`);
-      if (hibak.length) return { ok: false, megjegyzes: hibak.join("; ") + "." };
-      return { ok: true, megjegyzes: `${pc.ip} / ${pc.maszk}` };
-    }
-  };
-  function tervezettIp(f, nev) {
-    const sor2 = (f.feladat.cimterv || []).find((s) => s.eszkoz === nev);
-    return sor2 ? sor2.ip : f.eszkoz(nev).ip;
-  }
-  var PING_SZOVEG = {
-    valasz: "Megjött a válasz.",
-    idotullepes: "Nem jött válasz (Request timed out).",
-    elerhetetlen: "Nem jött ARP-válasz: a cél nem érhető el ebben a szórási tartományban (Destination host unreachable).",
-    hiba: "A ping el sem indult: nincs IP-cím, vagy a cél másik hálózatban van, és nincs alapértelmezett átjáró."
-  };
-  var PROBA_CELOK = {
-    ping(f, c, kesz) {
-      const ip = tervezettIp(f, c.cel);
-      egyPing(f.halozat, f.eszkoz(c.honnan), ip, (e) => {
-        const ment = e.fajta === "valasz";
-        const vart = c.vart !== false;
-        let megjegyzes = `${c.honnan} → ${ip}: ${PING_SZOVEG[e.fajta]}`;
-        if (!vart && ment) megjegyzes += " Pedig ennek nem szabadna sikerülnie!";
-        kesz({ ok: ment === vart, megjegyzes });
-      });
-    },
-    szoras(f, c, kesz) {
-      szorasProba(f.halozat, f.eszkoz(c.honnan), (kik) => {
-        const nevek = c.elerje.concat(c.neErje);
-        const elerte = nevek.filter((n) => kik.includes(f.eszkoz(n)));
-        const hianyzik = (c.elerje || []).filter((n) => !elerte.includes(n));
-        const tilos = (c.neErje || []).filter((n) => elerte.includes(n));
-        const reszek = [`Eljutott ide: ${elerte.length ? elerte.join(", ") : "senkihez"}.`];
-        if (hianyzik.length) reszek.push(`Nem jutott el ide, pedig kellene: ${hianyzik.join(", ")}.`);
-        if (tilos.length) reszek.push(`Ide nem szabadna eljutnia (más VLAN): ${tilos.join(", ")}.`);
-        kesz({ ok: hianyzik.length === 0 && tilos.length === 0, megjegyzes: reszek.join(" ") });
-      });
-    }
-  };
-  function probaE(cel) {
-    return !!PROBA_CELOK[cel.tipus];
-  }
-  function ellenoriz(f, { indul = () => {
-  }, lepes = () => {
-  }, kesz = () => {
-  }, szunet = 0 } = {}) {
-    const celok = f.feladat.celok;
-    const eredmenyek = new Array(celok.length).fill(null);
-    const probak = [];
-    celok.forEach((c, i) => {
-      if (ALLAPOT_CELOK[c.tipus]) {
-        eredmenyek[i] = ALLAPOT_CELOK[c.tipus](f, c);
-        lepes(i, eredmenyek[i]);
-      } else if (PROBA_CELOK[c.tipus]) {
-        probak.push(i);
-      } else {
-        throw new Error(`Ismeretlen céltípus: ${c.tipus}`);
-      }
-    });
-    const kovetkezo = (k) => {
-      if (k >= probak.length) return kesz(eredmenyek);
-      const i = probak[k];
-      indul(i);
-      PROBA_CELOK[celok[i].tipus](f, celok[i], (e) => {
-        eredmenyek[i] = e;
-        lepes(i, e);
-        f.halozat.ora.utemez(szunet, () => kovetkezo(k + 1));
-      });
-    };
-    kovetkezo(0);
-    return eredmenyek;
-  }
-
   // src/nezet/panel.js
-  function elem3(tag, osztaly, szoveg) {
+  function elem4(tag, osztaly, szoveg) {
     const e = document.createElement(tag);
     if (osztaly) e.className = osztaly;
     if (szoveg !== void 0) e.textContent = szoveg;
     return e;
   }
-  function szovegbe(cel, szoveg) {
+  function szovegbe2(cel, szoveg) {
     String(szoveg).split("`").forEach((resz, i) => {
       if (resz === "") return;
-      cel.append(i % 2 === 1 ? elem3("code", "hsz-kod", resz) : document.createTextNode(resz));
+      cel.append(i % 2 === 1 ? elem4("code", "hsz-kod", resz) : document.createTextNode(resz));
     });
     return cel;
   }
@@ -3318,52 +3544,54 @@
     /**
      * @param {HTMLElement} szulo
      * @param {import('../feladat/betolto.js').BetoltottFeladat} f
-     * @param {{mod?: 'oktato'|'gyakorlo'|'vizsga', most?: () => number, valtozatLink?: () => string}} [beallitasok]
+     * @param {{mod?: 'oktato'|'gyakorlo'|'vizsga', most?: () => number, valtozatLink?: () => string,
+     *          bemutato?: () => void, ellenorzesUtan?: () => void}} [beallitasok]
      */
     constructor(szulo, f, beallitasok = {}) {
       this.f = f;
       this.mod = MODOK2[beallitasok.mod] ? beallitasok.mod : "oktato";
       this.most = beallitasok.most || (() => typeof performance !== "undefined" ? performance.now() : Date.now());
       this.vizsga = this.mod === "vizsga";
+      this.beallitasok = beallitasok;
       this.feloldva = !this.vizsga;
       this.tippekSzama = 0;
       this.beadasok = 0;
       this.kezdes = this.most();
       this.vegeIdo = null;
       const fd = f.feladat;
-      this.doboz = elem3("section", `hsz-panel hsz-panel--${this.mod}`);
+      this.doboz = elem4("section", `hsz-panel hsz-panel--${this.mod}`);
       this.doboz.setAttribute("aria-label", "Feladat");
-      const fej = elem3("div", "hsz-panel__fej");
-      fej.append(elem3("h2", "hsz-panel__cim", fd.cim));
-      if (fd.szint) fej.append(elem3("span", "hsz-panel__szint", fd.szint));
-      fej.append(elem3("span", `hsz-panel__mod hsz-panel__mod--${this.mod}`, `${MODOK2[this.mod].nev} mód`));
+      const fej = elem4("div", "hsz-panel__fej");
+      fej.append(elem4("h2", "hsz-panel__cim", fd.cim));
+      if (fd.szint) fej.append(elem4("span", "hsz-panel__szint", fd.szint));
+      fej.append(elem4("span", `hsz-panel__mod hsz-panel__mod--${this.mod}`, `${MODOK2[this.mod].nev} mód`));
       this.doboz.append(fej);
-      this.doboz.append(elem3("p", "hsz-panel__modleiras", MODOK2[this.mod].leiras));
+      this.doboz.append(elem4("p", "hsz-panel__modleiras", MODOK2[this.mod].leiras));
       if (fd.mag !== null && fd.mag !== void 0) this.doboz.append(valtozatSor(fd.mag, beallitasok.valtozatLink));
       if (this.vizsga) {
-        this.ora = elem3("p", "hsz-panel__ora");
+        this.ora = elem4("p", "hsz-panel__ora");
         this.ora.setAttribute("aria-live", "off");
         this.doboz.append(this.ora);
         this.oraFrissit();
         this.oraIdozito = setInterval(() => this.oraFrissit(), 1e3);
       }
-      for (const bek of fd.leiras || []) this.doboz.append(szovegbe(elem3("p", "hsz-panel__szoveg"), bek));
+      for (const bek of fd.leiras || []) this.doboz.append(szovegbe2(elem4("p", "hsz-panel__szoveg"), bek));
       this.lepesSorok = [];
       if (fd.lepesek && fd.lepesek.length) {
-        this.doboz.append(elem3("h3", "hsz-panel__alcim", this.vizsga ? "Követelmények" : "Teendők"));
-        const ol = elem3("ol", "hsz-panel__lepesek");
+        this.doboz.append(elem4("h3", "hsz-panel__alcim", this.vizsga ? "Követelmények" : "Teendők"));
+        const ol = elem4("ol", "hsz-panel__lepesek");
         for (const nyers of fd.lepesek) ol.append(this.lepesSor(lepesAlak(nyers)));
         this.doboz.append(ol);
       }
       if (fd.cimterv && fd.cimterv.length) this.doboz.append(...cimtervTabla(fd.cimterv));
-      this.lista = elem3("ul", "hsz-celok");
+      this.lista = elem4("ul", "hsz-celok");
       this.lista.hidden = true;
       this.doboz.append(this.lista);
       if (fd.magyarazat && fd.magyarazat.length) {
         this.magyarazat = magyarazatElem(fd.magyarazat);
         this.doboz.append(this.magyarazat);
         if (this.vizsga) {
-          this.magyarazatZar = elem3(
+          this.magyarazatZar = elem4(
             "p",
             "hsz-panel__zarva",
             "A magyarázat a vizsga végén nyílik meg (ha minden cél teljesült, vagy ha feladod)."
@@ -3372,16 +3600,23 @@
           this.doboz.append(this.magyarazatZar);
         }
       }
-      const lab = elem3("div", "hsz-panel__lab");
-      this.osszegzes = elem3("p", "hsz-panel__osszegzes");
+      const lab = elem4("div", "hsz-panel__lab");
+      this.osszegzes = elem4("p", "hsz-panel__osszegzes");
       this.osszegzes.setAttribute("role", "status");
-      const gombok = elem3("div", "hsz-panel__gombok");
-      this.gomb = elem3("button", "hsz-gomb hsz-gomb--fo", this.vizsga ? "Beadás" : "Ellenőrzés");
+      const gombok = elem4("div", "hsz-panel__gombok");
+      this.gomb = elem4("button", "hsz-gomb hsz-gomb--fo", this.vizsga ? "Beadás" : "Ellenőrzés");
       this.gomb.type = "button";
       this.gomb.addEventListener("click", () => this.ellenoriz());
       gombok.append(this.gomb);
+      if (beallitasok.bemutato) {
+        this.bemutatoGomb = elem4("button", "hsz-gomb hsz-gomb--masodlagos", "Bemutató (buborékok)");
+        this.bemutatoGomb.type = "button";
+        this.bemutatoGomb.title = "Lépésről lépésre végigvezet a feladaton";
+        this.bemutatoGomb.addEventListener("click", beallitasok.bemutato);
+        gombok.append(this.bemutatoGomb);
+      }
       if (this.vizsga) {
-        this.feladGomb = elem3("button", "hsz-gomb hsz-gomb--masodlagos", "Feladom – mutasd a megoldást");
+        this.feladGomb = elem4("button", "hsz-gomb hsz-gomb--masodlagos", "Feladom – mutasd a megoldást");
         this.feladGomb.type = "button";
         this.feladGomb.addEventListener("click", () => {
           const ok = typeof window === "undefined" || !window.confirm || window.confirm("Biztosan feladod? Megjelennek a parancsok, a részletes okok és a magyarázat.");
@@ -3395,9 +3630,9 @@
     }
     /** @private – egy teendő sora a módnak megfelelően */
     lepesSor(l) {
-      const li = elem3("li", "hsz-lepes");
-      li.append(szovegbe(elem3("span", "hsz-lepes__cel"), l.cel));
-      const parancs = l.parancsok ? szovegbe(elem3("span", "hsz-lepes__parancs"), l.parancsok) : null;
+      const li = elem4("li", "hsz-lepes");
+      li.append(szovegbe2(elem4("span", "hsz-lepes__cel"), l.cel));
+      const parancs = l.parancsok ? szovegbe2(elem4("span", "hsz-lepes__parancs"), l.parancsok) : null;
       if (parancs) {
         li.append(parancs);
         parancs.hidden = this.mod !== "oktato";
@@ -3407,13 +3642,13 @@
         const tippek = [...l.tippek];
         if (l.parancsok) tippek.push(`Megoldás: ${l.parancsok}`);
         if (tippek.length) {
-          const hely = elem3("span", "hsz-lepes__tippek");
-          const gomb = elem3("button", "hsz-tippgomb", "Tipp");
+          const hely = elem4("span", "hsz-lepes__tippek");
+          const gomb = elem4("button", "hsz-tippgomb", "Tipp");
           gomb.type = "button";
           let hanyadik = 0;
           gomb.addEventListener("click", () => {
             if (hanyadik >= tippek.length) return;
-            hely.append(szovegbe(elem3("span", "hsz-lepes__tipp"), tippek[hanyadik]));
+            hely.append(szovegbe2(elem4("span", "hsz-lepes__tipp"), tippek[hanyadik]));
             hanyadik++;
             this.tippekSzama++;
             if (hanyadik >= tippek.length) {
@@ -3477,15 +3712,15 @@
       this.lista.textContent = "";
       this.lista.hidden = false;
       const sorok = this.f.feladat.celok.map((c) => {
-        const li = elem3("li", "hsz-cel hsz-cel--var");
-        const jel = elem3("span", "hsz-cel__jel", "·");
+        const li = elem4("li", "hsz-cel hsz-cel--var");
+        const jel = elem4("span", "hsz-cel__jel", "·");
         jel.setAttribute("aria-hidden", "true");
-        const szoveg = elem3("span", "hsz-cel__szoveg");
-        const cim = elem3("span", "hsz-cel__cim", c.szoveg);
+        const szoveg = elem4("span", "hsz-cel__szoveg");
+        const cim = elem4("span", "hsz-cel__cim", c.szoveg);
         if (c.ellenproba) cim.classList.add("hsz-cel__cim--ellenproba");
-        const megj = elem3("span", "hsz-cel__megj");
+        const megj = elem4("span", "hsz-cel__megj");
         megj.hidden = !this.feloldva;
-        const allapot2 = elem3("span", "hsz-rejtett", probaE(c) ? "vár" : "");
+        const allapot2 = elem4("span", "hsz-rejtett", probaE(c) ? "vár" : "");
         szoveg.append(cim, megj);
         li.append(jel, allapot2, szoveg);
         this.lista.append(li);
@@ -3517,6 +3752,7 @@
       this.utolsoEredmeny = { jo, osszes, mind };
       this.fut = false;
       this.gomb.disabled = false;
+      if (this.beallitasok.ellenorzesUtan) setTimeout(this.beallitasok.ellenorzesUtan, 0);
       if (beadas) {
         if (mind) {
           this.felold("siker");
@@ -3545,13 +3781,13 @@
     }
   };
   function valtozatSor(mag, link) {
-    const p = elem3("p", "hsz-panel__valtozat");
-    p.append(document.createTextNode("Véletlen adatok – változat: "), elem3("b", "", `#${mag}`));
+    const p = elem4("p", "hsz-panel__valtozat");
+    p.append(document.createTextNode("Véletlen adatok – változat: "), elem4("b", "", `#${mag}`));
     if (!link) return p;
-    const gomb = elem3("button", "hsz-tippgomb", "Link másolása");
+    const gomb = elem4("button", "hsz-tippgomb", "Link másolása");
     gomb.type = "button";
     gomb.title = "Ezzel a linkkel bárki pontosan ezt a változatot kapja (pl. a tanár az osztálynak)";
-    const mezo = elem3("input", "hsz-panel__link");
+    const mezo = elem4("input", "hsz-panel__link");
     mezo.type = "text";
     mezo.readOnly = true;
     mezo.hidden = true;
@@ -3579,35 +3815,35 @@
     return p;
   }
   function cimtervTabla(cimterv) {
-    const cim = elem3("h3", "hsz-panel__alcim", "Címterv");
-    const tabla = elem3("table", "hsz-panel__tabla");
-    const fejsor = elem3("tr");
-    for (const c of ["Gép", "IP-cím", "Maszk", "VLAN", "Port"]) fejsor.append(elem3("th", "", c));
-    const thead = elem3("thead");
+    const cim = elem4("h3", "hsz-panel__alcim", "Címterv");
+    const tabla = elem4("table", "hsz-panel__tabla");
+    const fejsor = elem4("tr");
+    for (const c of ["Gép", "IP-cím", "Maszk", "VLAN", "Port"]) fejsor.append(elem4("th", "", c));
+    const thead = elem4("thead");
     thead.append(fejsor);
-    const tbody = elem3("tbody");
+    const tbody = elem4("tbody");
     for (const s of cimterv) {
-      const tr = elem3("tr");
-      for (const c of [s.eszkoz, s.ip, s.maszk, s.vlan, s.hova]) tr.append(elem3("td", "", c === void 0 ? "" : String(c)));
+      const tr = elem4("tr");
+      for (const c of [s.eszkoz, s.ip, s.maszk, s.vlan, s.hova]) tr.append(elem4("td", "", c === void 0 ? "" : String(c)));
       tbody.append(tr);
     }
     tabla.append(thead, tbody);
-    const gorgeto = elem3("div", "hsz-panel__tablahely");
+    const gorgeto = elem4("div", "hsz-panel__tablahely");
     gorgeto.append(tabla);
     return [cim, gorgeto];
   }
   function magyarazatElem(magyarazat) {
-    const d = elem3("details", "hsz-magyarazat");
-    d.append(elem3("summary", "hsz-magyarazat__cim", "Magyarázat: mit, miért és miért így állítunk be?"));
+    const d = elem4("details", "hsz-magyarazat");
+    d.append(elem4("summary", "hsz-magyarazat__cim", "Magyarázat: mit, miért és miért így állítunk be?"));
     for (const resz of magyarazat) {
-      d.append(szovegbe(elem3("h4", "hsz-magyarazat__alcim"), resz.cim));
+      d.append(szovegbe2(elem4("h4", "hsz-magyarazat__alcim"), resz.cim));
       for (const bek of resz.szoveg || []) {
         if (Array.isArray(bek)) {
-          const ul = elem3("ul", "hsz-magyarazat__lista");
-          for (const li of bek) ul.append(szovegbe(elem3("li"), li));
+          const ul = elem4("ul", "hsz-magyarazat__lista");
+          for (const li of bek) ul.append(szovegbe2(elem4("li"), li));
           d.append(ul);
         } else {
-          d.append(szovegbe(elem3("p", "hsz-magyarazat__szoveg"), bek));
+          d.append(szovegbe2(elem4("p", "hsz-magyarazat__szoveg"), bek));
         }
       }
     }
@@ -3770,16 +4006,22 @@
   }
 
   // src/fo.js
-  var VERZIO = true ? "0.5.0" : "fejlesztői";
+  var VERZIO = true ? "0.6.0" : "fejlesztői";
   var HIBAJELENTO = "https://routerrantotta.hu/otlet.html";
   var ANIM_KESLELTETES = 260;
+  var SEBESSEGEK = [
+    { nev: "Nagyon lassú", szorzo: 0.2 },
+    { nev: "Lassú", szorzo: 0.4 },
+    { nev: "Normál", szorzo: 1 },
+    { nev: "Gyors", szorzo: 2 }
+  ];
   var SZABAD = {
     azon: "szabad",
     cim: "Szabad gyakorlás",
     topologia: { meret: { szel: 400, mag: 120 }, eszkozok: [{ nev: "Switch", tipus: "switch", x: 44, y: 34 }], kabelek: [] },
     celok: []
   };
-  function elem4(tag, osztaly, szoveg) {
+  function elem5(tag, osztaly, szoveg) {
     const e = document.createElement(tag);
     if (osztaly) e.className = osztaly;
     if (szoveg !== void 0) e.textContent = szoveg;
@@ -3803,8 +4045,12 @@
     }
     kezdoMag = ervenyesMag(kezdoMag) ? Number(kezdoMag) : null;
     if (!MODOK2[mod]) mod = "oktato";
-    const kisKepernyo = elem4("p", "hsz-kiskepernyo", "Tipp: nagyobb képernyőn kényelmesebb a gyakorlás.");
-    const tartalom = elem4("div", "hsz-tartalom");
+    let sebesseg = SEBESSEGEK.some((x) => x.szorzo === beallitasok.sebesseg) ? beallitasok.sebesseg : 1;
+    const sebessegKezelo = { kap: () => sebesseg, allit: (x) => {
+      sebesseg = x;
+    } };
+    const kisKepernyo = elem5("p", "hsz-kiskepernyo", "Tipp: nagyobb képernyőn kényelmesebb a gyakorlás.");
+    const tartalom = elem5("div", "hsz-tartalom");
     gyoker.append(kisKepernyo);
     const lista = feladatLista();
     let aktualis = null;
@@ -3829,7 +4075,7 @@
       mod = ujMod;
       if (mod === "oktato" || !feladat.valtozok) mag = null;
       else mag = ujMagErtek !== void 0 && ujMagErtek !== null ? ujMagErtek : ujMag();
-      fut = feladatInditas(tartalom, feladatValtozat(feladat, mag), mod, valtozatLink);
+      fut = feladatInditas(tartalom, feladatValtozat(feladat, mag), mod, valtozatLink, sebessegKezelo);
       if (valaszto) valaszto.igazit(feladat, mod);
       try {
         window.history.replaceState(null, "", valtozatLink());
@@ -3905,27 +4151,27 @@
     };
   }
   function feladatValaszto(lista, h) {
-    const doboz = elem4("div", "hsz-valaszto");
+    const doboz = elem5("div", "hsz-valaszto");
     doboz.setAttribute("role", "group");
     doboz.setAttribute("aria-label", "Feladat és mód választása");
     const mezo = (felirat) => {
-      const l = elem4("label", "hsz-valaszto__mezo");
-      const sel = elem4("select");
-      l.append(elem4("span", "", felirat), sel);
+      const l = elem5("label", "hsz-valaszto__mezo");
+      const sel = elem5("select");
+      l.append(elem5("span", "", felirat), sel);
       doboz.append(l);
       return sel;
     };
     const tipusSel = mezo("Feladattípus");
     const feladatSel = mezo("Feladat");
-    const modMezo = elem4("div", "hsz-valaszto__mezo");
-    const modCim = elem4("span", "", "Mód");
+    const modMezo = elem5("div", "hsz-valaszto__mezo");
+    const modCim = elem5("span", "", "Mód");
     modCim.id = `hsz-mod-${Math.random().toString(36).slice(2, 8)}`;
-    const modGombok = elem4("div", "hsz-modok");
+    const modGombok = elem5("div", "hsz-modok");
     modGombok.setAttribute("role", "group");
     modGombok.setAttribute("aria-labelledby", modCim.id);
     const gombok = {};
     for (const [kulcs, m] of Object.entries(MODOK2)) {
-      const g = elem4("button", "hsz-modgomb", m.nev);
+      const g = elem5("button", "hsz-modgomb", m.nev);
       g.type = "button";
       g.title = m.leiras;
       g.addEventListener("click", () => h.mod(kulcs));
@@ -3934,11 +4180,11 @@
     }
     modMezo.append(modCim, modGombok);
     doboz.append(modMezo);
-    const ujraGomb = elem4("button", "hsz-gomb hsz-gomb--masodlagos", "Újrakezdés");
+    const ujraGomb = elem5("button", "hsz-gomb hsz-gomb--masodlagos", "Újrakezdés");
     ujraGomb.type = "button";
     ujraGomb.title = "A feladat újraindítása az elejéről (minden beállítás elvész)";
     ujraGomb.addEventListener("click", () => h.ujra());
-    const ujValtGomb = elem4("button", "hsz-gomb hsz-gomb--masodlagos", "Új változat");
+    const ujValtGomb = elem5("button", "hsz-gomb hsz-gomb--masodlagos", "Új változat");
     ujValtGomb.type = "button";
     ujValtGomb.title = "Ugyanez a feladat más véletlen adatokkal (VLAN-számok, nevek, címek)";
     ujValtGomb.addEventListener("click", () => h.ujValtozat());
@@ -3981,28 +4227,199 @@
       }
     };
   }
-  function feladatInditas(gyoker, feladat, mod, valtozatLink) {
+  function bemutatoIndito({ f, feladat, gyoker, panel, topologia, nezetek, utolsoParancs, halozat, valasztott }) {
+    const nevbol = (nev) => f.eszkoz(nev);
+    const nevre = (eszkoz) => {
+      const el = f.elemek.find((x) => x.eszkoz === eszkoz);
+      return el ? el.nev : null;
+    };
+    const vezeto = new Vezeto(feladat.bemutato, {
+      f,
+      valasztott: () => nevre(valasztott()),
+      munkamenet: (nev) => {
+        const n = nezetek.get(nevbol(nev));
+        return n && n.munkamenet;
+      },
+      utolsoParancs: (nev) => utolsoParancs.get(nevbol(nev)) || "",
+      ellenorzesKesz: () => !!(panel && panel.utolsoEredmeny && panel.utolsoEredmeny.mind),
+      foglalt: (nev) => {
+        const n = nezetek.get(nevbol(nev));
+        return !!(n && n.terminal.foglalt);
+      }
+    });
+    let buborek = null;
+    let aktiv = false;
+    let utoljaraMutatott = null;
+    let utolsoCel = null;
+    let idozito = null;
+    const celElem = (l) => {
+      if (l.hol === "ellenorzes") return panel ? panel.gomb : null;
+      if (l.hol === "panel") return panel ? panel.doboz : null;
+      const eszkoz = l.eszkoz ? nevbol(l.eszkoz) : null;
+      const n = eszkoz && nezetek.get(eszkoz);
+      if (l.hol === "eszkoz") {
+        const r = topologia.rajzok.get(eszkoz);
+        return r ? r.g : null;
+      }
+      if (!n) return null;
+      if (valasztott() !== eszkoz) return n.ful;
+      if (l.hol === "pc") return n.urlap || n.doboz;
+      return n.terminal.sor.hidden ? n.terminal.doboz : n.terminal.sor;
+    };
+    const mutat = () => {
+      if (!aktiv) return;
+      if (panel && panel.fut) {
+        buborek.elrejt();
+        utoljaraMutatott = null;
+        utolsoCel = null;
+        return;
+      }
+      const l = vezeto.aktualis();
+      const bezar = () => leallitas();
+      if (!l) {
+        if (utoljaraMutatott === "vege") {
+          buborek.helyez();
+          return;
+        }
+        buborek.mutat({
+          cel: panel ? panel.doboz : null,
+          szamlalo: "Vége",
+          szoveg: "Gratulálok, végigértél a bemutatón! A feladatpanel alján, a Magyarázatban elolvashatod, mit miért csináltunk.",
+          miert: "Próbáld ki Gyakorló módban is: ott már csak a cél látszik, és más VLAN-számokat, neveket kapsz.",
+          gombok: [{ felirat: "Bezárás", fn: bezar, fo: true }],
+          bezar,
+          gorget: utoljaraMutatott !== "vege"
+        });
+        utoljaraMutatott = "vege";
+        return;
+      }
+      const eszkoz = l.eszkoz ? nevbol(l.eszkoz) : null;
+      const n = eszkoz && nezetek.get(eszkoz);
+      if (l.hol === "terminal" && n && n.terminal.foglalt && valasztott() === eszkoz) {
+        buborek.elrejt();
+        utoljaraMutatott = null;
+        utolsoCel = null;
+        return;
+      }
+      const masikEszkoz = (l.hol === "terminal" || l.hol === "pc") && valasztott() !== eszkoz;
+      const szoveg = masikEszkoz ? `Előbb válaszd ki: ${l.eszkoz} (kattints a fülére, vagy rá a rajzon). Utána: ${l.szoveg}` : l.szoveg;
+      const kulcs = `${vezeto.index}:${masikEszkoz}`;
+      const cel = celElem(l);
+      if (kulcs === utoljaraMutatott && cel === utolsoCel) {
+        buborek.helyez();
+        return;
+      }
+      utolsoCel = cel;
+      buborek.mutat({
+        cel,
+        szamlalo: `Bemutató · ${vezeto.index + 1} / ${vezeto.lepesek.length}`,
+        szoveg,
+        miert: l.miert,
+        gombok: [
+          { felirat: "Kihagyom ezt a lépést", fn: () => {
+            vezeto.kihagy();
+            frissit();
+          } },
+          { felirat: "Bemutató bezárása", fn: bezar }
+        ],
+        bezar,
+        gorget: utoljaraMutatott !== kulcs
+      });
+      utoljaraMutatott = kulcs;
+    };
+    const frissit = () => {
+      if (!aktiv) return;
+      vezeto.frissit();
+      mutat();
+    };
+    const leallitas = () => {
+      aktiv = false;
+      clearInterval(idozito);
+      if (buborek) buborek.elrejt();
+    };
+    let leiratkozas = null;
+    return {
+      indit() {
+        if (!buborek) buborek = new Buborek(gyoker);
+        aktiv = true;
+        vezeto.index = 0;
+        utoljaraMutatott = null;
+        utolsoCel = null;
+        clearInterval(idozito);
+        idozito = setInterval(frissit, 500);
+        if (!leiratkozas) leiratkozas = halozat.figyel((e) => {
+          if (e.tipus === "allapot") frissit();
+        });
+        frissit();
+      },
+      frissit,
+      megszuntet() {
+        leallitas();
+        if (buborek) buborek.megszuntet();
+      }
+    };
+  }
+  function sebessegValaszto(sebesseg) {
+    const sor2 = elem5("div", "hsz-sebesseg");
+    const cim = elem5("span", "hsz-sebesseg__cim", "Csomagok sebessége:");
+    cim.id = `hsz-seb-${Math.random().toString(36).slice(2, 8)}`;
+    const csoport = elem5("div", "hsz-modok hsz-modok--kicsi");
+    csoport.setAttribute("role", "group");
+    csoport.setAttribute("aria-labelledby", cim.id);
+    const gombok = SEBESSEGEK.map((s) => {
+      const g = elem5("button", "hsz-modgomb", s.nev);
+      g.type = "button";
+      g.title = s.szorzo === 1 ? "Valós idő" : `${s.szorzo < 1 ? "Lassítva" : "Gyorsítva"}: ${String(s.szorzo).replace(".", ",")}×`;
+      g.addEventListener("click", () => {
+        sebesseg.allit(s.szorzo);
+        frissit();
+      });
+      csoport.append(g);
+      return { g, s };
+    });
+    const frissit = () => {
+      for (const { g, s } of gombok) {
+        const aktiv = s.szorzo === sebesseg.kap();
+        g.classList.toggle("hsz-modgomb--aktiv", aktiv);
+        g.setAttribute("aria-pressed", String(aktiv));
+      }
+    };
+    frissit();
+    sor2.append(cim, csoport);
+    return sor2;
+  }
+  function feladatInditas(gyoker, feladat, mod, valtozatLink, sebesseg) {
     const ora = new Ora();
     let elozo = performance.now();
     const idozito = setInterval(() => {
       const most = performance.now();
-      ora.lep(most - elozo);
+      ora.lep((most - elozo) * sebesseg.kap());
       elozo = most;
     }, 20);
     const f = feladatBetolt(feladat, { ora, kesleltetes: ANIM_KESLELTETES });
     const { halozat } = f;
     const szeles = feladat.topologia.meret && feladat.topologia.meret.szel > 900;
-    const felso = elem4("div", `hsz-felso${!feladat.celok.length || szeles ? " hsz-felso--egy" : ""}`);
-    const munka = elem4("section", "hsz-munka");
+    const felso = elem5("div", `hsz-felso${!feladat.celok.length || szeles ? " hsz-felso--egy" : ""}`);
+    const munka = elem5("section", "hsz-munka");
     munka.setAttribute("aria-label", "Az eszközök kezelése");
     gyoker.append(felso, munka);
     let valasztott = null;
     const topologia = new Topologia(felso, { elemek: f.elemek, halozat, meret: feladat.topologia.meret }, {
+      sebesseg: sebesseg.kap,
       valaszt: (e) => valaszt(e, true)
     });
-    const panel = feladat.celok.length ? new FeladatPanel(felso, f, { mod, valtozatLink }) : null;
+    topologia.doboz.append(sebessegValaszto(sebesseg));
+    const vanBemutato = mod === "oktato" && Array.isArray(feladat.bemutato) && feladat.bemutato.length > 0;
+    let bemutato = null;
+    const panel = feladat.celok.length ? new FeladatPanel(felso, f, {
+      mod,
+      valtozatLink,
+      bemutato: vanBemutato ? () => bemutato.indit() : void 0,
+      ellenorzesUtan: () => bemutato && bemutato.frissit()
+    }) : null;
+    const utolsoParancs = /* @__PURE__ */ new Map();
     let piszkos = false;
-    const jelzo = elem4("a", "hsz-jelzo", "Hibás a kimenet? Jelezd!");
+    const jelzo = elem5("a", "hsz-jelzo", "Hibás a kimenet? Jelezd!");
     jelzo.target = "_blank";
     jelzo.rel = "noopener";
     const jelzoFrissit = (parancs) => {
@@ -4011,28 +4428,35 @@
       jelzo.href = `${HIBAJELENTO}?${p}`;
     };
     jelzoFrissit("");
-    const fulek = elem4("div", "hsz-fulek");
+    const fulek = elem5("div", "hsz-fulek");
     fulek.setAttribute("role", "tablist");
     fulek.setAttribute("aria-label", "Eszközök");
-    const nezetHely = elem4("div", "hsz-nezetek");
+    const nezetHely = elem5("div", "hsz-nezetek");
     munka.append(fulek, nezetHely);
     const nezetek = /* @__PURE__ */ new Map();
     const frissitMind = () => {
       piszkos = true;
       topologia.frissit();
       for (const n of nezetek.values()) n.cimFrissit();
+      if (bemutato) bemutato.frissit();
     };
     for (const { eszkoz, tipus } of f.elemek) {
-      const ful = elem4("button", "hsz-ful");
+      const ful = elem5("button", "hsz-ful");
       ful.type = "button";
       ful.setAttribute("role", "tab");
       ful.addEventListener("click", () => valaszt(eszkoz, true));
       fulek.append(ful);
       let n;
       if (tipus === "switch") {
-        const doboz = elem4("div", "hsz-nezet");
+        const doboz = elem5("div", "hsz-nezet");
         const munkamenet = new Munkamenet({ szemelyiseg: ios, eszkoz, ora });
-        const terminal = new Terminal(doboz, munkamenet, { parancsUtan: jelzoFrissit });
+        const terminal = new Terminal(doboz, munkamenet, {
+          parancsUtan: (sor2) => {
+            utolsoParancs.set(eszkoz, sor2);
+            jelzoFrissit(sor2);
+            if (bemutato) setTimeout(bemutato.frissit, 0);
+          }
+        });
         munkamenet.figyel(frissitMind);
         nezetHely.append(doboz);
         n = {
@@ -4048,8 +4472,17 @@
           }
         };
       } else {
-        const ablak = new PcAblak(nezetHely, { eszkoz, halozat, valtozott: frissitMind });
+        const ablak = new PcAblak(nezetHely, {
+          eszkoz,
+          halozat,
+          valtozott: frissitMind,
+          parancsUtan: (sor2) => {
+            utolsoParancs.set(eszkoz, sor2);
+            if (bemutato) setTimeout(bemutato.frissit, 0);
+          }
+        });
         n = {
+          urlap: ablak.urlap,
           doboz: ablak.doboz,
           terminal: ablak.terminal,
           munkamenet: ablak.munkamenet,
@@ -4077,10 +4510,25 @@
       }
       topologia.kijelol(eszkoz);
       if (fokusz) nezetek.get(eszkoz).terminal.fokusz();
+      if (bemutato) bemutato.frissit();
     }
     valaszt(f.elemek[0].eszkoz, false);
-    const lab = elem4("div", "hsz-lab");
-    const verzio = elem4("span", "", `IOS-szerű parancssor · Haloszim v${VERZIO.replace(/\.0$/, "")}`);
+    if (vanBemutato) {
+      bemutato = bemutatoIndito({
+        f,
+        feladat,
+        gyoker,
+        panel,
+        topologia,
+        nezetek,
+        utolsoParancs,
+        halozat,
+        valasztott: () => valasztott
+      });
+      bemutato.indit();
+    }
+    const lab = elem5("div", "hsz-lab");
+    const verzio = elem5("span", "", `IOS-szerű parancssor · Haloszim v${VERZIO.replace(/\.0$/, "")}`);
     lab.append(verzio, jelzo);
     gyoker.append(lab);
     const elso = nezetek.get(f.elemek[0].eszkoz);
@@ -4105,6 +4553,7 @@
       leallit() {
         clearInterval(idozito);
         if (panel) panel.leallit();
+        if (bemutato) bemutato.megszuntet();
         halozat.figyelok = [];
       }
     };

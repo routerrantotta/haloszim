@@ -88,6 +88,7 @@ const ALLAPOT_CELOK = {
     }
     if (c.jelszo !== undefined && sw.vtpJelszo !== c.jelszo) hibak.push(sw.vtpJelszo ? 'a jelszó nem egyezik' : 'nincs jelszó');
     if (c.verzio && sw.vtpVerzio !== c.verzio) hibak.push(`a verzió most ${sw.vtpVerzio} (${c.verzio} kellene)`);
+    if (c.revizio !== undefined && sw.vtpRevizio !== c.revizio) hibak.push(`a revízió most ${sw.vtpRevizio} (${c.revizio} kellene)`);
     if (hibak.length) return { ok: false, megjegyzes: hibak.join('; ') + '.' };
     return { ok: true, megjegyzes: `${sw.vtpMod}, tartomány: ${sw.vtpTartomany}, verzió: ${sw.vtpVerzio}, revízió: ${sw.vtpMod === 'transparent' ? 0 : sw.vtpRevizio}` };
   },
@@ -158,6 +159,16 @@ const PROBA_CELOK = {
     });
   },
 };
+
+/**
+ * Egy állapot-cél azonnali kiértékelése (a bemutató is ezt használja a lépések teljesülésének
+ * eldöntésére). Ismeretlen típusnál null.
+ * @returns {Eredmeny|null}
+ */
+export function allapotCel(f, c) {
+  const fn = ALLAPOT_CELOK[c.tipus];
+  return fn ? fn(f, c) : null;
+}
 
 /** Próbát igényel-e a cél (ezek animálva, egymás után futnak). */
 export function probaE(cel) {

@@ -199,6 +199,10 @@
 .hsz-modgomb--aktiv, .hsz-modgomb--aktiv:hover { background: var(--hsz-fekete); color: var(--hsz-sarga); }
 .hsz-modgomb:focus-visible { outline: 3px solid var(--hsz-yolk); outline-offset: -3px; }
 
+.hsz-modok--kicsi .hsz-modgomb { font-size: .82rem; padding: .25rem .7rem; }
+.hsz-sebesseg { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .6rem; margin: .5rem .4rem .1rem; font-size: .88rem; }
+.hsz-sebesseg__cim { font-weight: bold; }
+
 /* módok a panelen */
 .hsz-panel__mod { font-size: .75rem; border: 1.5px solid var(--hsz-fekete); border-radius: 999px; padding: 0 .55rem; background: var(--hsz-feher); }
 .hsz-panel__mod--vizsga { background: var(--hsz-fekete); color: var(--hsz-sarga); }
@@ -228,6 +232,39 @@
 .hsz-tippgomb:disabled { opacity: .5; cursor: default; }
 .hsz-tippgomb:focus-visible { outline: 3px solid var(--hsz-yolk); outline-offset: 2px; }
 .hsz-cel__megj[hidden] { display: none; }
+
+/* ---------- bemutató: buborék és kiemelés ---------- */
+.hsz-buborek {
+  position: fixed; z-index: 1000;
+  width: min(23rem, calc(100vw - 16px));
+  background: var(--hsz-fekete); color: var(--hsz-feher);
+  border: 2px solid var(--hsz-sarga); border-radius: .9rem;
+  padding: .7rem .9rem .8rem;
+  box-shadow: 0 .6rem 1.6rem rgba(0, 0, 0, .35);
+  font: .95rem/1.45 var(--hsz-betu);
+}
+.hsz-buborek[hidden] { display: none; }
+.hsz-buborek__nyil { position: absolute; width: 14px; height: 14px; background: var(--hsz-fekete); transform: translateX(-50%) rotate(45deg); }
+.hsz-buborek__nyil[hidden] { display: none; }
+.hsz-buborek__nyil--fent { top: -9px; border-left: 2px solid var(--hsz-sarga); border-top: 2px solid var(--hsz-sarga); }
+.hsz-buborek__nyil--lent { bottom: -9px; border-right: 2px solid var(--hsz-sarga); border-bottom: 2px solid var(--hsz-sarga); }
+.hsz-buborek__fej { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin-bottom: .2rem; }
+.hsz-buborek__szamlalo { font: 900 .78rem var(--hsz-cimbetu); color: var(--hsz-sarga); }
+.hsz-buborek__x { background: transparent; border: 0; color: var(--hsz-feher); font-size: 1.3rem; line-height: 1; cursor: pointer; padding: 0 .2rem; }
+.hsz-buborek__x:focus-visible { outline: 2px solid var(--hsz-sarga); }
+.hsz-buborek__szoveg { margin: .1rem 0 .4rem; font-weight: bold; }
+.hsz-buborek__miert { margin: 0 0 .5rem; font-size: .86rem; color: #e4ddc2; }
+.hsz-buborek__miert[hidden] { display: none; }
+.hsz-buborek .hsz-kod { background: #2c2918; color: var(--hsz-sarga); }
+.hsz-buborek__gombok { display: flex; flex-wrap: wrap; gap: .4rem; }
+.hsz-buborek .hsz-tippgomb { background: transparent; color: var(--hsz-feher); border-color: #8a836b; }
+.hsz-buborek .hsz-tippgomb:hover { background: #2c2918; }
+.hsz-gomb--kicsi { font-size: .85rem; padding: .25rem .9rem; background: var(--hsz-sarga); color: var(--hsz-fekete); border-color: var(--hsz-sarga); }
+.hsz-kiemelt { outline: 3px solid var(--hsz-yolk); outline-offset: 3px; border-radius: .5rem; animation: hsz-pulzal 1.6s ease-in-out infinite; }
+g.hsz-kiemelt { outline: none; animation: none; }
+g.hsz-kiemelt .hsz-eszkoz__haz { stroke: var(--hsz-yolk); stroke-width: 6; }
+@keyframes hsz-pulzal { 0%, 100% { outline-color: var(--hsz-yolk); } 50% { outline-color: rgba(245, 158, 0, .25); } }
+@media (prefers-reduced-motion: reduce) { .hsz-kiemelt { animation: none; } }
 
 /* ---------- PC-ablak ---------- */
 .hsz-pc-ablak { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); align-items: start; }

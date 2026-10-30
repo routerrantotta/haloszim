@@ -53,7 +53,7 @@ export class Topologia {
    * @param {HTMLElement} szulo
    * @param {{elemek: {eszkoz: Object, x: number, y: number, tipus: string}[], halozat: Object,
    *          meret?: {szel: number, mag: number}}} adat
-   * @param {{valaszt?: (eszkoz: Object) => void}} [beallitasok]
+   * @param {{valaszt?: (eszkoz: Object) => void, sebesseg?: () => number}} [beallitasok]
    */
   constructor(szulo, { elemek, halozat, meret }, beallitasok = {}) {
     this.elemek = elemek;
@@ -281,7 +281,9 @@ export class Topologia {
     }
     g.append(svg('title', {}, csomagLeiras(e.keret)));
     this.animReteg.append(g);
-    const m = { g, ut: kr.ut, hossz: kr.ut.getTotalLength(), elore, kezd: performance.now(), ido: Math.max(1, e.idotartam) };
+    // A szimulált idő lassítható (sebesség < 1): ennyivel tovább tart az út valós időben.
+    const sebesseg = this.beallitasok.sebesseg ? this.beallitasok.sebesseg() : 1;
+    const m = { g, ut: kr.ut, hossz: kr.ut.getTotalLength(), elore, kezd: performance.now(), ido: Math.max(1, e.idotartam / sebesseg) };
     this.mozgok.push(m);
     this.helyez(m, 0);
     // Ha a lap nem látszik (nincs animációs képkocka), akkor is tűnjön el.

@@ -16,6 +16,7 @@
  *               (ping, szoras); az „ellenproba: true” jelöli, aminek NEM szabad működnie
  *   valtozok – véletlen adatok szabályai (gyakorló és vizsga mód); helyőrzők: {VLAN1}, {VLAN1|es} → „10-es”,
  *               {VLAN1|aes} → „a 10-es” (src/feladat/veletlen.js)
+ *   bemutato  – az oktató mód buborékjai lépésenként (src/feladat/vezetett.js)
  *   magyarazat – a feladat végén lenyitható magyarázat: [{ cim, szoveg: [bekezdés | [listaelemek]] }]
  */
 (function (g) {
@@ -86,6 +87,154 @@
         parancsok: 'PC1-en: `ping 192.168.{VLAN1}.{H3}`; PC2-n: `ping 192.168.{VLAN2}.{H4}`; switchen: `show vlan brief`, '
           + '`show interfaces trunk`. Végül: Ellenőrzés.',
         tippek: ['A PC parancssorában a `ping` paranccsal próbálhatod ki; a switchen a `show` parancsok mutatják az állapotot.'],
+      },
+    ],
+    // Bemutató (oktató mód): buborékok lépésenként – mire mutat (hol), mit és miért, mikor teljesül (kesz).
+    // A leírás: src/feladat/vezetett.js. A „be” a beírandó parancsok (a tesztek ezzel játsszák végig).
+    bemutato: [
+      {
+        hol: 'eszkoz', eszkoz: 'SW1',
+        szoveg: 'Kezdjük SW1-gyel: kattints rá a rajzon (vagy fent az SW1 fülre).',
+        miert: 'Minden eszköznek saját parancssora van: amelyiket kiválasztod, annak a konzolja jelenik meg lent.',
+        kesz: { tipus: 'kivalasztva', eszkoz: 'SW1' },
+      },
+      {
+        hol: 'terminal', eszkoz: 'SW1',
+        szoveg: 'Írd be: `enable` (röviden: `en`), és nyomj Entert.',
+        miert: 'A switch felhasználói módban indul (`SW1>`), itt csak nézelődni lehet. Az `enable` után a prompt '
+          + '`SW1#` lesz: ez a privilegizált mód, innen lehet beállítani.',
+        be: ['enable'],
+        kesz: { tipus: 'mod', eszkoz: 'SW1', mod: 'priv' },
+      },
+      {
+        hol: 'terminal', eszkoz: 'SW1',
+        szoveg: 'Lépj be a konfigurációs módba: `configure terminal` (röviden: `conf t`).',
+        miert: 'Beállítani a globális konfigurációs módban lehet – a prompt `SW1(config)#` lesz.',
+        be: ['configure terminal'],
+        kesz: { tipus: 'mod', eszkoz: 'SW1', mod: 'konfig' },
+      },
+      {
+        hol: 'terminal', eszkoz: 'SW1',
+        szoveg: 'Hozd létre az első VLAN-t: `vlan {VLAN1}`, majd adj neki nevet: `name {NEV1}`.',
+        miert: 'A `vlan` létrehozza a VLAN-t, és belép a beállításaiba (`config-vlan`); a `name` nevet ad neki. '
+          + 'A név nem kötelező, de a hibakeresésnél sokat segít.',
+        be: ['vlan {VLAN1}', 'name {NEV1}'],
+        kesz: { tipus: 'vlan', eszkoz: 'SW1', vlan: '{VLAN1}', nev: '{NEV1}' },
+      },
+      {
+        hol: 'terminal', eszkoz: 'SW1',
+        szoveg: 'A második VLAN: `vlan {VLAN2}`, majd `name {NEV2}`.',
+        miert: 'Almódból is kiadhatsz globális parancsot (pl. egy újabb `vlan`-t): a switch magától kilép az almódból.',
+        be: ['vlan {VLAN2}', 'name {NEV2}'],
+        kesz: { tipus: 'vlan', eszkoz: 'SW1', vlan: '{VLAN2}', nev: '{NEV2}' },
+      },
+      {
+        hol: 'terminal', eszkoz: 'SW1',
+        szoveg: 'Jöhet a PC1 felé néző port: `interface fa0/1`.',
+        miert: 'Az `interface` paranccsal egy port beállításaiba lépsz – a prompt `SW1(config-if)#` lesz. '
+          + 'A portnév rövidíthető: f0/1, fa0/1, FastEthernet0/1 – mind ugyanaz.',
+        be: ['interface fa0/1'],
+        kesz: { tipus: 'mod', eszkoz: 'SW1', mod: 'konfig-if', port: 'FastEthernet0/1' },
+      },
+      {
+        hol: 'terminal', eszkoz: 'SW1',
+        szoveg: 'Tedd access porttá a {VLAN1|es} VLAN-ban: `switchport mode access`, majd `switchport access vlan {VLAN1}`.',
+        miert: 'Az első parancs biztosan access porttá teszi (nem egyezkedik trunkról), a második megmondja, melyik VLAN-hoz tartozzon.',
+        be: ['switchport mode access', 'switchport access vlan {VLAN1}'],
+        kesz: { tipus: 'access-port', eszkoz: 'SW1', port: 'FastEthernet0/1', vlan: '{VLAN1}' },
+      },
+      {
+        hol: 'terminal', eszkoz: 'SW1',
+        szoveg: 'Ugyanez a PC2 felé néző porttal: `interface fa0/2`, `switchport mode access`, `switchport access vlan {VLAN2}`.',
+        miert: 'Minden portot külön kell a megfelelő VLAN-ba tenni. (Sok portnál jól jön az `interface range` parancs.)',
+        be: ['interface fa0/2', 'switchport mode access', 'switchport access vlan {VLAN2}'],
+        kesz: { tipus: 'access-port', eszkoz: 'SW1', port: 'FastEthernet0/2', vlan: '{VLAN2}' },
+      },
+      {
+        hol: 'terminal', eszkoz: 'SW1',
+        szoveg: 'A két switch közötti port legyen trunk: `interface gi0/1`, majd `switchport mode trunk`.',
+        miert: 'A trunk viszi át mindkét VLAN forgalmát egyetlen kábelen: minden keretre ráteszi a 802.1Q-címkét (a VLAN számát).',
+        be: ['interface gi0/1', 'switchport mode trunk'],
+        kesz: { tipus: 'trunk', eszkoz: 'SW1', port: 'GigabitEthernet0/1' },
+      },
+      {
+        hol: 'terminal', eszkoz: 'SW1',
+        szoveg: 'Nézd meg, mit csináltál: `end`, majd `show vlan brief` (röviden: `sh vl br`).',
+        miert: 'Itt látszik minden VLAN a portjaival. A trunk port (Gi0/1) nem szerepel a listában – ez így helyes.',
+        be: ['end', 'show vlan brief'],
+        kesz: { tipus: 'parancs', eszkoz: 'SW1', szavak: ['show', 'vlan', 'brief'] },
+      },
+      {
+        hol: 'eszkoz', eszkoz: 'SW2',
+        szoveg: 'Most SW2 következik: kattints rá.',
+        miert: 'A VLAN-ok switchenként külön léteznek: SW2-n is létre kell hozni őket.',
+        kesz: { tipus: 'kivalasztva', eszkoz: 'SW2' },
+      },
+      {
+        hol: 'terminal', eszkoz: 'SW2',
+        szoveg: 'Ugyanaz, mint SW1-en – most rövidítve: `en`, `conf t`, `vl {VLAN1}`, `na {NEV1}`, `vl {VLAN2}`, `na {NEV2}`.',
+        miert: 'Minden szó rövidíthető, amíg egyértelmű. A switch ugyanazt az állapotot állítja be, mintha kiírtad volna.',
+        be: ['en', 'conf t', 'vl {VLAN1}', 'na {NEV1}', 'vl {VLAN2}', 'na {NEV2}'],
+        kesz: [
+          { tipus: 'vlan', eszkoz: 'SW2', vlan: '{VLAN1}', nev: '{NEV1}' },
+          { tipus: 'vlan', eszkoz: 'SW2', vlan: '{VLAN2}', nev: '{NEV2}' },
+        ],
+      },
+      {
+        hol: 'terminal', eszkoz: 'SW2',
+        szoveg: 'A portok: `int f0/1`, `sw mo acc`, `sw acc vl {VLAN1}`, majd `int f0/2`, `sw mo acc`, `sw acc vl {VLAN2}`.',
+        miert: 'PC3 {VLAN1|aes}, PC4 {VLAN2|aes} VLAN-ba kerül – ugyanúgy, mint a párjuk SW1-en.',
+        be: ['int f0/1', 'sw mo acc', 'sw acc vl {VLAN1}', 'int f0/2', 'sw mo acc', 'sw acc vl {VLAN2}'],
+        kesz: [
+          { tipus: 'access-port', eszkoz: 'SW2', port: 'FastEthernet0/1', vlan: '{VLAN1}' },
+          { tipus: 'access-port', eszkoz: 'SW2', port: 'FastEthernet0/2', vlan: '{VLAN2}' },
+        ],
+      },
+      {
+        hol: 'terminal', eszkoz: 'SW2',
+        szoveg: 'A trunk ezen az oldalon is: `int g0/1`, `sw mo tr`, majd `do sh int trunk`.',
+        miert: 'SW2 magától is trunk lett volna (DTP), de érdemes kifejezetten beállítani. A `do` előtaggal '
+          + 'konfigurációs módból is futtathatsz show parancsot.',
+        be: ['int g0/1', 'sw mo tr', 'do sh int trunk'],
+        kesz: { tipus: 'parancs', eszkoz: 'SW2', szavak: ['show', 'interfaces', 'trunk'] },
+      },
+      {
+        hol: 'eszkoz', eszkoz: 'PC1',
+        szoveg: 'Jöhetnek a PC-k: kattints PC1-re.',
+        miert: 'A PC-ken egy űrlapon adod meg az IP-címet, alatta pedig a gép parancssora van.',
+        kesz: { tipus: 'kivalasztva', eszkoz: 'PC1' },
+      },
+      {
+        hol: 'pc', eszkoz: 'PC1',
+        szoveg: 'IP-cím: 192.168.{VLAN1}.{H1}, maszk: 255.255.255.0 (vagy /24), majd Mentés.',
+        miert: 'A maszk mondja meg, mekkora a gép hálózata: /24 esetén az első három szám a hálózat. '
+          + 'Átjáró most nem kell – a két VLAN között nem lesz forgalom.',
+        kesz: { tipus: 'pc-ip', eszkoz: 'PC1', ip: '192.168.{VLAN1}.{H1}', maszk: '255.255.255.0' },
+      },
+      {
+        hol: 'panel',
+        szoveg: 'A többi PC-t (PC2, PC3, PC4) is állítsd be a címterv szerint – a táblázat a feladatpanelen van.',
+        miert: 'Az azonos VLAN-ú gépek (PC1–PC3, PC2–PC4) egy IP-hálózatban vannak, a két VLAN két külön hálózat.',
+        kesz: [
+          { tipus: 'pc-ip', eszkoz: 'PC2', ip: '192.168.{VLAN2}.{H2}', maszk: '255.255.255.0' },
+          { tipus: 'pc-ip', eszkoz: 'PC3', ip: '192.168.{VLAN1}.{H3}', maszk: '255.255.255.0' },
+          { tipus: 'pc-ip', eszkoz: 'PC4', ip: '192.168.{VLAN2}.{H4}', maszk: '255.255.255.0' },
+        ],
+      },
+      {
+        hol: 'terminal', eszkoz: 'PC1',
+        szoveg: 'Próbáld ki PC1 parancssorában: `ping 192.168.{VLAN1}.{H3}` (ez PC3), és figyeld a rajzot!',
+        miert: 'Előbb egy ARP-kérdés megy szórással (narancs pötty), a trunkon a {VLAN1|es} címkével – SW2 ebből tudja, '
+          + 'melyik VLAN-ba tegye. Utána jönnek a pingek (fekete-sárga pötty). Ha túl gyors, lassítsd le a rajz alatt!',
+        be: ['ping 192.168.{VLAN1}.{H3}'],
+        kesz: { tipus: 'parancs', eszkoz: 'PC1', szavak: ['ping'] },
+      },
+      {
+        hol: 'ellenorzes',
+        szoveg: 'Kész a hálózat! Nyomd meg az Ellenőrzés gombot.',
+        miert: 'Az ellenőrzés valódi pingekkel és szórásos próbával nézi meg a hálózatot – az ellenpróbák azt is, hogy '
+          + 'a két VLAN valóban el van-e választva.',
+        kesz: { tipus: 'ellenorzes' },
       },
     ],
     cimterv: [

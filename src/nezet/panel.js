@@ -62,13 +62,15 @@ export class FeladatPanel {
   /**
    * @param {HTMLElement} szulo
    * @param {import('../feladat/betolto.js').BetoltottFeladat} f
-   * @param {{mod?: 'oktato'|'gyakorlo'|'vizsga', most?: () => number, valtozatLink?: () => string}} [beallitasok]
+   * @param {{mod?: 'oktato'|'gyakorlo'|'vizsga', most?: () => number, valtozatLink?: () => string,
+   *          bemutato?: () => void, ellenorzesUtan?: () => void}} [beallitasok]
    */
   constructor(szulo, f, beallitasok = {}) {
     this.f = f;
     this.mod = MODOK[beallitasok.mod] ? beallitasok.mod : 'oktato';
     this.most = beallitasok.most || (() => (typeof performance !== 'undefined' ? performance.now() : Date.now()));
     this.vizsga = this.mod === 'vizsga';
+    this.beallitasok = beallitasok;
     /** Vizsgában: megnyíltak-e a részletek (siker vagy feladás után). */
     this.feloldva = !this.vizsga;
     this.tippekSzama = 0;
@@ -132,6 +134,13 @@ export class FeladatPanel {
     this.gomb.type = 'button';
     this.gomb.addEventListener('click', () => this.ellenoriz());
     gombok.append(this.gomb);
+    if (beallitasok.bemutato) {
+      this.bemutatoGomb = elem('button', 'hsz-gomb hsz-gomb--masodlagos', 'Bemutató (buborékok)');
+      this.bemutatoGomb.type = 'button';
+      this.bemutatoGomb.title = 'Lépésről lépésre végigvezet a feladaton';
+      this.bemutatoGomb.addEventListener('click', beallitasok.bemutato);
+      gombok.append(this.bemutatoGomb);
+    }
     if (this.vizsga) {
       this.feladGomb = elem('button', 'hsz-gomb hsz-gomb--masodlagos', 'Feladom – mutasd a megoldást');
       this.feladGomb.type = 'button';
@@ -281,6 +290,7 @@ export class FeladatPanel {
     this.utolsoEredmeny = { jo, osszes, mind };
     this.fut = false;
     this.gomb.disabled = false;
+    if (this.beallitasok.ellenorzesUtan) setTimeout(this.beallitasok.ellenorzesUtan, 0);
 
     if (beadas) {
       if (mind) {

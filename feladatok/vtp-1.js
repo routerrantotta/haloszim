@@ -96,6 +96,155 @@
         tippek: ['Hasonlítsd össze a revíziószámokat: SW1-nek és SW3-nak egyeznie kell, SW2-é 0.'],
       },
     ],
+    // Bemutató (oktató mód) – lásd vlan-1.js és src/feladat/vezetett.js.
+    bemutato: [
+      {
+        hol: 'eszkoz', eszkoz: 'SW3',
+        szoveg: 'Kezdjük a gyanús SW3-mal: kattints rá.',
+        miert: 'Mielőtt egy máshonnan hozott switchet a hálózatba kötnénk, mindig meg kell nézni a VTP-állapotát.',
+        kesz: { tipus: 'kivalasztva', eszkoz: 'SW3' },
+      },
+      {
+        hol: 'terminal', eszkoz: 'SW3',
+        szoveg: 'Írd be: `enable`, majd `show vtp status`.',
+        miert: 'Nézd a „Configuration Revision” sort: {REVIZIO}! A tartomány ({TARTOMANY}) is be van már állítva. '
+          + 'Ha így kötnénk be, a régi VLAN-jai mindenhol felülírnák a jókat.',
+        be: ['enable', 'show vtp status'],
+        kesz: { tipus: 'parancs', eszkoz: 'SW3', szavak: ['show', 'vtp', 'status'] },
+      },
+      {
+        hol: 'terminal', eszkoz: 'SW3',
+        szoveg: 'Nullázd a revíziót, és tedd kliensé: `configure terminal`, `vtp mode transparent`, majd `vtp mode client`.',
+        miert: 'A transparent módba lépés nullázza a revíziót, kliensként pedig már nem módosíthat VLAN-t. '
+          + '(A server → client váltás magában NEM nullázna!) A tartomány és a jelszó a régi laborból jó.',
+        be: ['configure terminal', 'vtp mode transparent', 'vtp mode client'],
+        kesz: { tipus: 'vtp', eszkoz: 'SW3', mod: 'client', revizio: 0 },
+      },
+      {
+        hol: 'eszkoz', eszkoz: 'SW1',
+        szoveg: 'Most a server: kattints SW1-re.',
+        miert: 'SW1-en fogjuk a VLAN-okat karbantartani – innen jutnak el a többiekhez.',
+        kesz: { tipus: 'kivalasztva', eszkoz: 'SW1' },
+      },
+      {
+        hol: 'terminal', eszkoz: 'SW1',
+        szoveg: '`enable`, `configure terminal`, `vtp domain {TARTOMANY}`, `vtp password {JELSZO}`.',
+        miert: 'A switch csak a saját tartománya és jelszava szerinti hirdetést fogadja el. A sorrend fontos: a tartománynév '
+          + 'megadása nullázza a revíziót, ezért ez legyen a VLAN-ok létrehozása előtt.',
+        be: ['enable', 'configure terminal', 'vtp domain {TARTOMANY}', 'vtp password {JELSZO}'],
+        kesz: { tipus: 'vtp', eszkoz: 'SW1', tartomany: '{TARTOMANY}', jelszo: '{JELSZO}' },
+      },
+      {
+        hol: 'terminal', eszkoz: 'SW1',
+        szoveg: 'A verzió: `vtp version 2`.',
+        miert: 'A 2-es verzióban a transparent switch mindig továbbengedi a hirdetést. A serveren beállított verziót a '
+          + 'hirdetés a kliensekhez is elviszi.',
+        be: ['vtp version 2'],
+        kesz: { tipus: 'vtp', eszkoz: 'SW1', mod: 'server', verzio: 2 },
+      },
+      {
+        hol: 'terminal', eszkoz: 'SW1',
+        szoveg: 'A VLAN-ok: `vlan {VLAN1}`, `name {NEV1}`, `vlan {VLAN2}`, `name {NEV2}`.',
+        miert: 'SW1 a server: itt hozzuk létre a VLAN-okat. Minden változás növeli a revíziószámot – ebből tudják a '
+          + 'többiek, hogy újabb adatbázist kaptak.',
+        be: ['vlan {VLAN1}', 'name {NEV1}', 'vlan {VLAN2}', 'name {NEV2}'],
+        kesz: [
+          { tipus: 'vlan', eszkoz: 'SW1', vlan: '{VLAN1}', nev: '{NEV1}' },
+          { tipus: 'vlan', eszkoz: 'SW1', vlan: '{VLAN2}', nev: '{NEV2}' },
+        ],
+      },
+      {
+        hol: 'terminal', eszkoz: 'SW1',
+        szoveg: 'Portok és trunk: `interface fa0/1`, `switchport mode access`, `switchport access vlan {VLAN1}`, '
+          + '`interface fa0/2`, `switchport mode access`, `switchport access vlan {VLAN2}`, `interface gi0/1`, `switchport mode trunk`.',
+        miert: 'A VTP-hirdetés csak trunkon megy át – a Gi0/1 vezet SW2 felé.',
+        be: ['interface fa0/1', 'switchport mode access', 'switchport access vlan {VLAN1}', 'interface fa0/2',
+          'switchport mode access', 'switchport access vlan {VLAN2}', 'interface gi0/1', 'switchport mode trunk'],
+        kesz: [
+          { tipus: 'access-port', eszkoz: 'SW1', port: 'FastEthernet0/1', vlan: '{VLAN1}' },
+          { tipus: 'access-port', eszkoz: 'SW1', port: 'FastEthernet0/2', vlan: '{VLAN2}' },
+          { tipus: 'trunk', eszkoz: 'SW1', port: 'GigabitEthernet0/1' },
+        ],
+      },
+      {
+        hol: 'eszkoz', eszkoz: 'SW2',
+        szoveg: 'Most a középső switch: kattints SW2-re.',
+        miert: 'SW2 transparent lesz: továbbengedi a hirdetéseket, de a saját VLAN-jait maga kezeli.',
+        kesz: { tipus: 'kivalasztva', eszkoz: 'SW2' },
+      },
+      {
+        hol: 'terminal', eszkoz: 'SW2',
+        szoveg: '`enable`, `configure terminal`, `vtp mode transparent`, `vtp domain {TARTOMANY}`, `vtp password {JELSZO}`, `vtp version 2`.',
+        miert: 'Ha SW2 már hallott hirdetést, a tartománynevet magától is átvehette – akkor a switch jelzi, hogy már be van állítva. '
+          + 'A verziót a transparent switchen kézzel kell beállítani.',
+        be: ['enable', 'configure terminal', 'vtp mode transparent', 'vtp domain {TARTOMANY}', 'vtp password {JELSZO}', 'vtp version 2'],
+        kesz: { tipus: 'vtp', eszkoz: 'SW2', mod: 'transparent', tartomany: '{TARTOMANY}', jelszo: '{JELSZO}', verzio: 2 },
+      },
+      {
+        hol: 'terminal', eszkoz: 'SW2',
+        szoveg: 'VLAN-ok kézzel: `vlan {VLAN1}`, `vlan {VLAN2}`, és a helyi VLAN: `vlan {HELYI}`, `name {NEVH}`.',
+        miert: 'A transparent switch nem veszi át a hirdetett VLAN-okat. Ha itt nincs {VLAN1|es} VLAN, a rajta áthaladó '
+          + '{VLAN1|es} címkéjű kereteket eldobná. A {HELYI|es} VLAN csak itt él – SW2 nem hirdeti tovább.',
+        be: ['vlan {VLAN1}', 'vlan {VLAN2}', 'vlan {HELYI}', 'name {NEVH}'],
+        kesz: [
+          { tipus: 'vlan', eszkoz: 'SW2', vlan: '{VLAN1}' },
+          { tipus: 'vlan', eszkoz: 'SW2', vlan: '{VLAN2}' },
+          { tipus: 'vlan', eszkoz: 'SW2', vlan: '{HELYI}', nev: '{NEVH}' },
+        ],
+      },
+      {
+        hol: 'terminal', eszkoz: 'SW2',
+        szoveg: 'Trunk mindkét irányba egyszerre: `interface range gi0/1 - 2`, `switchport mode trunk`.',
+        miert: 'Az `interface range` több portot állít be egyszerre. Figyeld a rajzon a fehér, szaggatott szélű pöttyöket: ezek a VTP-hirdetések.',
+        be: ['interface range gi0/1 - 2', 'switchport mode trunk'],
+        kesz: [
+          { tipus: 'trunk', eszkoz: 'SW1', port: 'GigabitEthernet0/1' },
+          { tipus: 'trunk', eszkoz: 'SW2', port: 'GigabitEthernet0/2' },
+        ],
+      },
+      {
+        hol: 'eszkoz', eszkoz: 'SW3',
+        szoveg: 'Vissza SW3-ra: kattints rá.',
+        miert: 'Nézzük meg, megérkeztek-e a VLAN-ok.',
+        kesz: { tipus: 'kivalasztva', eszkoz: 'SW3' },
+      },
+      {
+        hol: 'terminal', eszkoz: 'SW3',
+        szoveg: '`interface gi0/1`, `switchport mode trunk`, majd `do show vtp status`.',
+        miert: 'A revízió most ugyanannyi, mint SW1-en: SW3 átvette a VLAN-okat, a régiek eltűntek. A verzió is 2 lett, '
+          + 'pedig itt nem állítottuk – a serverről jött.',
+        be: ['interface gi0/1', 'switchport mode trunk', 'do show vtp status'],
+        kesz: [
+          { tipus: 'vtp-szinkron', eszkoz: 'SW3', forras: 'SW1' },
+          { tipus: 'parancs', eszkoz: 'SW3', szavak: ['show', 'vtp', 'status'] },
+        ],
+      },
+      {
+        hol: 'terminal', eszkoz: 'SW3',
+        szoveg: 'A portok: `interface fa0/1`, `switchport mode access`, `switchport access vlan {VLAN1}`, '
+          + '`interface fa0/2`, `switchport mode access`, `switchport access vlan {VLAN2}`.',
+        miert: 'A VTP csak a VLAN-ok listáját hozza; hogy melyik port melyik VLAN-ban van, azt minden switchen külön kell beállítani.',
+        be: ['interface fa0/1', 'switchport mode access', 'switchport access vlan {VLAN1}', 'interface fa0/2',
+          'switchport mode access', 'switchport access vlan {VLAN2}'],
+        kesz: [
+          { tipus: 'access-port', eszkoz: 'SW3', port: 'FastEthernet0/1', vlan: '{VLAN1}' },
+          { tipus: 'access-port', eszkoz: 'SW3', port: 'FastEthernet0/2', vlan: '{VLAN2}' },
+        ],
+      },
+      {
+        hol: 'terminal', eszkoz: 'PC1',
+        szoveg: 'PC1 parancssorában: `ping 192.168.{VLAN1}.{H3}` (PC3) – a csomag három switchen át jut el.',
+        miert: 'A középső, transparent SW2-n is átmegy, mert ott kézzel létrehoztuk a {VLAN1|es} VLAN-t.',
+        be: ['ping 192.168.{VLAN1}.{H3}'],
+        kesz: { tipus: 'parancs', eszkoz: 'PC1', szavak: ['ping'] },
+      },
+      {
+        hol: 'ellenorzes',
+        szoveg: 'Kész! Nyomd meg az Ellenőrzés gombot.',
+        miert: 'Az ellenpróbák azt is megnézik, hogy a régi VLAN-ok és SW2 helyi VLAN-ja nem terjedt-e el.',
+        kesz: { tipus: 'ellenorzes' },
+      },
+    ],
     cimterv: [
       { eszkoz: 'PC1', ip: '192.168.{VLAN1}.{H1}', maszk: '255.255.255.0', vlan: '{VLAN1}', hova: 'SW1 Fa0/1' },
       { eszkoz: 'PC2', ip: '192.168.{VLAN2}.{H2}', maszk: '255.255.255.0', vlan: '{VLAN2}', hova: 'SW1 Fa0/2' },

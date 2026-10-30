@@ -21,6 +21,8 @@ import { Munkamenet } from './cli/terminal-munkamenet.js';
 import { ios } from './gyartok/ios/index.js';
 import { Terminal } from './nezet/terminal.js';
 import { Topologia } from './nezet/topologia.js';
+import { Buborek } from './nezet/buborek.js';
+import { Vezeto } from './feladat/vezetett.js';
 import { PcAblak } from './nezet/pc-ablak.js';
 import { FeladatPanel, MODOK } from './nezet/panel.js';
 import { feladatKeres, feladatBetolt, feladatLista } from './feladat/betolto.js';
@@ -32,8 +34,20 @@ export const VERZIO = typeof __VERZIO__ !== 'undefined' ? __VERZIO__ : 'fejleszt
 /** A hibajelentő oldal (a weboldal ötletküldője). */
 const HIBAJELENTO = 'https://routerrantotta.hu/otlet.html';
 
-/** Ennyi ms alatt ér át egy keret egy kábelen (az animáció sebessége). */
+/** Ennyi (szimulált) ms alatt ér át egy keret egy kábelen. */
 const ANIM_KESLELTETES = 260;
+
+/**
+ * A szimuláció sebessége (a szimulált idő ennyiszer gyorsabban telik, mint a valódi).
+ * Lassításkor minden arányosan lassul (a csomagok útja, a ping, a link feljövetele), így a
+ * hálózat ugyanúgy működik – csak jobban követhető.
+ */
+export const SEBESSEGEK = [
+  { nev: 'Nagyon lassú', szorzo: 0.2 },
+  { nev: 'Lassú', szorzo: 0.4 },
+  { nev: 'Normál', szorzo: 1 },
+  { nev: 'Gyors', szorzo: 2 },
+];
 
 /** Feladat nélkül: egyetlen switch, szabad gyakorlás. */
 const SZABAD = {
@@ -77,6 +91,9 @@ export function indit(gyoker, beallitasok = {}) {
   }
   kezdoMag = ervenyesMag(kezdoMag) ? Number(kezdoMag) : null;
   if (!MODOK[mod]) mod = 'oktato';
+  /** A csomagok sebessége (feladatváltáskor is megmarad, a böngészőben nem tároljuk el). */
+  let sebesseg = SEBESSEGEK.some((x) => x.szorzo === beallitasok.sebesseg) ? beallitasok.sebesseg : 1;
+  const sebessegKezelo = { kap: () => sebesseg, allit: (x) => { sebesseg = x; } };
 
   const kisKepernyo = elem('p', 'hsz-kiskepernyo', 'Tipp: nagyobb képernyőn kényelmesebb a gyakorlás.');
   const tartalom = elem('div', 'hsz-tartalom');
@@ -113,7 +130,7 @@ export function indit(gyoker, beallitasok = {}) {
     mod = ujMod;
     if (mod === 'oktato' || !feladat.valtozok) mag = null;
     else mag = ujMagErtek !== undefined && ujMagErtek !== null ? ujMagErtek : ujMag();
-    fut = feladatInditas(tartalom, feladatValtozat(feladat, mag), mod, valtozatLink);
+    fut = feladatInditas(tartalom, feladatValtozat(feladat, mag), mod, valtozatLink, sebessegKezelo);
     if (valaszto) valaszto.igazit(feladat, mod);
     try {
       window.history.replaceState(null, '', valtozatLink());
@@ -264,16 +281,194 @@ function feladatValaszto(lista, h) {
 }
 
 /**
+ * A bemutató vezérlése: a Vezeto (feladat/vezetett.js) dönti el, melyik lépésnél tartunk,
+ * a Buborek (nezet/buborek.js) mutatja. A lépés célja: eszköz a rajzon, terminál, PC-űrlap,
+ * Ellenőrzés gomb. Ha a lépés egy másik eszköz terminálján van, a buborék előbb az eszköz fülére mutat.
+ */
+function bemutatoIndito({ f, feladat, gyoker, panel, topologia, nezetek, utolsoParancs, halozat, valasztott }) {
+  const nevbol = (nev) => f.eszkoz(nev);
+  const nevre = (eszkoz) => {
+    const el = f.elemek.find((x) => x.eszkoz === eszkoz);
+    return el ? el.nev : null;
+  };
+  const vezeto = new Vezeto(feladat.bemutato, {
+    f,
+    valasztott: () => nevre(valasztott()),
+    munkamenet: (nev) => {
+      const n = nezetek.get(nevbol(nev));
+      return n && n.munkamenet;
+    },
+    utolsoParancs: (nev) => utolsoParancs.get(nevbol(nev)) || '',
+    ellenorzesKesz: () => !!(panel && panel.utolsoEredmeny && panel.utolsoEredmeny.mind),
+    foglalt: (nev) => {
+      const n = nezetek.get(nevbol(nev));
+      return !!(n && n.terminal.foglalt);
+    },
+  });
+  let buborek = null;
+  let aktiv = false;
+  let utoljaraMutatott = null;
+  let utolsoCel = null;
+  let idozito = null;
+
+  const celElem = (l) => {
+    if (l.hol === 'ellenorzes') return panel ? panel.gomb : null;
+    if (l.hol === 'panel') return panel ? panel.doboz : null;
+    const eszkoz = l.eszkoz ? nevbol(l.eszkoz) : null;
+    const n = eszkoz && nezetek.get(eszkoz);
+    if (l.hol === 'eszkoz') {
+      const r = topologia.rajzok.get(eszkoz);
+      return r ? r.g : null;
+    }
+    if (!n) return null;
+    if (valasztott() !== eszkoz) return n.ful;
+    if (l.hol === 'pc') return n.urlap || n.doboz;
+    return n.terminal.sor.hidden ? n.terminal.doboz : n.terminal.sor;
+  };
+
+  const mutat = () => {
+    if (!aktiv) return;
+    // Az ellenőrzés alatt a buborék nem takarja el az eredményeket.
+    if (panel && panel.fut) {
+      buborek.elrejt();
+      utoljaraMutatott = null;
+      utolsoCel = null;
+      return;
+    }
+    const l = vezeto.aktualis();
+    const bezar = () => leallitas();
+    if (!l) {
+      if (utoljaraMutatott === 'vege') {
+        buborek.helyez();
+        return;
+      }
+      buborek.mutat({
+        cel: panel ? panel.doboz : null,
+        szamlalo: 'Vége',
+        szoveg: 'Gratulálok, végigértél a bemutatón! A feladatpanel alján, a Magyarázatban elolvashatod, mit miért csináltunk.',
+        miert: 'Próbáld ki Gyakorló módban is: ott már csak a cél látszik, és más VLAN-számokat, neveket kapsz.',
+        gombok: [{ felirat: 'Bezárás', fn: bezar, fo: true }],
+        bezar,
+        gorget: utoljaraMutatott !== 'vege',
+      });
+      utoljaraMutatott = 'vege';
+      return;
+    }
+    const eszkoz = l.eszkoz ? nevbol(l.eszkoz) : null;
+    // Amíg a terminál ír (pl. fut a ping), a buborék nem takarja el a kimenetet és a rajzot.
+    const n = eszkoz && nezetek.get(eszkoz);
+    if (l.hol === 'terminal' && n && n.terminal.foglalt && valasztott() === eszkoz) {
+      buborek.elrejt();
+      utoljaraMutatott = null;
+      utolsoCel = null;
+      return;
+    }
+    const masikEszkoz = (l.hol === 'terminal' || l.hol === 'pc') && valasztott() !== eszkoz;
+    const szoveg = masikEszkoz
+      ? `Előbb válaszd ki: ${l.eszkoz} (kattints a fülére, vagy rá a rajzon). Utána: ${l.szoveg}`
+      : l.szoveg;
+    const kulcs = `${vezeto.index}:${masikEszkoz}`;
+    const cel = celElem(l);
+    // Ha semmi nem változott, csak újra elhelyezzük (a gombok és a szöveg maradnak – a fókusz sem vész el).
+    if (kulcs === utoljaraMutatott && cel === utolsoCel) {
+      buborek.helyez();
+      return;
+    }
+    utolsoCel = cel;
+    buborek.mutat({
+      cel,
+      szamlalo: `Bemutató · ${vezeto.index + 1} / ${vezeto.lepesek.length}`,
+      szoveg,
+      miert: l.miert,
+      gombok: [
+        { felirat: 'Kihagyom ezt a lépést', fn: () => { vezeto.kihagy(); frissit(); } },
+        { felirat: 'Bemutató bezárása', fn: bezar },
+      ],
+      bezar,
+      gorget: utoljaraMutatott !== kulcs,
+    });
+    utoljaraMutatott = kulcs;
+  };
+
+  const frissit = () => {
+    if (!aktiv) return;
+    vezeto.frissit();
+    mutat();
+  };
+
+  const leallitas = () => {
+    aktiv = false;
+    clearInterval(idozito);
+    if (buborek) buborek.elrejt();
+  };
+
+  let leiratkozas = null;
+  return {
+    indit() {
+      if (!buborek) buborek = new Buborek(gyoker);
+      aktiv = true;
+      vezeto.index = 0;
+      utoljaraMutatott = null;
+      utolsoCel = null;
+      clearInterval(idozito);
+      // Biztonsági ellenőrzés fél másodpercenként (pl. a link feljötte, VTP-hirdetés után).
+      idozito = setInterval(frissit, 500);
+      if (!leiratkozas) leiratkozas = halozat.figyel((e) => { if (e.tipus === 'allapot') frissit(); });
+      frissit();
+    },
+    frissit,
+    megszuntet() {
+      leallitas();
+      if (buborek) buborek.megszuntet();
+    },
+  };
+}
+
+/**
+ * „Csomagok sebessége: Nagyon lassú | Lassú | Normál | Gyors” – a rajz alatt.
+ * @param {{kap: () => number, allit: (x: number) => void}} sebesseg
+ */
+function sebessegValaszto(sebesseg) {
+  const sor = elem('div', 'hsz-sebesseg');
+  const cim = elem('span', 'hsz-sebesseg__cim', 'Csomagok sebessége:');
+  cim.id = `hsz-seb-${Math.random().toString(36).slice(2, 8)}`;
+  const csoport = elem('div', 'hsz-modok hsz-modok--kicsi');
+  csoport.setAttribute('role', 'group');
+  csoport.setAttribute('aria-labelledby', cim.id);
+  const gombok = SEBESSEGEK.map((s) => {
+    const g = elem('button', 'hsz-modgomb', s.nev);
+    g.type = 'button';
+    g.title = s.szorzo === 1 ? 'Valós idő' : `${s.szorzo < 1 ? 'Lassítva' : 'Gyorsítva'}: ${String(s.szorzo).replace('.', ',')}×`;
+    g.addEventListener('click', () => {
+      sebesseg.allit(s.szorzo);
+      frissit();
+    });
+    csoport.append(g);
+    return { g, s };
+  });
+  const frissit = () => {
+    for (const { g, s } of gombok) {
+      const aktiv = s.szorzo === sebesseg.kap();
+      g.classList.toggle('hsz-modgomb--aktiv', aktiv);
+      g.setAttribute('aria-pressed', String(aktiv));
+    }
+  };
+  frissit();
+  sor.append(cim, csoport);
+  return sor;
+}
+
+/**
  * Egy feladat felépítése a megadott elemben (topológia, panel, eszközök, lábléc).
  * @returns {Object} – a futó feladat adatai és egy leallit() függvény
  */
-function feladatInditas(gyoker, feladat, mod, valtozatLink) {
-  // A szimulált óra a valódi idővel együtt halad (később gyorsítható, megállítható).
+function feladatInditas(gyoker, feladat, mod, valtozatLink, sebesseg) {
+  // A szimulált óra a valódi idővel halad, a választott sebességgel szorozva.
   const ora = new Ora();
   let elozo = performance.now();
   const idozito = setInterval(() => {
     const most = performance.now();
-    ora.lep(most - elozo);
+    ora.lep((most - elozo) * sebesseg.kap());
     elozo = most;
   }, 20);
 
@@ -289,9 +484,21 @@ function feladatInditas(gyoker, feladat, mod, valtozatLink) {
 
   let valasztott = null;
   const topologia = new Topologia(felso, { elemek: f.elemek, halozat, meret: feladat.topologia.meret }, {
+    sebesseg: sebesseg.kap,
     valaszt: (e) => valaszt(e, true),
   });
-  const panel = feladat.celok.length ? new FeladatPanel(felso, f, { mod, valtozatLink }) : null;
+  topologia.doboz.append(sebessegValaszto(sebesseg));
+  // Bemutató (oktató mód): buborékok lépésről lépésre – lásd lent, a „bemutato” résznél.
+  const vanBemutato = mod === 'oktato' && Array.isArray(feladat.bemutato) && feladat.bemutato.length > 0;
+  let bemutato = null;
+  const panel = feladat.celok.length ? new FeladatPanel(felso, f, {
+    mod,
+    valtozatLink,
+    bemutato: vanBemutato ? () => bemutato.indit() : undefined,
+    ellenorzesUtan: () => bemutato && bemutato.frissit(),
+  }) : null;
+  /** Az eszközök utoljára beírt parancsa (a bemutató „parancs” feltételéhez). */
+  const utolsoParancs = new Map();
   /** Dolgozott-e már a tanuló (beírt parancsot, beállított IP-t) – váltás előtt ezért kérdezünk. */
   let piszkos = false;
 
@@ -319,6 +526,7 @@ function feladatInditas(gyoker, feladat, mod, valtozatLink) {
     piszkos = true;
     topologia.frissit();
     for (const n of nezetek.values()) n.cimFrissit();
+    if (bemutato) bemutato.frissit();
   };
 
   for (const { eszkoz, tipus } of f.elemek) {
@@ -332,7 +540,14 @@ function feladatInditas(gyoker, feladat, mod, valtozatLink) {
     if (tipus === 'switch') {
       const doboz = elem('div', 'hsz-nezet');
       const munkamenet = new Munkamenet({ szemelyiseg: ios, eszkoz, ora });
-      const terminal = new Terminal(doboz, munkamenet, { parancsUtan: jelzoFrissit });
+      const terminal = new Terminal(doboz, munkamenet, {
+        parancsUtan: (sor) => {
+          utolsoParancs.set(eszkoz, sor);
+          jelzoFrissit(sor);
+          // Késleltetve: a terminál csak ezután kezdi kiírni a kimenetet (pl. a pinget).
+          if (bemutato) setTimeout(bemutato.frissit, 0);
+        },
+      });
       munkamenet.figyel(frissitMind);
       nezetHely.append(doboz);
       n = {
@@ -346,8 +561,18 @@ function feladatInditas(gyoker, feladat, mod, valtozatLink) {
         },
       };
     } else {
-      const ablak = new PcAblak(nezetHely, { eszkoz, halozat, valtozott: frissitMind });
+      const ablak = new PcAblak(nezetHely, {
+        eszkoz,
+        halozat,
+        valtozott: frissitMind,
+        parancsUtan: (sor) => {
+          utolsoParancs.set(eszkoz, sor);
+          // Késleltetve: a terminál csak ezután kezdi kiírni a kimenetet (pl. a pinget).
+          if (bemutato) setTimeout(bemutato.frissit, 0);
+        },
+      });
       n = {
+        urlap: ablak.urlap,
         doboz: ablak.doboz,
         terminal: ablak.terminal,
         munkamenet: ablak.munkamenet,
@@ -376,8 +601,17 @@ function feladatInditas(gyoker, feladat, mod, valtozatLink) {
     }
     topologia.kijelol(eszkoz);
     if (fokusz) nezetek.get(eszkoz).terminal.fokusz();
+    if (bemutato) bemutato.frissit();
   }
   valaszt(f.elemek[0].eszkoz, false);
+
+  if (vanBemutato) {
+    bemutato = bemutatoIndito({
+      f, feladat, gyoker, panel, topologia, nezetek, utolsoParancs, halozat,
+      valasztott: () => valasztott,
+    });
+    bemutato.indit();
+  }
 
   const lab = elem('div', 'hsz-lab');
   const verzio = elem('span', '', `IOS-szerű parancssor · Haloszim v${VERZIO.replace(/\.0$/, '')}`);
@@ -402,6 +636,7 @@ function feladatInditas(gyoker, feladat, mod, valtozatLink) {
     leallit() {
       clearInterval(idozito);
       if (panel) panel.leallit();
+      if (bemutato) bemutato.megszuntet();
       halozat.figyelok = [];
     },
   };

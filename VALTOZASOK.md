@@ -2,6 +2,25 @@
 
 A legújabb van felül.
 
+## v0.6 – 2026-10-30 – Bemutató buborékokkal, állítható sebesség
+
+- **Bemutató (oktató mód):** buborékok vezetnek végig a feladaton lépésről lépésre: a rajzon az eszközre, a terminál
+  beviteli sorára, a PC-űrlapra vagy az Ellenőrzés gombra mutatnak, és megmondják, **mit** írj be és **miért**.
+  - A lépés az **állapot** alapján teljesül (rövidítve is, más sorrendben is): pl. ha a VLAN megvan a jó névvel.
+    Ha a tanuló előreszaladt, a bemutató átugorja a már elvégzett lépéseket.
+  - Ha a lépés másik eszközön van, a buborék előbb az eszköz fülére mutat. Amíg a terminál ír (pl. fut a ping) és
+    amíg az Ellenőrzés fut, a buborék nem takar.
+  - „Kihagyom ezt a lépést”, „Bemutató bezárása”, és a panelen „Bemutató (buborékok)” gomb az újraindításhoz.
+  - Mindkét feladathoz: VLAN-feladat 19 lépés, VTP-feladat 17 lépés (a revíziócsapda nullázásával kezdve).
+- **Csomagok sebessége** a rajz alatt: Nagyon lassú (0,2×), Lassú (0,4×), Normál, Gyors (2×). Az egész szimulált idő
+  lassul (a csomagok, a ping, a link feljövetele), így lassítva is ugyanúgy működik a hálózat – csak jól követhető.
+  Feladatváltáskor megmarad (a böngészőben nem tároljuk el).
+- A kipróbáló oldalról lekerült a „fejlesztői kipróbáló oldal” felirat.
+- Új modulok: `src/feladat/vezetett.js` (a lépések logikája, rajz nélkül – tesztelhető), `src/nezet/buborek.js`.
+  Feladatfájl: új `bemutato` mező (lépések: hol, eszköz, szöveg, miért, be, kesz).
+- Tesztek: a bemutató végigjátszása mindkét feladatra alapadatokkal és 3–3 véletlen változattal (minden lépés
+  teljesül, a végén hibátlan az ellenőrzés), előreszaladás; 119 teszt.
+
 ## v0.5 – 2026-10-30 – Véletlen adatok, megosztható változatok
 
 - **Gyakorló és Vizsga módban minden indításkor más adatok:** VLAN-számok (2–254), VLAN-nevek, IP-címek
