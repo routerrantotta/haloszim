@@ -18,7 +18,7 @@
 
 import { Ora } from './mag/ido.js';
 import { Munkamenet } from './cli/terminal-munkamenet.js';
-import { ios } from './gyartok/ios/index.js';
+import { szemelyiseg } from './gyartok/ios/index.js';
 import { Terminal } from './nezet/terminal.js';
 import { Topologia } from './nezet/topologia.js';
 import { Buborek } from './nezet/buborek.js';
@@ -239,7 +239,7 @@ function feladatValaszto(lista, h) {
   ujraGomb.addEventListener('click', () => h.ujra());
   const ujValtGomb = elem('button', 'hsz-gomb hsz-gomb--masodlagos', 'Új változat');
   ujValtGomb.type = 'button';
-  ujValtGomb.title = 'Ugyanez a feladat más véletlen adatokkal (VLAN-számok, nevek, címek)';
+  ujValtGomb.title = 'Ugyanez a feladat más véletlen adatokkal (számok, nevek, címek)';
   ujValtGomb.addEventListener('click', () => h.ujValtozat());
   doboz.append(ujraGomb, ujValtGomb);
 
@@ -350,7 +350,7 @@ function bemutatoIndito({ f, feladat, gyoker, panel, topologia, nezetek, utolsoP
         cel: panel ? panel.doboz : null,
         szamlalo: 'Vége',
         szoveg: 'Gratulálok, végigértél a bemutatón! A feladatpanel alján, a Magyarázatban elolvashatod, mit miért csináltunk.',
-        miert: 'Próbáld ki Gyakorló módban is: ott már csak a cél látszik, és más VLAN-számokat, neveket kapsz.',
+        miert: 'Próbáld ki Gyakorló módban is: ott már csak a cél látszik, és más adatokat (számokat, neveket, címeket) kapsz.',
         gombok: [{ felirat: 'Bezárás', fn: bezar, fo: true }],
         bezar,
         gorget: utoljaraMutatott !== 'vege',
@@ -487,7 +487,7 @@ function feladatInditas(gyoker, feladat, mod, valtozatLink, sebesseg, hibajelent
   gyoker.append(felso, munka);
 
   let valasztott = null;
-  const topologia = new Topologia(felso, { elemek: f.elemek, halozat, meret: feladat.topologia.meret }, {
+  const topologia = new Topologia(felso, { elemek: f.elemek, halozat, meret: feladat.topologia.meret, feliratok: feladat.topologia.feliratok }, {
     sebesseg: sebesseg.kap,
     valaszt: (e) => valaszt(e, true),
   });
@@ -542,9 +542,9 @@ function feladatInditas(gyoker, feladat, mod, valtozatLink, sebesseg, hibajelent
     fulek.append(ful);
 
     let n;
-    if (tipus === 'switch') {
+    if (tipus === 'switch' || tipus === 'router') {
       const doboz = elem('div', 'hsz-nezet');
-      const munkamenet = new Munkamenet({ szemelyiseg: ios, eszkoz, ora });
+      const munkamenet = new Munkamenet({ szemelyiseg: szemelyiseg(eszkoz), eszkoz, ora });
       const terminal = new Terminal(doboz, munkamenet, {
         parancsUtan: (sor) => {
           utolsoParancs.set(eszkoz, sor);
@@ -569,6 +569,8 @@ function feladatInditas(gyoker, feladat, mod, valtozatLink, sebesseg, hibajelent
       const ablak = new PcAblak(nezetHely, {
         eszkoz,
         halozat,
+        ipv6: !!feladat.ipv6,
+        atjaroKell: f.elemek.some((x) => x.tipus === 'router'),
         valtozott: frissitMind,
         parancsUtan: (sor) => {
           utolsoParancs.set(eszkoz, sor);

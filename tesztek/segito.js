@@ -2,7 +2,7 @@
  * Közös segédfüggvények a tesztekhez: egy friss switch + munkamenet, és parancsfuttatás.
  */
 import { Munkamenet } from '../src/cli/terminal-munkamenet.js';
-import { ios } from '../src/gyartok/ios/index.js';
+import { ios, szemelyiseg } from '../src/gyartok/ios/index.js';
 import { ujSwitch2960 } from '../src/modell/switch.js';
 import { Ora } from '../src/mag/ido.js';
 
@@ -42,6 +42,7 @@ export function konfigbol(...sorok) {
 // ---------------------------------------------------------------------------
 import '../feladatok/vlan-1.js';
 import '../feladatok/vtp-1.js';
+import '../feladatok/rip-1.js';
 import { feladatKeres, feladatBetolt } from '../src/feladat/betolto.js';
 import { feladatValtozat } from '../src/feladat/veletlen.js';
 import { ipBeallit } from '../src/mag/vegpont.js';
@@ -61,7 +62,7 @@ export function feladatTeszt(azon, mag = null) {
   const munkamenetek = new Map();
   f.mm = (nev) => {
     if (!munkamenetek.has(nev)) {
-      const mm = new Munkamenet({ szemelyiseg: ios, eszkoz: f.eszkoz(nev), ora: f.halozat.ora });
+      const mm = new Munkamenet({ szemelyiseg: szemelyiseg(f.eszkoz(nev)), eszkoz: f.eszkoz(nev), ora: f.halozat.ora });
       fut(mm, 'enable');
       munkamenetek.set(nev, mm);
     }

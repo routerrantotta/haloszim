@@ -81,3 +81,30 @@ export function gepcimHiba(ip, maszk) {
   if (gepResz > 1 && gep === gepResz) return 'Ez a hálózat szórási címe, gépnek nem adható.';
   return null;
 }
+
+/** Maszk (számként) a prefix hosszából: 24 → 0xffffff00. */
+export function maszkSzam(hossz) {
+  return hossz === 0 ? 0 : (0xffffffff << (32 - hossz)) >>> 0;
+}
+
+/** Maszk szövegként a prefix hosszából: 24 → "255.255.255.0". */
+export function maszkSzoveg(hossz) {
+  return ipSzoveg(maszkSzam(hossz));
+}
+
+/** A cím hálózati része (számként). */
+export function halozatSzam(ip, hossz) {
+  return (ip & maszkSzam(hossz)) >>> 0;
+}
+
+/**
+ * A cím osztályos (classful) hálózata: A osztály /8, B osztály /16, C osztály /24.
+ * A RIP network parancsa és az automatikus összegzés ezt használja.
+ * @param {number} ip
+ * @returns {{halozat: number, hossz: number}}
+ */
+export function osztalyos(ip) {
+  const elso = ip >>> 24;
+  const hossz = elso < 128 ? 8 : elso < 192 ? 16 : 24;
+  return { halozat: halozatSzam(ip, hossz), hossz };
+}

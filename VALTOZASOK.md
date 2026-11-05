@@ -2,6 +2,37 @@
 
 A legújabb van felül.
 
+## v0.8 – 2026-11-05 – Routerek, RIPv2 és RIPng (új feladatcsoport: Dinamikus routing)
+
+- **Új feladat: RIPv2 és RIPng** a **Dinamikus routing** csoportban (a csoport később bővül). Három router háromszögben
+  (R1–R3 között lassú soros vonal), R1 mögött internetszolgáltató, három LAN, IPv4 és IPv6. Hat rész: a kiinduló állapot,
+  RIPv2-alapbeállítás, az automatikus összegzés csapdája (nem összefüggő 172.16-os hálózat), alapértelmezett útvonal
+  terjesztése, RIPng, végül metrika és konvergencia (a soros vonal ki- és bekapcsolása `debug ip rip` mellett).
+  Oktató módban 29 lépéses bemutató, gyakorló és vizsga módban véletlen LAN-címek; részletes magyarázat (a Packet
+  Tracertől való eltérésekkel együtt). 27 cél, köztük ellenpróbák (nincs összevont /16, az ISP-link nem szivárog be,
+  az ISP felé nem fut RIPng), és valódi pingek IPv4-en és IPv6-on.
+- **Router (ISR 4331 jellegű):** GigabitEthernet0/0/0–2, Serial0/1/0–1, létrehozható Loopback. Saját rajz a topológián,
+  egyenes kábelek, szaggatott soros vonal, hálózatfeliratok a rajzon.
+- **A magban:** IP-továbbítás (leghosszabb előtag, TTL, egyenlő költségű utak), ARP és IPv6-szomszédfelderítés (ND),
+  ICMP „Time exceeded” és „Destination unreachable”, routing tábla (C, L, S, R; adminisztratív távolság), statikus
+  útvonalak, **RIP** (v1/v2, 30 s-os frissítés, triggered update, kérés, split horizon, poisoning, invalid / holddown /
+  flush, auto-summary, passzív interfész, default-information originate) és **RIPng** (link-local következő ugrás,
+  interfészenkénti bekapcsolás, ::/0 hirdetése). A soros vonal késleltetése a ping- és tracert-időkben is látszik.
+- **Új parancsok (router):** `ip address`, `ipv6 address` (link-local is), `ipv6 enable`, `ip route`, `ipv6 route`,
+  `ipv6 unicast-routing`, `router rip` (version, network, passive-interface, auto-summary, default-information originate,
+  timers basic), `ipv6 router rip`, `ipv6 rip … enable / default-information originate|only`, `clock rate`, `bandwidth`,
+  `show ip interface brief`, `show ipv6 interface brief`, `show ip route [rip|connected|static]`, `show ipv6 route […]`,
+  `show ip protocols`, `show ipv6 protocols`, `show ip rip database`, `show ipv6 rip [database]`, `show ip arp`,
+  `show running-config`, `ping`, `traceroute`, `debug ip rip`, `debug ipv6 rip`, `undebug all`, `clear ip route *`.
+- **PC:** IPv6-cím és -átjáró az űrlapon (IPv6-os feladatban), IPv6-ping, `tracert`, `ipconfig` IPv6-sorokkal,
+  „Destination net unreachable” és magyarázat, ha az első csomagok az ARP miatt vesznek el.
+- **Ellenőrzés:** új céltípusok (`rip`, `ripng`, `ipv6-routing`, `utvonal` – „nincs” változattal ellenpróbának);
+  a ping-próba IPv6-címre és több pingre is (`db`), routerek esetén „bemelegítő” pingekkel.
+- A címterv-táblázat oszlopai a feladathoz igazodnak (eszköz, interfész, IPv4, IPv6, átjáró).
+- Telefonon a hosszú parancsok is törnek a panelen (nincs vízszintes görgetés).
+- Tesztek: a RIP-feladat bemutatója alap- és 3 véletlen változattal végigjátszva, teljes megoldás ellenőrzése,
+  kimenetek formája, auto-summary hiba, poisoning a debugban, verzióeltérés, passzív interfész; 130 teszt.
+
 ## v0.7 – 2026-10-30 – Beépíthető a weboldalba
 
 - **Védőréteg a stílusban:** a befogadó oldal általános szabályai (`button`, `form`, `label`, `input`, `.light h2`,

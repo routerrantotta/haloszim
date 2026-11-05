@@ -28,6 +28,13 @@ ezeket érdemes elsőként összevetni egy valódi eszközzel vagy újabb forrá
 | F14 | [Cisco Community – VTP egy 2960XR-en](https://community.cisco.com/t5/switching/vtp-in-switch-2960xr/m-p/3192215) | show vtp status IOS 15-ös formája (VTP Version capable, Feature VLAN szakasz), `*** MD5 digest checksum mismatch on trunk: … ***` |
 | F15 | [UCG – Lab 3 (2017), VTP-gyakorlat](https://www.ucg.ac.me/skladiste/blog_2904/objava_20332/fajlovi/lab3_2017.pdf) | a vtp mode / domain / password válaszüzenetei, kliens VLAN-tiltás, régi (12.x) show vtp status |
 | F16 | [Cisco fórum – transparent → client váltás](https://supportforums.cisco.com/t5/switching/behavior-when-changing-vtp-transparent-to-vtp-client/m-p/1935598/highlight/true) | `Setting device to VTP CLIENT mode.`; transparentben a revízió 0, kliensként átveszi a server nagyobb revízióját |
+| F17 | A felhasználó megoldókulcsa: „Dinamikus forgalomirányítás: RIPv2 és RIPng” (Packet Tracer 9.0-ban mérve, 2026-11-03) | show ip protocols, show ip route (RIP-sorok), show ipv6 route, debug ip rip (poisoning), tracert, `% IPv6 routing not enabled` |
+| F18 | [Cisco IOS IP Routing: RIP Command Reference](https://www3-realm.cisco.com/en/US/docs/ios/iproute_rip/command/reference/irr_rip.html) | show ip protocols, show ip rip database, debug ip rip mezői és alakja |
+| F19 | [Cisco IOS IPv6 Command Reference – show ipv6 rip](https://cisco.com/en/US/docs/ios/ipv6/command/reference/ipv6_16.html) | show ipv6 rip (folyamat-adatok, időzítők: 30/180/0/120), show ipv6 rip database |
+| F20 | [amitsciscozone – Basic RIPng Configuration](https://sites.google.com/site/amitsciscozone/ipv6/basic-ripng-configuration), [RIPng Holddown Timer](https://sites.google.com/site/amitsciscozone/ipv6/ripng-holddown-timer) | valódi RIPng-kimenetek: show ipv6 route (R-sorok, via FE80::…), show ipv6 rip database |
+| F21 | [Cisco NetAcad tananyag (Tartui Egyetem tükre), 7.3.1.5](https://courses.cs.ut.ee/all/MTAT.08.003/mat/2mrs/course/module7/7.3.1.5/7.3.1.5.html) | show ip protocols RIP-pel |
+| F22 | [Cisco Community – ISR4331](https://community.cisco.com/t5/routing/isr4331-can-t-even-ping-itself/m-p/4735505) | ISR 4331 portnevei (GigabitEthernet0/0/0 …), show ip interface brief IOS XE-n |
+| F23 | [basicitnetworking – Troubleshooting RIP v2](https://basicitnetworking.blogspot.com/2012/11/troubleshooting-rip-v2.html?m=1), [NetworkLessons fórum – RIP](https://forum.networklessons.com/t/rip-distance-vector-routing-protocol/876/4) | debug ip rip valódi kimenete (sending/received, build update entries, `in N hops`) |
 | E | Saját emlékezet (CCNA-oktatás, Packet Tracer-gyakorlat) | csak kiegészítésként; egyedül nem elég |
 
 ## Parancsok és üzenetek
@@ -76,6 +83,44 @@ ezeket érdemes elsőként összevetni egy valódi eszközzel vagy újabb forrá
 | VTP a running-configban | csak transparent módban: `vtp domain X`, `vtp mode transparent`, és a VLAN-ok | F7, E | rendben |
 | `--More--` | 24 soros terminál: 23 sor, majd ` --More-- `; szóköz = oldal, Enter = sor, más = vége | E | ellenőrizendő |
 
+## Router, RIP, RIPng (v0.8-tól)
+
+Utánzott eszköz: **ISR 4331 jellegű router, IOS XE 16 jellegű kimenetek**.
+
+| Mit | Forma a szimulátorban | Források | Állapot |
+|-----|------------------------|----------|---------|
+| `show ip interface brief` | `Interface` 23, `IP-Address` 16, `OK?` 4, `Method` 7, `Status` 22 karakter, majd `Protocol`; `unassigned` / `YES unset` | F22, F17, E | rendben |
+| `show ipv6 interface brief` | `Név [up/up]`, alatta 4 szóközzel a link-local, majd a globális címek; cím nélkül `unassigned` | F17, E | ellenőrizendő |
+| `show ip route` | rövidített kódsor (csak a használt kódok), `Gateway of last resort is …`, osztályos csoportok: `… is subnetted, N subnets` (egy maszk: a sorokban nincs /hossz), `… is variably subnetted, N subnets, M masks`; kód 6 (csoportban 9) karakteren; második egyenlő út a `[` alá igazítva; `is possibly down, routing via …` | F17, F18, E | rendben; a kódsor szándékosan rövid |
+| `show ipv6 route` | `IPv6 Routing Table - default - N entries`, rövidített kódsor, `R   előtag [120/m]`, alatta `     via FE80::x, interfész`; a végén `L   FF00::/8` `via Null0, receive` | F20, F17 | rendben |
+| `show ip protocols` | `*** IP Routing is NSF aware ***`, `Routing Protocol is "rip"`, időzítők, `Default version control: send version 2, receive version 2` (PT-ben „receive 2”), interfésztábla, `Automatic network summarization is (not) in effect`, `Maximum path: 4`, hálózatok, passzív interfészek, `Routing Information Sources`, `Distance: (default is 120)` | F18, F21, F17 | rendben |
+| `show ipv6 protocols` | `IPv6 Routing Protocol is "connected"` / `"application"` / `"ND"` / `"rip NÉV"`, `Interfaces:`, `Redistribution:` | F17, E | ellenőrizendő |
+| `show ip rip database` | `hálózat/hossz    directly connected, interfész`, tanultnál alatta `    [metrika] via cím, kor, interfész`; `auto-summary` sorok | F18, E | ellenőrizendő |
+| `show ipv6 rip` / `database` | `RIP process "NÉV", port 521, multicast-group FF02::9, pid …`, időzítők (30, 180, holddown 0, garbage 120); adatbázis: ` előtag, metric m, installed`, alatta `interfész/FE80::x, expires in N secs` | F19, F20 | rendben |
+| `debug ip rip` | `RIP: sending v2 update to 224.0.0.9 via IF (cím)`, `RIP: build update entries`, `cím/hossz via 0.0.0.0, metric m, tag 0`; fogadás: `RIP: received v2 update from cím on IF`, `     cím/hossz via 0.0.0.0 in N hops`; bekapcsolva: `RIP protocol debugging is on` | F23, F17, F18 | rendben |
+| `debug ipv6 rip` | `RIPng: Sending multicast update on IF for NÉV`, `src=`, `dst=`, `sport/dport`, `command=2, version=1, mbz=0, #rte=N`, `tag=0, metric=m, prefix=…` | E | ellenőrizendő |
+| `undebug all` | `All possible debugging has been turned off` | E | ellenőrizendő |
+| router `ping` | `Type escape sequence to abort.`, `Sending 5, 100-byte ICMP Echos to X, timeout is 2 seconds:`, `!!!!!` (`.` időtúllépés, `U` elérhetetlen), `Success rate is N percent (a/5), round-trip min/avg/max = …` | E (közismert) | ellenőrizendő (2. forrás) |
+| router `traceroute` | `Tracing the route to X`, `VRF info: (vrf in name/id, vrf out name/id)`, `  1 cím 20 msec 20 msec 20 msec` | E | ellenőrizendő |
+| PC `tracert` | `Tracing route to X over a maximum of 30 hops`, `  1    <1 ms    <1 ms    <1 ms  cím`, `Request timed out.`, `Trace complete.` | F17, E | rendben |
+| Hibaüzenetek | `% IPv6 routing not enabled`; `%Inconsistent address and mask`; `% X overlaps with IF`; `Bad mask /N for address X`; `% Use the link-local keyword …`; `%No matching route to delete` | F17 (az első), E | a többi ellenőrizendő |
+| `show running-config` (router) | IOS XE 16.9 jellegű váz: interfészenként `ip address`/`no ip address`, `shutdown`, `negotiation auto`, IPv6-címek, `ipv6 rip NÉV enable`; `router rip` blokk (version, passive-interface, network, default-information originate, no auto-summary); `ip route`, `ipv6 route`, `ipv6 router rip NÉV` | E | ellenőrizendő |
+
+## Szándékos egyszerűsítések (v0.8-tól, router és RIP)
+
+- A RIP periodikus frissítése pontosan 30 másodpercenként megy (a valódi eszköz kis véletlen eltérést ad hozzá).
+- Változáskor (triggered update) 1 másodperc múlva csak a változott bejegyzések mennek ki; a már nem hirdetett
+  útvonalakat a router egyszer 16-os metrikával kihirdeti (poisoning). Poison reverse nincs (a Cisco alapból sem).
+- Ha egy interfész leesik, az onnan tanult útvonalak azonnal törlődnek (holddown nélkül); holddown akkor van, ha a
+  szomszéd 16-os metrikát küld, vagy lejár az útvonal (invalid).
+- Egyenlő költségű utaknál a router csomagonként váltogat (a valódi eszköz CEF-fel általában célcímenként osztja el).
+- A `default-information originate` (RIP) feltétel nélkül hirdeti a 0.0.0.0/0-t.
+- IPv4-ben az ismeretlen MAC-ű következő ugrás felé a router ARP-ot küld, és a csomagot eldobja (mint a valódi);
+  IPv6-ban a szomszédfelderítés idejére legfeljebb 3 csomagot sorba tesz.
+- A soros vonal 64 kbit/s-os késleltetése irányonként 10 ms (a ping/tracert ideje ebből jön); a gigabites link 0 ms.
+- A router traceroute-ja ICMP echóval dolgozik (a valódi UDP-vel), a kimenet formája ugyanaz.
+- Nincs `clock rate`-függés (a soros vonal órajel nélkül is működik), nincs CDP, nincs a 4331 GigabitEthernet0 menedzsmentportja.
+
 ## Szándékos egyszerűsítések (v0.3-tól, VTP)
 
 - A VTP-hirdetés a szimulátorban egyetlen üzenet (a valódiban summary / subset / request), és a beállításváltozás vagy
@@ -91,7 +136,7 @@ ezeket érdemes elsőként összevetni egy valódi eszközzel vagy újabb forrá
 - DTP egyszerűsítve: dynamic auto + trunk/desirable → trunk; auto + auto → access. A trunkon minden VLAN átmegy
   (1–4094), a natív VLAN mindig 1 (a `switchport trunk …` parancsok még nincsenek meg).
 - VTP-terjesztés nincs (gyári állapotban, üres tartománynévvel a valódi eszközök sem terjesztenek).
-- A ping ideje mindig `time<1ms`: az animáció miatti késleltetés nem számít bele.
+- A ping ideje `time<1ms` (v0.8-tól: soros vonalon a vonal késleltetése, pl. `time=20ms`): az animáció miatti késleltetés nem számít bele.
 - Access portra érkező címkés keretet a switch eldob.
 - Az üzemmód (access/trunk) váltásakor a link nem „pattan” le és fel.
 

@@ -25,8 +25,15 @@ function svg(tag, attr = {}, szoveg) {
 const SW = { szel: 520, mag: 96, portSzel: 22, portMag: 17, koz: 4, nagyitas: 0.6 };
 /** A PC rajzának méretei. */
 const PC = { szel: 80, mag: 66 };
+/** A router rajzának méretei (a középpontja a rajzon megadott x, y). */
+const RT = { szel: 76, mag: 48 };
 
 const MOD_SZOVEG = { access: 'access', trunk: 'trunk', 'dinamikus-auto': 'dynamic auto', 'dinamikus-kezdemenyezo': 'dynamic desirable' };
+
+/** A topológia-adat feliratai (ha vannak). */
+function adatFeliratok(adat) {
+  return (adat && adat.feliratok) || [];
+}
 
 /** A port helye a switch saját rajzán (a bal felső sarka). */
 function swPortHely(p) {
@@ -55,11 +62,14 @@ export class Topologia {
    *          meret?: {szel: number, mag: number}}} adat
    * @param {{valaszt?: (eszkoz: Object) => void, sebesseg?: () => number}} [beallitasok]
    */
-  constructor(szulo, { elemek, halozat, meret }, beallitasok = {}) {
+  constructor(szulo, { elemek, halozat, meret, feliratok }, beallitasok = {}) {
     this.elemek = elemek;
     this.halozat = halozat;
     /** Van-e értelme a VTP-jelnek a jelmagyarázatban (legalább két switch). */
     this.vanVtp = elemek.filter((e) => e.tipus === 'switch').length > 1;
+    this.vanSwitch = elemek.some((e) => e.tipus === 'switch');
+    this.vanRouter = elemek.some((e) => e.tipus === 'router');
+    this.vanSoros = halozat.kabelek.some((k) => k.soros);
     this.beallitasok = beallitasok;
     const m = meret || { szel: 800, mag: 400 };
 
@@ -68,6 +78,11 @@ export class Topologia {
     this.doboz.setAttribute('aria-label', 'Topológia');
     this.rajz = svg('svg', { viewBox: `0 0 ${m.szel} ${m.mag}`, class: 'hsz-topologia__rajz', role: 'group' });
     this.rajz.append(svg('title', {}, 'A hálózat rajza – kattints egy eszközre a kezeléséhez'));
+    const defs = svg('defs');
+    const marker = svg('marker', { id: 'hsz-nyilhegy', viewBox: '0 0 10 10', refX: 6, refY: 5, markerWidth: 4, markerHeight: 4, orient: 'auto-start-reverse' });
+    marker.append(svg('path', { d: 'M 0 0 L 10 5 L 0 10 z', class: 'hsz-router__nyilhegy' }));
+    defs.append(marker);
+    this.rajz.append(defs);
     this.kabelReteg = svg('g', { class: 'hsz-kabelek' });
     this.eszkozReteg = svg('g');
     this.animReteg = svg('g', { class: 'hsz-anim' });
@@ -78,8 +93,11 @@ export class Topologia {
     /** eszköz → { g, felirat, ipFelirat?, portok: Map<portnév, {x, y, led, pg?, cim}> } */
     this.rajzok = new Map();
     for (const e of elemek) {
-      this.rajzok.set(e.eszkoz, e.tipus === 'switch' ? this.switchRajz(e) : this.pcRajz(e));
+      const r = e.tipus === 'switch' ? this.switchRajz(e) : e.tipus === 'router' ? this.routerRajz(e) : this.pcRajz(e);
+      this.rajzok.set(e.eszkoz, r);
     }
+    // Feliratok a rajzon (pl. a linkek hálózatcímei) – a feladatfájl topologia.feliratok mezőjéből.
+    for (const f of adatFeliratok({ feliratok })) this.felirat(f);
     /** a kábelek rajza: { k (a hálózat kábele), ut (path), cimkek, trunkFelirat } */
     this.kabelek = halozat.kabelek.map((k) => this.kabelRajz(k));
 
@@ -94,12 +112,14 @@ export class Topologia {
   jelmagyarazat() {
     const j = document.createElement('p');
     j.className = 'hsz-jelmagyarazat';
-    j.innerHTML = '<span><i class="hsz-potty hsz-potty--arp"></i>ARP</span>'
+    j.innerHTML = `<span><i class="hsz-potty hsz-potty--arp"></i>${this.vanRouter ? 'ARP / ND' : 'ARP'}</span>`
       + '<span><i class="hsz-potty hsz-potty--icmp"></i>ping (ICMP)</span>'
+      + (this.vanRouter ? '<span><i class="hsz-potty hsz-potty--rip"></i>RIP / RIPng</span>' : '')
       + (this.vanVtp ? '<span><i class="hsz-potty hsz-potty--vtp"></i>VTP-hirdetés</span>' : '')
-      + '<span><b class="hsz-cimke-minta">10</b>802.1Q-címke (VLAN)</span>'
+      + (this.vanSwitch ? '<span><b class="hsz-cimke-minta">10</b>802.1Q-címke (VLAN)</span>' : '')
       + '<span><b class="hsz-x-minta">✕</b>eldobott keret</span>'
-      + '<span><i class="hsz-vonal-minta"></i>trunk</span>';
+      + (this.vanSwitch ? '<span><i class="hsz-vonal-minta"></i>trunk</span>' : '')
+      + (this.vanSoros ? '<span><i class="hsz-vonal-minta hsz-vonal-minta--soros"></i>soros vonal (lassú)</span>' : '');
     return j;
   }
 
@@ -182,6 +202,52 @@ export class Topologia {
     return { g, felirat, ipFelirat, portok, tipus: 'pc' };
   }
 
+
+  /** @private – egy router kirajzolása (saját rajz: henger, rajta négy nyíl) */
+  routerRajz({ eszkoz, x, y, felirat: hely }) {
+    const g = svg('g', { class: 'hsz-eszkoz hsz-eszkoz--router', transform: `translate(${x} ${y})` });
+    this.kattinthato(g, eszkoz, `Router: ${eszkoz.hostname} – kattints, és írj a parancssorába`);
+    const w = RT.szel / 2;
+    const fel = RT.mag / 2;
+    const ry = 11;
+    g.append(svg('path', {
+      d: `M ${-w} ${-fel + ry} L ${-w} ${fel - ry} A ${w} ${ry} 0 0 0 ${w} ${fel - ry} L ${w} ${-fel + ry} Z`,
+      class: 'hsz-eszkoz__haz',
+    }));
+    g.append(svg('ellipse', { cx: 0, cy: -fel + ry, rx: w, ry, class: 'hsz-router__teto' }));
+    // Négy nyíl a tetején: kettő befelé, kettő kifelé (a „csomagtovábbító” jelkép)
+    const nyil = (x1, y1, x2, y2) => g.append(svg('path', { d: `M ${x1} ${y1} L ${x2} ${y2}`, class: 'hsz-router__nyil', 'marker-end': 'url(#hsz-nyilhegy)' }));
+    const ty = -fel + ry;
+    nyil(-27, ty - 5, -10, ty - 1);
+    nyil(27, ty + 5, 10, ty + 1);
+    nyil(-6, ty + 2, -24, ty + 7);
+    nyil(6, ty - 2, 24, ty - 7);
+    const cim = svg('title');
+    g.append(cim);
+    // A név helye: lent (alapból), fent, balra vagy jobbra – hogy ne takarja a kábeleket.
+    const HELYEK = {
+      lent: { x: 0, y: fel + 17, d: 13, igazit: 'middle' },
+      fent: { x: 0, y: -fel - 20, d: 13, igazit: 'middle' },
+      balra: { x: -w - 8, y: -2, d: 14, igazit: 'end' },
+      jobbra: { x: w + 8, y: -2, d: 14, igazit: 'start' },
+    };
+    const h = HELYEK[hely] || HELYEK.lent;
+    const nev = svg('text', { x: h.x, y: h.y, class: 'hsz-eszkoz__nev', 'text-anchor': h.igazit });
+    const tipus = svg('text', { x: h.x, y: h.y + h.d, class: 'hsz-eszkoz__tipus', 'text-anchor': h.igazit }, 'ISR 4331 jellegű router');
+    g.append(nev, tipus);
+    this.eszkozReteg.append(g);
+    const portok = new Map();
+    for (const p of eszkoz.portok) portok.set(p.nev, { x, y });
+    return { g, felirat: nev, cim, portok, tipus: 'router', kozep: { x, y } };
+  }
+
+  /** @private – szöveg a rajzon (pl. egy link hálózatcíme); több sor: \n */
+  felirat({ x, y, szoveg, igazit = 'middle', halvany = false }) {
+    const t = svg('text', { x, y, class: `hsz-terkep-felirat${halvany ? ' hsz-terkep-felirat--halvany' : ''}`, 'text-anchor': igazit });
+    String(szoveg).split('\n').forEach((sor, i) => t.append(svg('tspan', { x, dy: i ? 13 : 0 }, sor)));
+    this.kabelReteg.append(t);
+  }
+
   /** @private – egy kábel útvonala és portcímkéi */
   kabelRajz(k) {
     const ra = this.rajzok.get(k.a.eszkoz);
@@ -190,7 +256,31 @@ export class Topologia {
     const pb = rb.portok.get(k.b.port.nev);
     let d;
     const cimkek = [];
-    if (ra.tipus === 'switch' && rb.tipus === 'switch') {
+    if (ra.tipus === 'router' || rb.tipus === 'router') {
+      // Routernél egyenes vonal a középpontok (PC-nél a gép teteje) között, a portnevek a végek közelében.
+      d = `M ${pa.x} ${pa.y} L ${pb.x} ${pb.y}`;
+      const dx = pb.x - pa.x;
+      const dy = pb.y - pa.y;
+      const hossz = Math.hypot(dx, dy) || 1;
+      const ux = dx / hossz;
+      const uy = dy / hossz;
+      const cimke = (vege, r, p, tav) => {
+        const elojel = vege === 'a' ? 1 : -1;
+        const bx = p.x + ux * tav * elojel;
+        const by = p.y + uy * tav * elojel;
+        // A vonalra merőlegesen kicsit eltolva, hogy ne takarja a vonal (a két vég ellentétes oldalra,
+        // így rövid kábelen sem takarják egymást).
+        const szoveg = (vege === 'a' ? k.a : k.b).port.rovid;
+        // Függőleges vonalnál oldalra kell tolni a szöveg felével, vízszintesnél elég kicsit fölé/alá.
+        const tol = Math.abs(uy) * (szoveg.length * 3.4 + 5) + Math.abs(ux) * 9;
+        const nx = -uy * tol * elojel;
+        const ny = ux * tol * elojel;
+        return { x: bx + nx, y: by + ny + 4, szoveg, igazit: 'middle' };
+      };
+      const tav = (r) => (r.tipus === 'router' ? 62 : 14);
+      cimkek.push(cimke('a', ra, pa, tav(ra)));
+      cimkek.push(cimke('b', rb, pb, tav(rb)));
+    } else if (ra.tipus === 'switch' && rb.tipus === 'switch') {
       // Két switch: a portokból felfelé, és felül át.
       const fent = Math.min(ra.felso, rb.felso) - 30;
       d = `M ${pa.x} ${pa.y} L ${pa.x} ${fent} L ${pb.x} ${fent} L ${pb.x} ${pb.y}`;
@@ -209,7 +299,7 @@ export class Topologia {
       cimkek.push({ x: swp.x + (balra ? -5 : 5), y: sw.also + 14, szoveg: swk.port.rovid, igazit: balra ? 'end' : 'start' });
       cimkek.push({ x: pcp.x + 5, y: pcp.y - 6, szoveg: 'Fa0', igazit: 'start' });
     }
-    const ut = svg('path', { d, class: 'hsz-kabel' });
+    const ut = svg('path', { d, class: `hsz-kabel${k.soros ? ' hsz-kabel--soros' : ''}` });
     this.kabelReteg.append(ut);
     for (const c of cimkek) {
       this.kabelReteg.append(svg('text', { x: c.x, y: c.y, class: 'hsz-kabel__cimke', 'text-anchor': c.igazit }, c.szoveg));
@@ -231,7 +321,16 @@ export class Topologia {
         r.ipFelirat.classList.toggle('hsz-eszkoz__ip--nincs', !eszkoz.ip);
         const p = r.portok.get(eszkoz.portok[0].nev);
         p.led.classList.toggle('hsz-led--be', eszkoz.portok[0].fent);
-        p.cim.textContent = `${eszkoz.hostname} – ${eszkoz.ip || 'nincs IP-cím'}${eszkoz.maszk ? ' / ' + eszkoz.maszk : ''}`;
+        p.cim.textContent = `${eszkoz.hostname} – ${eszkoz.ip || 'nincs IP-cím'}${eszkoz.maszk ? ' / ' + eszkoz.maszk : ''}`
+          + (eszkoz.ipv6 ? `, ${eszkoz.ipv6.toLowerCase()}/${eszkoz.ipv6Hossz || 64}` : '');
+        continue;
+      }
+      if (r.tipus === 'router') {
+        const sorok = eszkoz.portok.filter((p) => p.ip || p.ipv6.length).map((p) => {
+          const allapot = p.leallitva ? 'shutdown' : p.fent || p.tipus === 'Loopback' ? 'működik' : 'nincs link';
+          return `${p.rovid}: ${[p.ip, ...p.ipv6.map((c) => `${c.cim}/${c.hossz}`)].filter(Boolean).join(', ')} (${allapot})`;
+        });
+        r.cim.textContent = [`${eszkoz.hostname} – router`, ...sorok].join('\n');
         continue;
       }
       for (const p of eszkoz.portok) {
@@ -270,7 +369,7 @@ export class Topologia {
     const kr = this.kabelek.find((x) => x.k === this.halozat.kabelVege(e.honnan.eszkoz, e.honnan.port));
     if (!kr || typeof kr.ut.getTotalLength !== 'function') return;
     const elore = kr.k.a.eszkoz === e.honnan.eszkoz && kr.k.a.port === e.honnan.port;
-    const fajta = e.keret.tipus === 'arp' || e.keret.tipus === 'vtp' ? e.keret.tipus : 'icmp';
+    const fajta = csomagFajta(e.keret);
     const g = svg('g', { class: `hsz-csomag hsz-csomag--${fajta}` });
     g.append(svg('circle', { r: 7 }));
     if (e.keret.vlan !== undefined) {
@@ -332,8 +431,45 @@ export class Topologia {
   }
 }
 
+/** A csomag színe a rajzon: arp (ARP és IPv6 ND), rip (RIP, RIPng), vtp, icmp (minden más). */
+function csomagFajta(k) {
+  if (k.tipus === 'arp' || k.tipus === 'vtp') return k.tipus;
+  const a = k.adat || {};
+  if (a.protokoll === 'udp') return 'rip';
+  if (a.protokoll === 'icmpv6' && (a.icmp.tipus === 'ns' || a.icmp.tipus === 'na')) return 'arp';
+  return 'icmp';
+}
+
+const ICMP_NEV = {
+  'echo-keres': 'ping-kérés (echo request)',
+  'echo-valasz': 'ping-válasz (echo reply)',
+  'ido-lejart': 'ICMP „Time exceeded” – lejárt a TTL',
+  elerhetetlen: 'ICMP „Destination unreachable” – nincs útvonal',
+};
+
 /** A csomag rövid leírása (a pötty buboréka). */
 function csomagLeiras(k) {
+  const a = k.adat || {};
+  if (k.tipus === 'ipv4' && a.protokoll === 'udp') {
+    const r = a.udp.adat;
+    if (r.parancs === 'keres') return `RIP-kérés: ${a.forrasIp} → ${a.celIp} (küldjétek el a táblátokat!)`;
+    return `RIPv${r.verzio}-frissítés: ${a.forrasIp} → ${a.celIp}, ${r.bejegyzesek.length} útvonal: `
+      + r.bejegyzesek.slice(0, 6).map((e) => `${e.halozat}${e.maszk ? '' : ''} (${e.metrika})`).join(', ') + (r.bejegyzesek.length > 6 ? ' …' : '');
+  }
+  if (k.tipus === 'ipv6') {
+    if (a.protokoll === 'udp') {
+      const r = a.udp.adat;
+      if (r.parancs === 'keres') return `RIPng-kérés: ${a.forras} → ${a.cel}`;
+      return `RIPng-frissítés: ${a.forras} → ${a.cel}, ${r.bejegyzesek.length} útvonal: `
+        + r.bejegyzesek.slice(0, 5).map((e) => `${e.prefix}/${e.hossz} (${e.metrika})`).join(', ') + (r.bejegyzesek.length > 5 ? ' …' : '');
+    }
+    if (a.icmp && a.icmp.tipus === 'ns') return `IPv6 szomszédkérdés (NS): kié a(z) ${a.icmp.cel}? Kérdezi: ${a.forras}`;
+    if (a.icmp && a.icmp.tipus === 'na') return `IPv6 szomszédhirdetés (NA): a(z) ${a.icmp.cel} az enyém`;
+    if (a.icmp) return `${ICMP_NEV[a.icmp.tipus] || 'ICMPv6'} (IPv6): ${a.forras} → ${a.cel}, hop limit ${a.hop}`;
+  }
+  if (k.tipus === 'ipv4' && a.icmp && a.icmp.tipus !== 'echo-keres' && a.icmp.tipus !== 'echo-valasz') {
+    return `${ICMP_NEV[a.icmp.tipus]}: ${a.forrasIp} → ${a.celIp}`;
+  }
   if (k.tipus === 'vtp') {
     const a = k.adat;
     return `VTP-${a.keres ? 'kérés és hirdetés' : 'hirdetés'} (${a.kuldo}): tartomány ${a.tartomany}, revízió ${a.revizio}, `
@@ -347,7 +483,7 @@ function csomagLeiras(k) {
   }
   if (k.adat && k.adat.protokoll === 'icmp') {
     const fajta = k.adat.icmp.tipus === 'echo-keres' ? 'ping-kérés (echo request)' : 'ping-válasz (echo reply)';
-    return `${fajta}: ${k.adat.forrasIp} → ${k.adat.celIp}${cimke}`;
+    return `${fajta}: ${k.adat.forrasIp} → ${k.adat.celIp}, TTL ${k.adat.ttl}${cimke}`;
   }
   return `keret${cimke}`;
 }

@@ -368,14 +368,27 @@ function valtozatSor(mag, link) {
 function cimtervTabla(cimterv) {
   const cim = elem('h3', 'hsz-panel__alcim', 'Címterv');
   const tabla = elem('table', 'hsz-panel__tabla');
+  // Csak azok az oszlopok látszanak, amelyekhez van adat (a VLAN-feladatban: gép, IP, maszk, VLAN, port;
+  // a routing-feladatban: eszköz, interfész, IPv4, IPv6, átjáró).
+  const vanInterfesz = cimterv.some((s) => s.interfesz);
+  const OSZLOPOK = [
+    ['eszkoz', vanInterfesz ? 'Eszköz' : 'Gép'], ['interfesz', 'Interfész'], ['ip', vanInterfesz ? 'IPv4-cím' : 'IP-cím'],
+    ['maszk', 'Maszk'], ['ipv6', 'IPv6-cím'], ['atjaro', 'Átjáró'], ['vlan', 'VLAN'], ['hova', 'Port'],
+  ].filter(([k]) => cimterv.some((s) => s[k] !== undefined && s[k] !== ''));
   const fejsor = elem('tr');
-  for (const c of ['Gép', 'IP-cím', 'Maszk', 'VLAN', 'Port']) fejsor.append(elem('th', '', c));
+  for (const [, c] of OSZLOPOK) fejsor.append(elem('th', '', c));
   const thead = elem('thead');
   thead.append(fejsor);
   const tbody = elem('tbody');
+  let elozo = null;
   for (const s of cimterv) {
     const tr = elem('tr');
-    for (const c of [s.eszkoz, s.ip, s.maszk, s.vlan, s.hova]) tr.append(elem('td', '', c === undefined ? '' : String(c)));
+    for (const [k] of OSZLOPOK) {
+      // Ugyanannak az eszköznek a további sorainál a név nem ismétlődik.
+      const v = k === 'eszkoz' && vanInterfesz && s.eszkoz === elozo ? '' : s[k];
+      tr.append(elem('td', '', v === undefined ? '' : String(v)));
+    }
+    elozo = s.eszkoz;
     tbody.append(tr);
   }
   tabla.append(thead, tbody);

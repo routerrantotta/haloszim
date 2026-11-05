@@ -1,14 +1,15 @@
 /**
  * A PC egyszerű parancssora (asztali gépek parancssorához hasonló forma):
- *   ping [-n db] <IP-cím>, ipconfig [/all], arp -a, arp -d, hostname, cls, help
+ *   ping [-n db] <IPv4- vagy IPv6-cím>, tracert <cím>, ipconfig [/all], arp -a, arp -d, hostname, cls, help
  *
  * Ugyanazt a felületet adja, mint a switch munkamenete (prompt, bevitel, tortenet …), így
  * ugyanaz a terminál-komponens jeleníti meg. A ping kimenete fokozatosan jön (ahogy a
  * válaszok megérkeznek): ezt egy { folyamat } elem jelzi a kimenetben.
  */
 
-import { egyPing, vanIp, kovetkezoUgras } from '../mag/vegpont.js';
+import { egyPing, vanIp, vanIpv6, kovetkezoUgras, pcLinkLocal } from '../mag/vegpont.js';
 import { ervenyesIp } from '../mag/ip.js';
+import { ipv6Normal } from '../mag/ipv6.js';
 import { macKotojeles } from '../mag/ethernet.js';
 import { TORTENET_MERET } from './terminal-munkamenet.js';
 
@@ -69,6 +70,7 @@ export class PcMunkamenet {
     const parancs = szavak[0].toLowerCase();
     const arg = szavak.slice(1);
     if (parancs === 'ping') kimenet.push(...this.ping(arg));
+    else if (parancs === 'tracert') kimenet.push(...this.tracert(arg));
     else if (parancs === 'ipconfig') kimenet.push(...this.ipconfig(arg));
     else if (parancs === 'arp') kimenet.push(...this.arp(arg));
     else if (parancs === 'hostname') kimenet.push(this.eszkoz.hostname, '');
@@ -77,7 +79,7 @@ export class PcMunkamenet {
     else {
       kimenet.push(`'${szavak[0]}' is not recognized as an internal or external command,`,
         'operable program or batch file.', '',
-        '[Szimulátor] A gépen használható parancsok: ping, ipconfig, arp -a, hostname, cls, help', '');
+        '[Szimulátor] A gépen használható parancsok: ping, tracert, ipconfig, arp -a, hostname, cls, help', '');
     }
     for (const fn of this.figyelok) fn();
     return { kimenet, lapozhato: false };
@@ -102,9 +104,11 @@ export class PcMunkamenet {
       }
     }
     if (cel === null) return pingHasznalat();
-    if (!ervenyesIp(cel)) {
+    if (!ervenyesIp(cel) && !ipv6Normal(cel)) {
       return [`Ping request could not find host ${cel}. Please check the name and try again.`, ''];
     }
+    const v6 = !ervenyesIp(cel);
+    if (v6) cel = ipv6Normal(cel).toLowerCase();
     return ['', `Pinging ${cel} with 32 bytes of data:`, { folyamat: (kiir, kesz) => this.pingFolyamat(cel, db, kiir, kesz) }];
   }
 
@@ -112,28 +116,36 @@ export class PcMunkamenet {
   pingFolyamat(cel, db, kiir, kesz) {
     const h = this.halozat;
     const pc = this.eszkoz;
+    const v6 = cel.includes(':');
     let elkuldve = 0;
     let fogadva = 0;
-    let valaszok = 0;
-    const fajtak = new Set();
+    const idok = [];
+    const fajtak = [];
+    const ido = (ms) => (ms ? `=${ms}ms` : '<1ms');
     const egy = () => {
       if (elkuldve >= db) return vege();
       elkuldve++;
       egyPing(h, pc, cel, (e) => {
-        fajtak.add(e.fajta);
+        fajtak.push(e);
         let szunet = 1000;
         if (e.fajta === 'valasz') {
-          kiir(`Reply from ${cel}: bytes=32 time<1ms TTL=${e.ttl}`);
+          kiir(v6 ? `Reply from ${cel}: time${ido(e.keses)}` : `Reply from ${cel}: bytes=32 time${ido(e.keses)} TTL=${e.ttl}`);
           fogadva++;
-          valaszok++;
+          idok.push(e.keses || 0);
         } else if (e.fajta === 'idotullepes') {
           kiir('Request timed out.');
           szunet = 0;
         } else if (e.fajta === 'elerhetetlen') {
           // Ezt a választ a saját gép adja, ezért a statisztika „kapott” csomagnak számolja.
-          kiir(`Reply from ${pc.ip}: Destination host unreachable.`);
+          kiir(`Reply from ${v6 ? (pc.ipv6 || pcLinkLocal(pc)).toLowerCase() : pc.ip}: Destination host unreachable.`);
           fogadva++;
           szunet = 0;
+        } else if (e.fajta === 'halozat-elerhetetlen') {
+          kiir(`Reply from ${v6 ? e.kitol.toLowerCase() : e.kitol}: Destination net unreachable.`);
+          fogadva++;
+        } else if (e.fajta === 'ttl-lejart') {
+          kiir(`Reply from ${v6 ? e.kitol.toLowerCase() : e.kitol}: TTL expired in transit.`);
+          fogadva++;
         } else {
           kiir('PING: transmit failed. General failure. ');
           szunet = 500;
@@ -147,9 +159,10 @@ export class PcMunkamenet {
       kiir('');
       kiir(`Ping statistics for ${cel}:`);
       kiir(`    Packets: Sent = ${elkuldve}, Received = ${fogadva}, Lost = ${elveszett} (${Math.round((elveszett / elkuldve) * 100)}% loss),`);
-      if (valaszok > 0) {
+      if (idok.length > 0) {
+        const atl = Math.round(idok.reduce((a, b) => a + b, 0) / idok.length);
         kiir('Approximate round trip times in milli-seconds:');
-        kiir('    Minimum = 0ms, Maximum = 0ms, Average = 0ms');
+        kiir(`    Minimum = ${Math.min(...idok)}ms, Maximum = ${Math.max(...idok)}ms, Average = ${atl}ms`);
       }
       kiir('');
       for (const m of this.magyarazat(cel, fajtak)) kiir(m);
@@ -159,22 +172,114 @@ export class PcMunkamenet {
   }
 
   /** @private – rövid magyarázat a sikertelen pinghez (a szimulátor saját megjegyzése) */
-  magyarazat(cel, fajtak) {
+  magyarazat(cel, eredmenyek) {
     const pc = this.eszkoz;
+    const fajtak = new Set(eredmenyek.map((e) => e.fajta));
+    const v6 = cel.includes(':');
     const m = [];
     if (fajtak.has('hiba')) {
-      if (!vanIp(pc)) m.push('[Szimulátor] Ennek a gépnek még nincs IP-címe vagy maszkja (kattints a beállításokra fent).');
+      if (v6 && !vanIpv6(pc)) m.push('[Szimulátor] Ennek a gépnek még nincs IPv6-címe (kattints a beállításokra fent).');
+      else if (!v6 && !vanIp(pc)) m.push('[Szimulátor] Ennek a gépnek még nincs IP-címe vagy maszkja (kattints a beállításokra fent).');
       else if (!pc.portok[0].fent) m.push('[Szimulátor] Nincs link: a gép kábele egy lekapcsolt portra csatlakozik.');
-      else if (!kovetkezoUgras(pc, cel)) {
+      else if (!kovetkezoUgras(pc, v6 ? ipv6Normal(cel) : cel)) {
         m.push('[Szimulátor] A cél másik hálózatban van, és nincs alapértelmezett átjáró, ezért a csomag el sem indul.');
       }
     }
     if (fajtak.has('elerhetetlen')) {
-      m.push('[Szimulátor] A „Destination host unreachable” a saját gépedtől jön: senki nem válaszolt az ARP-kérdésre,'
-        + ' hogy kié ez a cím. A gép ezt is „Received”-nek számolja.');
+      m.push(v6
+        ? '[Szimulátor] A „Destination host unreachable” a saját gépedtől jön: senki nem válaszolt a szomszédkérdésre (ND).'
+        : '[Szimulátor] A „Destination host unreachable” a saját gépedtől jön: senki nem válaszolt az ARP-kérdésre,'
+          + ' hogy kié ez a cím. A gép ezt is „Received”-nek számolja.');
+    }
+    const nincsUt = eredmenyek.find((e) => e.fajta === 'halozat-elerhetetlen');
+    if (nincsUt) {
+      m.push(`[Szimulátor] A „Destination net unreachable” a(z) ${nincsUt.kitol} routertől jött: nincs útvonala a célhálózat felé`
+        + ' (nézd meg a routing tábláját: show ip route).');
+    }
+    const elso = eredmenyek.findIndex((e) => e.fajta !== 'idotullepes');
+    const elsoElveszett = elso > 0 && eredmenyek.slice(elso).every((e) => e.fajta === 'valasz');
+    if (elsoElveszett) {
+      m.push(`[Szimulátor] ${elso === 1 ? 'Az első csomag elveszett' : 'Az első csomagok elvesztek'}, a többi átment: útközben egy router még nem ismerte a következő ugrás`
+        + ` MAC-címét. Ilyenkor ${v6 ? 'szomszédkérdést (ND)' : 'ARP-kérdést'} küld, az éppen továbbítandó csomagot pedig eldobja.`);
     }
     if (m.length) m.push('');
     return m;
+  }
+
+  /** @private – tracert: ugrásonként 3 próba egyre nagyobb TTL-lel */
+  tracert(arg) {
+    const cel0 = arg.find((a) => !a.startsWith('-') && !a.startsWith('/'));
+    if (!cel0) return ['', 'Usage: tracert target_name', '', '[Szimulátor] Példa: tracert 172.16.3.10', ''];
+    if (!ervenyesIp(cel0) && !ipv6Normal(cel0)) return [`Unable to resolve target system name ${cel0}.`, ''];
+    const v6 = !ervenyesIp(cel0);
+    const cel = v6 ? ipv6Normal(cel0).toLowerCase() : cel0;
+    return ['', `Tracing route to ${cel} over a maximum of 30 hops`, '', {
+      folyamat: (kiir, kesz) => this.tracertFolyamat(cel, kiir, kesz),
+    }];
+  }
+
+  /** @private */
+  tracertFolyamat(cel, kiir, kesz) {
+    const h = this.halozat;
+    const pc = this.eszkoz;
+    const v6 = cel.includes(':');
+    let ttl = 1;
+    let ures = 0;
+    const oszlop = (e) => {
+      if (e.fajta === 'idotullepes' || e.fajta === 'hiba' || e.fajta === 'elerhetetlen') return '    *    ';
+      return (e.keses ? `${e.keses} ms` : '<1 ms').padStart(9);
+    };
+    const ugras = () => {
+      const valaszok = [];
+      const egy = () => {
+        egyPing(h, pc, cel, (e) => {
+          valaszok.push(e);
+          if (valaszok.length < 3 && e.fajta !== 'hiba') return h.ora.utemez(1, egy);
+          return sorKesz();
+        }, { ttl });
+      };
+      const sorKesz = () => {
+        const sor = String(ttl).padStart(3);
+        if (valaszok[0].fajta === 'hiba') {
+          kiir('Unable to contact IP driver. General failure.');
+          kiir('');
+          return kesz();
+        }
+        const ki = valaszok.find((e) => e.kitol);
+        const halozat = valaszok.find((e) => e.fajta === 'halozat-elerhetetlen');
+        if (halozat) {
+          kiir(`${sor}  ${v6 ? halozat.kitol.toLowerCase() : halozat.kitol}  reports: Destination net unreachable.`);
+          kiir('');
+          kiir('Trace complete.');
+          kiir('');
+          return kesz();
+        }
+        const cimek = valaszok.map(oszlop).join('');
+        if (!ki) {
+          kiir(`${sor}${cimek}  Request timed out.`);
+          ures++;
+        } else {
+          kiir(`${sor}${cimek}  ${v6 ? ki.kitol.toLowerCase() : ki.kitol}`);
+          ures = 0;
+        }
+        if (valaszok.some((e) => e.fajta === 'valasz') || ttl >= 30) {
+          kiir('');
+          kiir('Trace complete.');
+          kiir('');
+          return kesz();
+        }
+        if (ures >= 5) {
+          kiir('');
+          kiir('[Szimulátor] Több ugrás óta nem jön válasz – a valódi gép 30 ugrásig próbálkozna (megszakítás: Ctrl+C).');
+          kiir('');
+          return kesz();
+        }
+        ttl++;
+        ugras();
+      };
+      egy();
+    };
+    ugras();
   }
 
   /** @private */
@@ -190,9 +295,17 @@ export class PcMunkamenet {
     }
     s.push('   Connection-specific DNS Suffix  . :');
     if (minden) s.push(`   Physical Address. . . . . . . . . : ${macKotojeles(pc.mac)}`);
+    const v6 = vanIpv6(pc) || !!pc.ipv6Atjaro;
+    if (v6 && pc.ipv6) s.push(`   IPv6 Address. . . . . . . . . . . : ${pc.ipv6.toLowerCase()}`);
+    if (v6) s.push(`   Link-local IPv6 Address . . . . . : ${pcLinkLocal(pc).toLowerCase()}`);
     s.push(`   IPv4 Address. . . . . . . . . . . : ${pc.ip || '0.0.0.0'}`);
     s.push(`   Subnet Mask . . . . . . . . . . . : ${pc.maszk || '0.0.0.0'}`);
-    s.push(`   Default Gateway . . . . . . . . . : ${pc.atjaro}`.trimEnd());
+    if (v6 && pc.ipv6Atjaro) {
+      s.push(`   Default Gateway . . . . . . . . . : ${pc.ipv6Atjaro.toLowerCase()}`);
+      if (pc.atjaro) s.push(`                                       ${pc.atjaro}`);
+    } else {
+      s.push(`   Default Gateway . . . . . . . . . : ${pc.atjaro}`.trimEnd());
+    }
     s.push('');
     return s;
   }
@@ -226,7 +339,8 @@ function sugoSzoveg() {
   return [
     '',
     '[Szimulátor] A gépen használható parancsok:',
-    '[Szimulátor]   ping <IP-cím>      – elér-e egy másik gépet (ping -n 2 … = csak 2 csomag)',
+    '[Szimulátor]   ping <IP-cím>      – elér-e egy másik gépet (ping -n 2 … = csak 2 csomag; IPv6-címmel is)',
+    '[Szimulátor]   tracert <IP-cím>   – merre, mely routereken át jut el a csomag a célig',
     '[Szimulátor]   ipconfig           – a gép IP-beállításai (ipconfig /all: MAC-címmel együtt)',
     '[Szimulátor]   arp -a             – az ARP-gyorstár: melyik IP-címhez melyik MAC tartozik',
     '[Szimulátor]   arp -d             – az ARP-gyorstár törlése',

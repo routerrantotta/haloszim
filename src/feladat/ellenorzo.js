@@ -16,6 +16,10 @@
 
 import { uzemmod } from '../mag/kapcsolas.js';
 import { egyPing, szorasProba } from '../mag/vegpont.js';
+import { routerPing } from '../mag/router.js';
+import { bejegyzes } from '../mag/utvonal.js';
+import { ipSzam, ipSzoveg, osztalyos } from '../mag/ip.js';
+import { ipv6Szoveg } from '../mag/ipv6.js';
 import { portKeres } from '../modell/switch.js';
 import { esRag, nevelo } from '../magyar.js';
 
@@ -32,7 +36,11 @@ const AVlan = (n) => { const t = aVlan(n); return t[0].toUpperCase() + t.slice(1
 const MOD_SZOVEG = { access: 'access', trunk: 'trunk', 'dinamikus-auto': 'dynamic auto', 'dinamikus-kezdemenyezo': 'dynamic desirable' };
 
 function rovid(nev) {
-  return nev.replace(/^FastEthernet/, 'Fa').replace(/^GigabitEthernet/, 'Gi');
+  return nev.replace(/^FastEthernet/, 'Fa').replace(/^GigabitEthernet/, 'Gi').replace(/^Serial/, 'Se').replace(/^Loopback/, 'Lo');
+}
+
+function kovSzoveg(k) {
+  return Array.isArray(k) ? ipv6Szoveg(k) : ipSzoveg(k);
 }
 
 /** A próba nélküli (azonnal eldönthető) célok. */
@@ -109,6 +117,79 @@ const ALLAPOT_CELOK = {
     return { ok: false, megjegyzes: megj };
   },
 
+  /** RIP-beállítás egy routeren: verzió, hálózatok, passzív interfészek, auto-summary, default route hirdetése. */
+  rip(f, c) {
+    const r = f.eszkoz(c.eszkoz);
+    if (!r.rip) return { ok: false, megjegyzes: `${c.eszkoz}-en nem fut RIP.` };
+    const hibak = [];
+    if (c.verzio && r.rip.verzio !== c.verzio) hibak.push(`a verzió most ${r.rip.verzio || 'nincs megadva (v1-et küld)'} (${c.verzio} kellene)`);
+    for (const n of c.halozatok || []) {
+      const o = ipSzoveg(osztalyos(ipSzam(n)).halozat);
+      if (!r.rip.halozatok.includes(o)) hibak.push(`hiányzik a ${o} hálózat`);
+    }
+    for (const n of c.nemHalozatok || []) {
+      const o = ipSzoveg(osztalyos(ipSzam(n)).halozat);
+      if (r.rip.halozatok.includes(o)) hibak.push(`a ${o} hálózat nem kellene a RIP-be`);
+    }
+    for (const p of c.passziv || []) if (!r.rip.passziv.includes(p)) hibak.push(`${rovid(p)} nem passzív`);
+    if (c.autoSummary !== undefined && r.rip.autoSummary !== c.autoSummary) {
+      hibak.push(c.autoSummary ? 'az automatikus összegzés ki van kapcsolva' : 'az automatikus összegzés még be van kapcsolva');
+    }
+    if (c.alapUtvonal !== undefined && r.rip.alapUtvonal !== c.alapUtvonal) {
+      hibak.push(c.alapUtvonal ? 'nem hirdeti az alapértelmezett útvonalat' : 'hirdeti az alapértelmezett útvonalat, pedig nem kellene');
+    }
+    if (hibak.length) return { ok: false, megjegyzes: hibak.join('; ') + '.' };
+    const reszek = [`RIPv${r.rip.verzio || 1}`, `hálózatok: ${r.rip.halozatok.join(', ') || '–'}`];
+    if (r.rip.passziv.length) reszek.push(`passzív: ${r.rip.passziv.map(rovid).join(', ')}`);
+    reszek.push(r.rip.autoSummary ? 'auto-summary be' : 'auto-summary ki');
+    return { ok: true, megjegyzes: reszek.join(', ') + '.' };
+  },
+
+  /** RIPng egy routeren: IPv6-továbbítás, mely interfészeken fut (és melyiken nem), default route hirdetése. */
+  ripng(f, c) {
+    const r = f.eszkoz(c.eszkoz);
+    if (!r.ipv6Routing) return { ok: false, megjegyzes: `${c.eszkoz}-en nincs bekapcsolva az IPv6-továbbítás (unicast routing).` };
+    const hibak = [];
+    const port = (n) => r.portok.find((p) => p.nev === n);
+    for (const n of c.interfeszek || []) if (!port(n).ripng) hibak.push(`${rovid(n)}: nincs rajta RIPng`);
+    for (const n of c.nemInterfeszek || []) if (port(n).ripng) hibak.push(`${rovid(n)}: fut rajta RIPng, pedig nem kellene`);
+    for (const [n, mit] of Object.entries(c.alapUtvonal || {})) {
+      if (port(n).ripngAlap !== mit) hibak.push(`${rovid(n)}: nem hirdeti a ::/0-t (${mit})`);
+    }
+    if (hibak.length) return { ok: false, megjegyzes: hibak.join('; ') + '.' };
+    const be = r.portok.filter((p) => p.ripng).map((p) => rovid(p.nev));
+    return { ok: true, megjegyzes: `RIPng fut itt: ${be.join(', ') || '–'}.` };
+  },
+
+  /** IPv6-továbbítás be van-e kapcsolva. */
+  'ipv6-routing'(f, c) {
+    const r = f.eszkoz(c.eszkoz);
+    return r.ipv6Routing
+      ? { ok: true, megjegyzes: 'Az IPv6-továbbítás be van kapcsolva.' }
+      : { ok: false, megjegyzes: `${c.eszkoz} nem továbbít IPv6-csomagokat (gyárilag ki van kapcsolva).` };
+  },
+
+  /**
+   * Útvonal a routing táblában: { eszkoz, halozat: '172.16.3.0/24', kod?: 'R', port?: 'Serial0/1/0', nincs?: true }.
+   * „nincs: true” – ellenpróba: ez az útvonal NE legyen a táblában.
+   */
+  utvonal(f, c) {
+    const r = f.eszkoz(c.eszkoz);
+    const e = bejegyzes(r, c.halozat);
+    const jo = e && !e.lehetLe;
+    if (c.nincs) {
+      if (jo) return { ok: false, megjegyzes: `${c.eszkoz} táblájában ott van: ${e.kod} ${c.halozat} – pedig nem kellene.` };
+      return { ok: true, megjegyzes: `${c.eszkoz} táblájában nincs ${c.halozat} – ahogy kell.` };
+    }
+    if (!jo) return { ok: false, megjegyzes: `${c.eszkoz} táblájában nincs ${c.halozat}${e && e.lehetLe ? ' (csak „possibly down” állapotban)' : ''}.` };
+    if (c.kod && e.kod !== c.kod) return { ok: false, megjegyzes: `${c.halozat} megvan, de ${e.kod} kódú (${c.kod} kellene).` };
+    const utak = e.utak.map((u) => u.port || (u.kovetkezo !== null && u.kovetkezo !== undefined ? kovSzoveg(u.kovetkezo) : '')).filter(Boolean);
+    if (c.port && !e.utak.some((u) => u.port === c.port)) {
+      return { ok: false, megjegyzes: `${c.halozat} most erre megy: ${utak.map(rovid).join(', ')} (${rovid(c.port)} felé kellene).` };
+    }
+    return { ok: true, megjegyzes: `${e.kod} ${c.halozat} [${e.ad}/${e.metrika}]${utak.length ? ' – ' + utak.map(rovid).join(', ') : ''}` };
+  },
+
   'pc-ip'(f, c) {
     const pc = f.eszkoz(c.eszkoz);
     if (!pc.ip) return { ok: false, megjegyzes: `${c.eszkoz}-nek még nincs IP-címe (kattints a gépre).` };
@@ -131,19 +212,61 @@ const PING_SZOVEG = {
   idotullepes: 'Nem jött válasz (Request timed out).',
   elerhetetlen: 'Nem jött ARP-válasz: a cél nem érhető el ebben a szórási tartományban (Destination host unreachable).',
   hiba: 'A ping el sem indult: nincs IP-cím, vagy a cél másik hálózatban van, és nincs alapértelmezett átjáró.',
+  'halozat-elerhetetlen': 'Egy router visszaszólt: nincs útvonala a célhálózat felé (Destination net unreachable).',
+  'ttl-lejart': 'Lejárt a TTL útközben (hurok?).',
+  'ido-lejart': 'Lejárt a TTL útközben (hurok?).',
 };
+
+/** Egy ping az eszköz fajtájától függően (PC vagy router). */
+function egyProbaPing(f, honnan, ip, cb) {
+  const e = f.eszkoz(honnan);
+  if (e.tipus === 'router') {
+    routerPing(f.halozat, e, ip, (v) => cb(v.fajta === 'elerhetetlen' ? { ...v, fajta: 'halozat-elerhetetlen' } : v));
+  } else {
+    egyPing(f.halozat, e, ip, cb);
+  }
+}
 
 /** A próbát igénylő célok: (f, c, kesz(eredmeny)) */
 const PROBA_CELOK = {
+  /**
+   * ping { honnan, cel (a címterv szerinti gép) vagy ip, vart: true|false, db: hány pingnek kell sikerülnie }
+   * Ha routerek is vannak, előtte „bemelegítő” pingek mennek (nem számítanak): az első csomagok
+   * gyakran elvesznek, amíg a routerek ARP-pal megkeresik a következő ugrást.
+   */
   ping(f, c, kesz) {
-    const ip = tervezettIp(f, c.cel);
-    egyPing(f.halozat, f.eszkoz(c.honnan), ip, (e) => {
-      const ment = e.fajta === 'valasz';
-      const vart = c.vart !== false;
-      let megjegyzes = `${c.honnan} → ${ip}: ${PING_SZOVEG[e.fajta]}`;
-      if (!vart && ment) megjegyzes += ' Pedig ennek nem szabadna sikerülnie!';
-      kesz({ ok: ment === vart, megjegyzes });
-    });
+    const ip = c.ip || tervezettIp(f, c.cel);
+    const db = c.db || 1;
+    const vart = c.vart !== false;
+    const eredmenyek = [];
+    // Bemelegítés: legfeljebb 3 ping, amíg az első válasz meg nem jön (útközben minden router ARP-ozhat).
+    // Csak az időtúllépés lehet ARP miatti; más hibánál (pl. nincs útvonal) nincs értelme tovább próbálni.
+    let bemelegites = f.halozat.eszkozok.some((x) => x.tipus === 'router') ? 3 : 0;
+    let elment = bemelegites === 0;
+    const kovetkezo = () => {
+      egyProbaPing(f, c.honnan, ip, (e) => {
+        if (bemelegites > 0) {
+          if (e.fajta === 'valasz') elment = true;
+          bemelegites = e.fajta === 'idotullepes' ? bemelegites - 1 : 0;
+          return f.halozat.ora.utemez(1, kovetkezo);
+        }
+        eredmenyek.push(e);
+        // Ha a bemelegítés alatt egyszer sem ment át, egy (sikertelen) próba is elég az ítélethez.
+        const kell = elment || e.fajta === 'valasz' ? db : 1;
+        if (eredmenyek.length < kell) return f.halozat.ora.utemez(1, kovetkezo);
+        const sikeres = eredmenyek.filter((x) => x.fajta === 'valasz').length;
+        const ok = vart ? sikeres === db && eredmenyek.length === db : sikeres === 0;
+        const rossz = eredmenyek.find((x) => (x.fajta === 'valasz') !== vart) || eredmenyek[0];
+        let megjegyzes = `${c.honnan} → ${ip}: `;
+        if (eredmenyek.length > 1) megjegyzes += `${eredmenyek.length} pingből ${sikeres} sikerült. `;
+        megjegyzes += PING_SZOVEG[rossz.fajta] || rossz.fajta;
+        if (rossz.kitol && rossz.fajta !== 'valasz') megjegyzes += ` (${rossz.kitol})`;
+        if (!vart && sikeres) megjegyzes += ' Pedig ennek nem szabadna sikerülnie!';
+        if (vart && eredmenyek.length > 1 && sikeres > 0 && sikeres < eredmenyek.length) megjegyzes += ' Hol megy, hol nem – nézd meg, nincs-e két út ugyanoda.';
+        kesz({ ok, megjegyzes });
+      });
+    };
+    kovetkezo();
   },
 
   szoras(f, c, kesz) {

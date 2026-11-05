@@ -7,6 +7,8 @@
  *   konfig-if          Switch(config-if)#       (egy interfész beállítása)
  *   konfig-if-tartomany Switch(config-if-range)# (több interfész egyszerre)
  *   konfig-vlan        Switch(config-vlan)#     (egy VLAN beállítása)
+ *   konfig-router      Router(config-router)#   (router rip – a RIP beállításai)
+ *   konfig-rtr         Router(config-rtr)#      (ipv6 router rip NÉV – a RIPng-folyamat beállításai)
  *
  * Mezők:
  *   prompt(hostname)  – a prompt szövege
@@ -48,6 +50,20 @@ export const MODOK = {
     visszaesik: 'konfig',
     tortenet: 'konfig',
     sugoFejlec: 'Interface configuration commands:',
+  },
+  'konfig-router': {
+    prompt: (h) => `${h}(config-router)#`,
+    konfig: true,
+    visszaesik: 'konfig',
+    tortenet: 'konfig',
+    sugoFejlec: 'Router configuration commands:',
+  },
+  'konfig-rtr': {
+    prompt: (h) => `${h}(config-rtr)#`,
+    konfig: true,
+    visszaesik: 'konfig',
+    tortenet: 'konfig',
+    sugoFejlec: 'IPv6 RIP router configuration commands:',
   },
   'konfig-vlan': {
     prompt: (h) => `${h}(config-vlan)#`,

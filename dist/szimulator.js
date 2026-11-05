@@ -1,4 +1,4 @@
-/* Haloszim v0.7.0 – routerrantotta.hu – minden jog fenntartva. */
+/* Haloszim v0.8.0 – routerrantotta.hu – minden jog fenntartva. */
 (() => {
   // src/mag/ido.js
   var Ora = class {
@@ -153,6 +153,160 @@
     return { ok: true, nevek };
   }
 
+  // src/mag/ip.js
+  function ipSzam(szoveg) {
+    if (typeof szoveg !== "string") return null;
+    const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(szoveg.trim());
+    if (!m) return null;
+    const reszek = m.slice(1).map(Number);
+    if (reszek.some((r) => r > 255)) return null;
+    return (reszek[0] << 24 >>> 0) + (reszek[1] << 16) + (reszek[2] << 8) + reszek[3];
+  }
+  function ipSzoveg(szam) {
+    return [24, 16, 8, 0].map((t) => szam >>> t & 255).join(".");
+  }
+  function ervenyesIp(szoveg) {
+    return ipSzam(szoveg) !== null;
+  }
+  function ervenyesMaszk(szoveg) {
+    const m = ipSzam(szoveg);
+    if (m === null || m === 0) return false;
+    const inv = ~m >>> 0;
+    return (inv + 1 & inv) === 0;
+  }
+  function prefixHossz(maszk) {
+    let m = ipSzam(maszk);
+    let n = 0;
+    while (m & 2147483648) {
+      n++;
+      m = m << 1 >>> 0;
+    }
+    return n;
+  }
+  function egyHalozat(a, b, maszk) {
+    const x = ipSzam(a);
+    const y = ipSzam(b);
+    const m = ipSzam(maszk);
+    if (x === null || y === null || m === null) return false;
+    return (x & m) >>> 0 === (y & m) >>> 0;
+  }
+  function gepcimHiba(ip, maszk) {
+    const x = ipSzam(ip);
+    const m = ipSzam(maszk);
+    if (x === null) return "Érvénytelen IP-cím.";
+    if (m === null || !ervenyesMaszk(maszk)) return "Érvénytelen alhálózati maszk.";
+    const elso = x >>> 24;
+    if (elso === 0 || elso === 127 || elso >= 224) return "Ez a cím nem adható egy gépnek.";
+    const gep = (x & ~m) >>> 0;
+    const gepResz = ~m >>> 0;
+    if (gepResz > 1 && gep === 0) return "Ez a hálózat címe, gépnek nem adható.";
+    if (gepResz > 1 && gep === gepResz) return "Ez a hálózat szórási címe, gépnek nem adható.";
+    return null;
+  }
+  function maszkSzam(hossz) {
+    return hossz === 0 ? 0 : 4294967295 << 32 - hossz >>> 0;
+  }
+  function maszkSzoveg(hossz) {
+    return ipSzoveg(maszkSzam(hossz));
+  }
+  function halozatSzam(ip, hossz) {
+    return (ip & maszkSzam(hossz)) >>> 0;
+  }
+  function osztalyos(ip) {
+    const elso = ip >>> 24;
+    const hossz = elso < 128 ? 8 : elso < 192 ? 16 : 24;
+    return { halozat: halozatSzam(ip, hossz), hossz };
+  }
+
+  // src/mag/ipv6.js
+  function ipv6Elemez(szoveg) {
+    if (typeof szoveg !== "string") return null;
+    const s = szoveg.trim();
+    if (!/^[0-9a-fA-F:]+$/.test(s) || s.length < 2) return null;
+    const dupla = s.split("::");
+    if (dupla.length > 2) return null;
+    const darabol = (r) => r === "" ? [] : r.split(":");
+    const eleje = darabol(dupla[0]);
+    const vege = dupla.length === 2 ? darabol(dupla[1]) : [];
+    const jo = (x) => /^[0-9a-fA-F]{1,4}$/.test(x);
+    if (!eleje.every(jo) || !vege.every(jo)) return null;
+    let reszek;
+    if (dupla.length === 2) {
+      const hiany = 8 - eleje.length - vege.length;
+      if (hiany < 1) return null;
+      reszek = [...eleje, ...new Array(hiany).fill("0"), ...vege];
+    } else {
+      reszek = eleje;
+    }
+    if (reszek.length !== 8) return null;
+    return reszek.map((r) => parseInt(r, 16));
+  }
+  function ipv6Szoveg(c) {
+    let legKezd = -1;
+    let legHossz = 0;
+    for (let i = 0; i < 8; ) {
+      if (c[i] !== 0) {
+        i++;
+        continue;
+      }
+      let j = i;
+      while (j < 8 && c[j] === 0) j++;
+      if (j - i > legHossz && j - i >= 2) {
+        legKezd = i;
+        legHossz = j - i;
+      }
+      i = j;
+    }
+    const hex = (x) => x.toString(16).toUpperCase();
+    if (legKezd < 0) return c.map(hex).join(":");
+    const eleje = c.slice(0, legKezd).map(hex).join(":");
+    const vege = c.slice(legKezd + legHossz).map(hex).join(":");
+    return `${eleje}::${vege}`;
+  }
+  function ipv6Normal(szoveg) {
+    const c = ipv6Elemez(szoveg);
+    return c ? ipv6Szoveg(c) : null;
+  }
+  function ipv6PrefixElemez(szoveg) {
+    const m = /^([^/\s]+)\/(\d{1,3})$/.exec(String(szoveg).trim());
+    if (!m) return null;
+    const cim = ipv6Elemez(m[1]);
+    const hossz = Number(m[2]);
+    if (!cim || hossz > 128) return null;
+    return { cim, hossz };
+  }
+  function ipv6Halozat(c, hossz) {
+    return c.map((x, i) => {
+      const bitek = Math.max(0, Math.min(16, hossz - i * 16));
+      const maszk = bitek === 0 ? 0 : 65535 << 16 - bitek & 65535;
+      return x & maszk;
+    });
+  }
+  function ipv6EgyHalozat(a, b, hossz) {
+    const x = ipv6Halozat(a, hossz);
+    const y = ipv6Halozat(b, hossz);
+    return x.every((v, i) => v === y[i]);
+  }
+  function linkLocalE(c) {
+    return (c[0] & 65472) === 65152;
+  }
+  function csoportcimE(c) {
+    return (c[0] & 65280) === 65280;
+  }
+  function eui64LinkLocal(mac) {
+    const b = mac.match(/../g).map((x) => parseInt(x, 16));
+    b[0] ^= 2;
+    return [65152, 0, 0, 0, b[0] << 8 | b[1], b[2] << 8 | 255, 254 << 8 | b[3], b[4] << 8 | b[5]];
+  }
+  function ipv6CsoportMac(c) {
+    const h4 = (x) => x.toString(16).padStart(4, "0");
+    return "3333" + h4(c[6]) + h4(c[7]);
+  }
+  function solicitedNode(c) {
+    return [65282, 0, 0, 0, 0, 1, 65280 | c[6] & 255, c[7]];
+  }
+  var RIPNG_CSOPORT = [65282, 0, 0, 0, 0, 0, 0, 9];
+
   // src/cli/ertelmezo.js
   function szavakra(sor2) {
     const tokenek = [];
@@ -190,6 +344,48 @@
       reszleges: (e) => [PARAM_TIPUSOK.szo.nev(e)],
       kiegeszit: () => null
     },
+    /** IPv4-cím vagy -maszk pontozott alakban, pl. 10.1.12.0 (az érték egységes szöveg) */
+    ipv4: {
+      nev: (e) => e.nev || "A.B.C.D",
+      illeszt(e, tokenek, i) {
+        const t = tokenek[i];
+        const n = ipSzam(t.szoveg);
+        if (n === null) return { ok: false, hiba: "ervenytelen", oszlop: t.kezdet + ipv4HibaHely(t.szoveg) };
+        return { ok: true, ertek: ipSzoveg(n), kovetkezo: i + 1 };
+      },
+      sugoElemek: (e) => [{ nev: PARAM_TIPUSOK.ipv4.nev(e), sugo: e.sugo }],
+      reszleges: (e, r) => /^[\d.]+$/.test(r) ? [PARAM_TIPUSOK.ipv4.nev(e)] : [],
+      kiegeszit: () => null
+    },
+    /** IPv6-cím előtaghossz nélkül, pl. FE80::1 (az érték egységes, nagybetűs rövid alak) */
+    ipv6: {
+      nev: (e) => e.nev || "X:X:X:X::X",
+      illeszt(e, tokenek, i) {
+        const t = tokenek[i];
+        const c = t.szoveg.includes("/") ? null : ipv6Elemez(t.szoveg);
+        if (!c) return { ok: false, hiba: "ervenytelen", oszlop: t.kezdet };
+        return { ok: true, ertek: ipv6Szoveg(c), kovetkezo: i + 1 };
+      },
+      sugoElemek: (e) => [{ nev: PARAM_TIPUSOK.ipv6.nev(e), sugo: e.sugo }],
+      reszleges: (e, r) => /^[0-9a-fA-F:]+$/.test(r) ? [PARAM_TIPUSOK.ipv6.nev(e)] : [],
+      kiegeszit: () => null
+    },
+    /** IPv6-cím előtaghosszal, pl. 2001:DB8:ACAD:1::1/64 → { cim, hossz } */
+    "ipv6-prefix": {
+      nev: (e) => e.nev || "X:X:X:X::X/<0-128>",
+      illeszt(e, tokenek, i) {
+        const t = tokenek[i];
+        const m = /^([^/]+)\/(\d{1,3})$/.exec(t.szoveg);
+        const c = m && ipv6Elemez(m[1]);
+        if (!c) return { ok: false, hiba: "ervenytelen", oszlop: t.kezdet };
+        const hossz = Number(m[2]);
+        if (hossz > 128) return { ok: false, hiba: "ervenytelen", oszlop: t.kezdet + m[1].length + 1 };
+        return { ok: true, ertek: { cim: ipv6Szoveg(c), hossz }, kovetkezo: i + 1 };
+      },
+      sugoElemek: (e) => [{ nev: PARAM_TIPUSOK["ipv6-prefix"].nev(e), sugo: e.sugo }],
+      reszleges: (e, r) => /^[0-9a-fA-F:/]+$/.test(r) ? [PARAM_TIPUSOK["ipv6-prefix"].nev(e)] : [],
+      kiegeszit: () => null
+    },
     /** Egy interfész, pl. fa0/1 vagy „FastEthernet 0/1” (egy vagy két szó) */
     interfesz: {
       illeszt(e, tokenek, i, sor2, kornyezet) {
@@ -215,6 +411,19 @@
       kiegeszit: (e, r, kornyezet) => interfeszKiegeszit(r, kornyezet)
     }
   };
+  function ipv4HibaHely(szoveg) {
+    const reszek = szoveg.split(".");
+    let hely = 0;
+    for (let i = 0; i < reszek.length; i++) {
+      const r = reszek[i];
+      if (i > 3 || !/^\d{1,3}$/.test(r) || Number(r) > 255) {
+        const m = /^\d*/.exec(r)[0];
+        return hely + (Number(m) > 255 || m.length > 3 ? 0 : m.length);
+      }
+      hely += r.length + 1;
+    }
+    return szoveg.length;
+  }
   function tipusSugo(e, kornyezet) {
     const tipusok = Object.keys(kornyezet.portTipusok || {});
     const leirasok = kornyezet.tipusLeirasok || {};
@@ -488,12 +697,12 @@
      * @param {Object} p.eszkoz      – az eszköz állapota (modell)
      * @param {Ora} [p.ora]          – szimulált óra (a naplóüzenetek időbélyegéhez)
      */
-    constructor({ szemelyiseg, eszkoz, ora }) {
-      this.szemelyiseg = szemelyiseg;
+    constructor({ szemelyiseg: szemelyiseg2, eszkoz, ora }) {
+      this.szemelyiseg = szemelyiseg2;
       this.eszkoz = eszkoz;
       this.ora = ora || new Ora();
-      this.fak = faEpites(szemelyiseg.parancsok);
-      this.mod = szemelyiseg.kezdoMod;
+      this.fak = faEpites(szemelyiseg2.parancsok);
+      this.mod = szemelyiseg2.kezdoMod;
       this.kontextus = {};
       this.tortenetek = {};
       this.varakozas = null;
@@ -520,9 +729,9 @@
     /** @private */
     tortenetbe(sor2) {
       const csoport = this.szemelyiseg.modok[this.mod].tortenet;
-      const lista = this.tortenetek[csoport] = this.tortenetek[csoport] || [];
-      if (lista[lista.length - 1] !== sor2) lista.push(sor2);
-      while (lista.length > TORTENET_MERET) lista.shift();
+      const lista2 = this.tortenetek[csoport] = this.tortenetek[csoport] || [];
+      if (lista2[lista2.length - 1] !== sor2) lista2.push(sor2);
+      while (lista2.length > TORTENET_MERET) lista2.shift();
     }
     /**
      * A parancsoknak átadott „eszköztár”.
@@ -680,6 +889,20 @@
       visszaesik: "konfig",
       tortenet: "konfig",
       sugoFejlec: "Interface configuration commands:"
+    },
+    "konfig-router": {
+      prompt: (h) => `${h}(config-router)#`,
+      konfig: true,
+      visszaesik: "konfig",
+      tortenet: "konfig",
+      sugoFejlec: "Router configuration commands:"
+    },
+    "konfig-rtr": {
+      prompt: (h) => `${h}(config-rtr)#`,
+      konfig: true,
+      visszaesik: "konfig",
+      tortenet: "konfig",
+      sugoFejlec: "IPv6 RIP router configuration commands:"
     },
     "konfig-vlan": {
       prompt: (h) => `${h}(config-vlan)#`,
@@ -963,27 +1186,27 @@
 
   // src/mag/kapcsolas.js
   var MAC_ELETKOR = 3e5;
-  function uzemmod(sw, port) {
-    if (port.mod === "trunk") return "trunk";
-    if (port.mod === "access") return "access";
-    if (!port.fent || !sw.halozat) return "access";
-    const tul = sw.halozat.szomszed(sw, port);
+  function uzemmod(sw, port2) {
+    if (port2.mod === "trunk") return "trunk";
+    if (port2.mod === "access") return "access";
+    if (!port2.fent || !sw.halozat) return "access";
+    const tul = sw.halozat.szomszed(sw, port2);
     if (!tul || tul.eszkoz.tipus !== "switch") return "access";
     const m = tul.port.mod;
     const t1 = sw.vtpTartomany;
     const t2 = tul.eszkoz.vtpTartomany;
     if (t1 && t2 && t1 !== t2 && m !== "trunk") return "access";
-    if (port.mod === "dinamikus-auto") return m === "trunk" || m === "dinamikus-kezdemenyezo" ? "trunk" : "access";
-    if (port.mod === "dinamikus-kezdemenyezo") return m === "access" ? "access" : "trunk";
+    if (port2.mod === "dinamikus-auto") return m === "trunk" || m === "dinamikus-kezdemenyezo" ? "trunk" : "access";
+    if (port2.mod === "dinamikus-kezdemenyezo") return m === "access" ? "access" : "trunk";
     return "access";
   }
   function vlanAktiv(sw, vlan) {
     const v = sw.vlanok[vlan];
     return !!v && v.tamogatott !== false;
   }
-  function portTagja(sw, port, vlan) {
-    if (uzemmod(sw, port) === "trunk") return vlanAktiv(sw, vlan);
-    return port.accessVlan === vlan;
+  function portTagja(sw, port2, vlan) {
+    if (uzemmod(sw, port2) === "trunk") return vlanAktiv(sw, vlan);
+    return port2.accessVlan === vlan;
   }
   function macTabla(sw) {
     const ido = sw.halozat ? sw.halozat.ora.ido : 0;
@@ -1003,26 +1226,26 @@
       t.push({ vlan, mac, port: portNev, ido });
     }
   }
-  function kapcsoloFogad(h, sw, port, keret2) {
-    if (keret2.tipus === "vtp") return vtpFogad(h, sw, port, keret2);
+  function kapcsoloFogad(h, sw, port2, keret2) {
+    if (keret2.tipus === "vtp") return vtpFogad(h, sw, port2, keret2);
     let vlan;
-    if (uzemmod(sw, port) === "trunk") {
-      vlan = keret2.vlan !== void 0 ? keret2.vlan : port.nativVlan;
+    if (uzemmod(sw, port2) === "trunk") {
+      vlan = keret2.vlan !== void 0 ? keret2.vlan : port2.nativVlan;
     } else {
-      if (keret2.vlan !== void 0) return h.eldob(sw, port, keret2, "Címkés (802.1Q) keret érkezett egy access portra.");
-      vlan = port.accessVlan;
+      if (keret2.vlan !== void 0) return h.eldob(sw, port2, keret2, "Címkés (802.1Q) keret érkezett egy access portra.");
+      vlan = port2.accessVlan;
     }
     if (!vlanAktiv(sw, vlan)) {
-      return h.eldob(sw, port, keret2, `${nevelo(vlan) === "az" ? "Az" : "A"} ${esRag(vlan)} VLAN nem létezik ezen a switchen (${sw.hostname}), ezért a keretet eldobta.`);
+      return h.eldob(sw, port2, keret2, `${nevelo(vlan) === "az" ? "Az" : "A"} ${esRag(vlan)} VLAN nem létezik ezen a switchen (${sw.hostname}), ezért a keretet eldobta.`);
     }
-    if (keret2.forrasMac !== SZORAS) macTanul(sw, vlan, keret2.forrasMac, port.nev, h.ora.ido);
+    if (keret2.forrasMac !== SZORAS) macTanul(sw, vlan, keret2.forrasMac, port2.nev, h.ora.ido);
     let kimenok;
     const ismert = keret2.celMac !== SZORAS && macTabla(sw).find((b) => b.vlan === vlan && b.mac === keret2.celMac);
     if (ismert) {
-      if (ismert.port === port.nev) return;
+      if (ismert.port === port2.nev) return;
       kimenok = sw.portok.filter((p) => p.nev === ismert.port);
     } else {
-      kimenok = sw.portok.filter((p) => p !== port);
+      kimenok = sw.portok.filter((p) => p !== port2);
     }
     for (const p of kimenok) {
       if (!p.fent || !portTagja(sw, p, vlan)) continue;
@@ -1096,10 +1319,10 @@
   function vtpBeallitasValtozas(sw) {
     vtpHirdet(sw, { keres: true });
   }
-  function vtpTrunkValtozas(sw, port) {
+  function vtpTrunkValtozas(sw, port2) {
     if (!sw.halozat) return;
-    const tul = sw.halozat.szomszed(sw, port);
-    for (const [e, p] of [[sw, port], tul ? [tul.eszkoz, tul.port] : [null, null]]) {
+    const tul = sw.halozat.szomszed(sw, port2);
+    for (const [e, p] of [[sw, port2], tul ? [tul.eszkoz, tul.port] : [null, null]]) {
       if (e && e.tipus === "switch" && p.fent && uzemmod(e, p) === "trunk") vtpHirdet(e, { keres: true, csak: p });
     }
   }
@@ -1116,12 +1339,12 @@
     if (a.verzio === 2) sw.vtpVerzio = 2;
     sw.vtpModositva = sw.halozat.ora.ido;
   }
-  function vtpFogad(h, sw, port, k) {
-    if (uzemmod(sw, port) !== "trunk") return;
+  function vtpFogad(h, sw, port2, k) {
+    if (uzemmod(sw, port2) !== "trunk") return;
     const a = k.adat;
     if (sw.vtpMod === "transparent") {
       if (sw.vtpVerzio === 2 || a.tartomany === sw.vtpTartomany) {
-        for (const p of trunkPortok(sw)) if (p !== port) h.kuld(sw, p, k);
+        for (const p of trunkPortok(sw)) if (p !== port2) h.kuld(sw, p, k);
       }
       return;
     }
@@ -1130,24 +1353,24 @@
     }
     if (a.tartomany !== sw.vtpTartomany) return;
     if (a.jelszoKivonat !== jelszoKivonat(sw.vtpJelszo)) {
-      sw.vtpMd5Hiba = port.rovid;
-      return h.eldob(sw, port, k, `A VTP-hirdetés jelszava nem egyezik (${sw.hostname}), ezért nem fogadta el.`);
+      sw.vtpMd5Hiba = port2.rovid;
+      return h.eldob(sw, port2, k, `A VTP-hirdetés jelszava nem egyezik (${sw.hostname}), ezért nem fogadta el.`);
     }
     sw.vtpMd5Hiba = null;
     if (a.revizio > sw.vtpRevizio) {
       atvesz(sw, a);
       h.esemeny({ tipus: "allapot" });
-      vtpHirdet(sw, { kiveve: port });
+      vtpHirdet(sw, { kiveve: port2 });
     } else if (a.revizio < sw.vtpRevizio || a.keres) {
-      vtpHirdet(sw, { csak: port });
+      vtpHirdet(sw, { csak: port2 });
     }
   }
   function vtpIdozitoIndit(h) {
-    const kor = () => {
+    const kor2 = () => {
       for (const e of h.eszkozok) if (e.tipus === "switch") vtpHirdet(e);
-      h.ora.utemez(VTP_IDOKOZ, kor);
+      h.ora.utemez(VTP_IDOKOZ, kor2);
     };
-    h.ora.utemez(VTP_IDOKOZ, kor);
+    h.ora.utemez(VTP_IDOKOZ, kor2);
   }
 
   // src/gyartok/ios/parancsok/vlan.js
@@ -1225,48 +1448,6 @@
     }
   ];
 
-  // src/mag/ip.js
-  function ipSzam(szoveg) {
-    if (typeof szoveg !== "string") return null;
-    const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(szoveg.trim());
-    if (!m) return null;
-    const reszek = m.slice(1).map(Number);
-    if (reszek.some((r) => r > 255)) return null;
-    return (reszek[0] << 24 >>> 0) + (reszek[1] << 16) + (reszek[2] << 8) + reszek[3];
-  }
-  function ipSzoveg(szam) {
-    return [24, 16, 8, 0].map((t) => szam >>> t & 255).join(".");
-  }
-  function ervenyesIp(szoveg) {
-    return ipSzam(szoveg) !== null;
-  }
-  function ervenyesMaszk(szoveg) {
-    const m = ipSzam(szoveg);
-    if (m === null || m === 0) return false;
-    const inv = ~m >>> 0;
-    return (inv + 1 & inv) === 0;
-  }
-  function egyHalozat(a, b, maszk) {
-    const x = ipSzam(a);
-    const y = ipSzam(b);
-    const m = ipSzam(maszk);
-    if (x === null || y === null || m === null) return false;
-    return (x & m) >>> 0 === (y & m) >>> 0;
-  }
-  function gepcimHiba(ip, maszk) {
-    const x = ipSzam(ip);
-    const m = ipSzam(maszk);
-    if (x === null) return "Érvénytelen IP-cím.";
-    if (m === null || !ervenyesMaszk(maszk)) return "Érvénytelen alhálózati maszk.";
-    const elso = x >>> 24;
-    if (elso === 0 || elso === 127 || elso >= 224) return "Ez a cím nem adható egy gépnek.";
-    const gep = (x & ~m) >>> 0;
-    const gepResz = ~m >>> 0;
-    if (gepResz > 1 && gep === 0) return "Ez a hálózat címe, gépnek nem adható.";
-    if (gepResz > 1 && gep === gepResz) return "Ez a hálózat szórási címe, gépnek nem adható.";
-    return null;
-  }
-
   // src/mag/vegpont.js
   var ARP_VARAKOZAS = 3e3;
   var PING_VARAKOZAS = 4e3;
@@ -1274,7 +1455,7 @@
   var belso = /* @__PURE__ */ new WeakMap();
   function allapot(pc) {
     let a = belso.get(pc);
-    if (!a) belso.set(pc, a = { arpVarok: /* @__PURE__ */ new Map(), pingVarok: /* @__PURE__ */ new Map(), kovetkezoSorszam: 1 });
+    if (!a) belso.set(pc, a = { arpVarok: /* @__PURE__ */ new Map(), ndVarok: /* @__PURE__ */ new Map(), pingVarok: /* @__PURE__ */ new Map(), kovetkezoSorszam: 1 });
     return a;
   }
   function nic(pc) {
@@ -1286,12 +1467,29 @@
   function vanIp(pc) {
     return !!pc.ip && !!pc.maszk;
   }
+  function vanIpv6(pc) {
+    return !!pc.ipv6;
+  }
+  function pcLinkLocal(pc) {
+    return ipv6Szoveg(eui64LinkLocal(pc.mac));
+  }
   function kovetkezoUgras(pc, celIp) {
+    if (celIp.includes(":")) return kovetkezoUgras6(pc, celIp);
     if (egyHalozat(pc.ip, celIp, pc.maszk)) return celIp;
     if (pc.atjaro && egyHalozat(pc.ip, pc.atjaro, pc.maszk)) return pc.atjaro;
     return null;
   }
+  function kovetkezoUgras6(pc, cel) {
+    const c = ipv6Elemez(cel);
+    if (linkLocalE(c)) return cel;
+    if (pc.ipv6 && ipv6EgyHalozat(ipv6Elemez(pc.ipv6), c, pc.ipv6Hossz || 64)) return cel;
+    return pc.ipv6Atjaro || null;
+  }
+  function sajat6(pc, cim) {
+    return cim === pc.ipv6 || cim === pcLinkLocal(pc);
+  }
   function arpFelold(h, pc, ip, cb) {
+    if (ip.includes(":")) return ndFelold(h, pc, ip, cb);
     const b = pc.arpTabla[ip];
     if (b) return cb(b.mac);
     const a = allapot(pc);
@@ -1312,6 +1510,28 @@
       adat: { muvelet: "keres", kuldoMac: pc.mac, kuldoIp: pc.ip, celMac: "000000000000", celIp: ip }
     });
   }
+  function ndFelold(h, pc, cim, cb) {
+    const b = pc.ndTabla[cim];
+    if (b) return cb(b.mac);
+    const a = allapot(pc);
+    const var_ = a.ndVarok.get(cim);
+    if (var_) {
+      var_.cbk.push(cb);
+      return;
+    }
+    const uj = { cbk: [cb], idozito: null };
+    a.ndVarok.set(cim, uj);
+    uj.idozito = h.ora.utemez(ARP_VARAKOZAS, () => {
+      a.ndVarok.delete(cim);
+      for (const f of uj.cbk) f(null);
+    });
+    const sn = solicitedNode(ipv6Elemez(cim));
+    kuld(h, pc, {
+      celMac: ipv6CsoportMac(sn),
+      tipus: "ipv6",
+      adat: { forras: pcLinkLocal(pc), cel: ipv6Szoveg(sn), hop: 255, protokoll: "icmpv6", icmp: { tipus: "ns", cel: cim }, keses: 0 }
+    });
+  }
   function arpTanul(h, pc, ip, mac) {
     pc.arpTabla[ip] = { mac, ido: h.ora.ido };
     const a = allapot(pc);
@@ -1322,17 +1542,42 @@
       for (const f of var_.cbk) f(mac);
     }
   }
+  function ndTanul(h, pc, cim, mac) {
+    pc.ndTabla[cim] = { mac, ido: h.ora.ido };
+    const a = allapot(pc);
+    const var_ = a.ndVarok.get(cim);
+    if (var_) {
+      a.ndVarok.delete(cim);
+      h.ora.lemond(var_.idozito);
+      for (const f of var_.cbk) f(mac);
+    }
+  }
   function ipKuld(h, pc, celIp, adat, hibaCb) {
+    const v6 = celIp.includes(":");
     const ugras = kovetkezoUgras(pc, celIp);
     if (!ugras) return hibaCb && hibaCb("nincs-ut");
     arpFelold(h, pc, ugras, (mac) => {
       if (!mac) return hibaCb && hibaCb("arp");
-      kuld(h, pc, { celMac: mac, tipus: "ipv4", adat: { forrasIp: pc.ip, celIp, ttl: ALAP_TTL, ...adat } });
+      if (v6) {
+        const forras = linkLocalE(ipv6Elemez(celIp)) ? pcLinkLocal(pc) : pc.ipv6;
+        kuld(h, pc, { celMac: mac, tipus: "ipv6", adat: { forras, cel: celIp, hop: ALAP_TTL, keses: 0, ...adat } });
+      } else {
+        kuld(h, pc, { celMac: mac, tipus: "ipv4", adat: { forrasIp: pc.ip, celIp, ttl: ALAP_TTL, keses: 0, ...adat } });
+      }
     });
   }
-  function egyPing(h, pc, celIp, cb) {
-    if (!vanIp(pc) || !nic(pc).fent) return cb({ fajta: "hiba" });
-    if (celIp === pc.ip) return cb({ fajta: "valasz", ttl: ALAP_TTL });
+  function egyPing(h, pc, celIp, cb, { ttl = ALAP_TTL } = {}) {
+    const v6 = celIp.includes(":");
+    const cel = v6 ? ipv6Normal(celIp) : celIp;
+    if (!nic(pc).fent) return cb({ fajta: "hiba" });
+    if (v6) {
+      if (!cel) return cb({ fajta: "hiba" });
+      if (sajat6(pc, cel)) return cb({ fajta: "valasz", ttl: ALAP_TTL, keses: 0 });
+      if (!vanIpv6(pc) && !linkLocalE(ipv6Elemez(cel))) return cb({ fajta: "hiba" });
+    } else {
+      if (!vanIp(pc)) return cb({ fajta: "hiba" });
+      if (cel === pc.ip) return cb({ fajta: "valasz", ttl: ALAP_TTL, keses: 0 });
+    }
     const a = allapot(pc);
     const sorszam = a.kovetkezoSorszam++;
     let kesz = false;
@@ -1342,20 +1587,29 @@
       a.pingVarok.delete(sorszam);
       cb(e);
     };
-    const ugras = kovetkezoUgras(pc, celIp);
+    const ugras = kovetkezoUgras(pc, cel);
     if (!ugras) return vege({ fajta: "hiba" });
     arpFelold(h, pc, ugras, (mac) => {
       if (!mac) return vege({ fajta: "elerhetetlen" });
       const idozito = h.ora.utemez(PING_VARAKOZAS, () => vege({ fajta: "idotullepes" }));
-      a.pingVarok.set(sorszam, (ttl) => {
+      a.pingVarok.set(sorszam, (v) => {
         h.ora.lemond(idozito);
-        vege({ fajta: "valasz", ttl });
+        vege(v);
       });
-      kuld(h, pc, {
-        celMac: mac,
-        tipus: "ipv4",
-        adat: { forrasIp: pc.ip, celIp, ttl: ALAP_TTL, protokoll: "icmp", icmp: { tipus: "echo-keres", sorszam } }
-      });
+      if (v6) {
+        const forras = linkLocalE(ipv6Elemez(cel)) ? pcLinkLocal(pc) : pc.ipv6;
+        kuld(h, pc, {
+          celMac: mac,
+          tipus: "ipv6",
+          adat: { forras, cel, hop: ttl, protokoll: "icmpv6", icmp: { tipus: "echo-keres", sorszam }, keses: 0 }
+        });
+      } else {
+        kuld(h, pc, {
+          celMac: mac,
+          tipus: "ipv4",
+          adat: { forrasIp: pc.ip, celIp: cel, ttl, protokoll: "icmp", icmp: { tipus: "echo-keres", sorszam }, keses: 0 }
+        });
+      }
     });
   }
   function szorasProba(h, pc, cb) {
@@ -1376,10 +1630,25 @@
       cb(kik);
     });
   }
-  function vegpontFogad(h, pc, port, keret2) {
-    if (keret2.vlan !== void 0) return h.eldob(pc, port, keret2, "A PC nem ismeri a 802.1Q-címkés keretet.");
-    if (keret2.celMac !== pc.mac && keret2.celMac !== SZORAS) return;
-    h.esemeny({ tipus: "fogadva", eszkoz: pc, port, keret: keret2 });
+  function pingnek(pc, icmp, kitol, ttl, keses) {
+    const a = allapot(pc);
+    if (icmp.tipus === "echo-valasz") {
+      const v2 = a.pingVarok.get(icmp.sorszam);
+      if (v2) v2({ fajta: "valasz", ttl, kitol, keses });
+      return;
+    }
+    const v = icmp.eredeti && a.pingVarok.get(icmp.eredeti.sorszam);
+    if (!v) return;
+    if (icmp.tipus === "ido-lejart") v({ fajta: "ttl-lejart", kitol, keses });
+    else if (icmp.tipus === "elerhetetlen") v({ fajta: "halozat-elerhetetlen", kitol, keses });
+  }
+  function vegpontFogad(h, pc, port2, keret2) {
+    if (keret2.vlan !== void 0) return h.eldob(pc, port2, keret2, "A PC nem ismeri a 802.1Q-címkés keretet.");
+    const csoport = keret2.celMac.startsWith("3333");
+    if (keret2.celMac !== pc.mac && keret2.celMac !== SZORAS && !csoport) return;
+    if (keret2.tipus === "ipv6") return ipv6Fogad(h, pc, port2, keret2);
+    if (csoport) return;
+    h.esemeny({ tipus: "fogadva", eszkoz: pc, port: port2, keret: keret2 });
     if (keret2.tipus === "arp") {
       const arp = keret2.adat;
       if (!vanIp(pc) || arp.kuldoIp === "0.0.0.0") return;
@@ -1398,18 +1667,1028 @@
       const ip = keret2.adat;
       if (!vanIp(pc) || ip.celIp !== pc.ip) return;
       if (ip.protokoll === "icmp" && ip.icmp.tipus === "echo-keres") {
-        ipKuld(h, pc, ip.forrasIp, { protokoll: "icmp", icmp: { tipus: "echo-valasz", sorszam: ip.icmp.sorszam } });
-      } else if (ip.protokoll === "icmp" && ip.icmp.tipus === "echo-valasz") {
-        const v = allapot(pc).pingVarok.get(ip.icmp.sorszam);
-        if (v) v(ip.ttl);
+        ipKuld(h, pc, ip.forrasIp, { protokoll: "icmp", icmp: { tipus: "echo-valasz", sorszam: ip.icmp.sorszam }, keses: ip.keses || 0 });
+      } else if (ip.protokoll === "icmp") {
+        pingnek(pc, ip.icmp, ip.forrasIp, ip.ttl, ip.keses || 0);
       }
     }
   }
-  function ipBeallit(pc, { ip, maszk, atjaro }) {
+  function ipv6Fogad(h, pc, port2, keret2) {
+    const cs = keret2.adat;
+    if (cs.protokoll === "icmpv6" && cs.icmp.tipus === "ns") {
+      if (!sajat6(pc, cs.icmp.cel)) return;
+      h.esemeny({ tipus: "fogadva", eszkoz: pc, port: port2, keret: keret2 });
+      ndTanul(h, pc, cs.forras, keret2.forrasMac);
+      kuld(h, pc, {
+        celMac: keret2.forrasMac,
+        tipus: "ipv6",
+        adat: { forras: cs.icmp.cel, cel: cs.forras, hop: 255, protokoll: "icmpv6", icmp: { tipus: "na", cel: cs.icmp.cel }, keses: 0 }
+      });
+      return;
+    }
+    if (!sajat6(pc, cs.cel)) return;
+    h.esemeny({ tipus: "fogadva", eszkoz: pc, port: port2, keret: keret2 });
+    if (cs.protokoll !== "icmpv6") return;
+    if (cs.icmp.tipus === "na") {
+      ndTanul(h, pc, cs.icmp.cel, keret2.forrasMac);
+      return;
+    }
+    if (cs.icmp.tipus === "echo-keres") {
+      ipKuld(h, pc, cs.forras, { protokoll: "icmpv6", icmp: { tipus: "echo-valasz", sorszam: cs.icmp.sorszam }, keses: cs.keses || 0 });
+      return;
+    }
+    pingnek(pc, cs.icmp, cs.forras, cs.hop, cs.keses || 0);
+  }
+  function ipBeallit(pc, { ip, maszk, atjaro, ipv6, ipv6Hossz, ipv6Atjaro }) {
     if (ip !== void 0) pc.ip = ip;
     if (maszk !== void 0) pc.maszk = maszk;
     if (atjaro !== void 0) pc.atjaro = atjaro;
+    if (ipv6 !== void 0) pc.ipv6 = ipv6 ? ipv6Normal(ipv6) || "" : "";
+    if (ipv6Hossz !== void 0) pc.ipv6Hossz = ipv6Hossz;
+    if (ipv6Atjaro !== void 0) pc.ipv6Atjaro = ipv6Atjaro ? ipv6Normal(ipv6Atjaro) || "" : "";
     pc.arpTabla = {};
+    pc.ndTabla = {};
+  }
+
+  // src/mag/rip.js
+  var VEGTELEN = 16;
+  var UZENET_MERET = 25;
+  var MAX_UT = 4;
+  var RIPNG_IDOZITOK = { frissites: 30, ervenytelen: 180, visszatartas: 0, torles: 120 };
+  var VILLAM_KESES = 1e3;
+  var belso2 = /* @__PURE__ */ new WeakMap();
+  function ujCsaladAllapot() {
+    return {
+      /** kulcs → { halozat, hossz, metrika, utak: [{kovetkezo, port, ido}], le, leKezd, utolsoJo, eloMetrika } */
+      db: /* @__PURE__ */ new Map(),
+      /** port neve → Map(kulcs → metrika): amit legutóbb ott hirdetett (a poisoninghoz és a változásokhoz) */
+      hirdetett: /* @__PURE__ */ new Map(),
+      /** szomszéd címe → utolsó frissítés ideje */
+      forrasok: /* @__PURE__ */ new Map(),
+      kovetkezo: null,
+      villam: null,
+      periodikus: 0,
+      valtozasra: 0
+    };
+  }
+  function all(r, csalad) {
+    let a = belso2.get(r);
+    if (!a) belso2.set(r, a = { 4: ujCsaladAllapot(), 6: ujCsaladAllapot() });
+    return a[csalad];
+  }
+  function most(r) {
+    return r.halozat ? r.halozat.ora.ido : 0;
+  }
+  function naplo(r, ...sorok) {
+    if (!r.halozat) return;
+    for (const s of sorok) r.halozat.naplo(r, s);
+  }
+  function idozitok(r, csalad) {
+    const t = csalad === 4 ? r.rip ? r.rip.idozitok : { frissites: 30, ervenytelen: 180, visszatartas: 180, torles: 240 } : RIPNG_IDOZITOK;
+    return { frissites: t.frissites * 1e3, ervenytelen: t.ervenytelen * 1e3, visszatartas: t.visszatartas * 1e3, torles: t.torles * 1e3 };
+  }
+  function ripPorton4(r, p) {
+    if (!r.rip || !p.ip) return false;
+    const o = osztalyos(ipSzam(p.ip)).halozat;
+    return r.rip.halozatok.some((n) => ipSzam(n) === o);
+  }
+  function ripPorton6(r, p) {
+    return !!(r.ipv6Routing && p.ripng && r.ripng[p.ripng] && ipv6Engedelyezve(p));
+  }
+  function porton(r, p, csalad) {
+    return csalad === 4 ? ripPorton4(r, p) : ripPorton6(r, p);
+  }
+  function kuldhet(r, p, csalad) {
+    if (!porton(r, p, csalad) || !portFent(p) || p.tipus === "Loopback") return false;
+    if (csalad === 4 && r.rip.passziv.includes(p.nev)) return false;
+    return true;
+  }
+  function ripPortok(r, csalad) {
+    return r.portok.filter((p) => porton(r, p, csalad));
+  }
+  function aktiv(r, csalad) {
+    return csalad === 4 ? !!r.rip : !!r.ipv6Routing && Object.keys(r.ripng).length > 0;
+  }
+  function kulcs(csalad, halozat, hossz) {
+    return csalad === 4 ? `${ipSzoveg(halozat)}/${hossz}` : `${ipv6Szoveg(halozat)}/${hossz}`;
+  }
+  function azonosSzomszed(csalad, a, b) {
+    return csalad === 4 ? a === b : ipv6Szoveg(a) === ipv6Szoveg(b);
+  }
+  function leTesz(r, csalad, e) {
+    e.le = true;
+    e.leKezd = most(r);
+    e.eloMetrika = e.metrika;
+    e.metrika = VEGTELEN;
+    e.utak = e.utak.length ? [e.utak[0]] : e.utak;
+  }
+  function frissit(r, csalad, halozat, hossz, u) {
+    const a = all(r, csalad);
+    const k = kulcs(csalad, halozat, hossz);
+    const t = idozitok(r, csalad);
+    const ido = most(r);
+    let e = a.db.get(k);
+    const ut = { kovetkezo: u.kovetkezo, port: u.port, ido };
+    if (u.metrika >= VEGTELEN) {
+      if (!e || e.le) return false;
+      const i2 = e.utak.findIndex((x) => x.port === u.port && azonosSzomszed(csalad, x.kovetkezo, u.kovetkezo));
+      if (i2 < 0) return false;
+      if (e.utak.length > 1) {
+        e.utak.splice(i2, 1);
+        return true;
+      }
+      leTesz(r, csalad, e);
+      return true;
+    }
+    if (!e) {
+      a.db.set(k, { halozat, hossz, metrika: u.metrika, utak: [ut], le: false, utolsoJo: ido });
+      return true;
+    }
+    if (e.le) {
+      if (ido < e.leKezd + t.visszatartas && u.metrika > e.eloMetrika) return false;
+      Object.assign(e, { le: false, metrika: u.metrika, utak: [ut], utolsoJo: ido });
+      return true;
+    }
+    const i = e.utak.findIndex((x) => x.port === u.port && azonosSzomszed(csalad, x.kovetkezo, u.kovetkezo));
+    if (i >= 0) {
+      e.utak[i].ido = ido;
+      e.utolsoJo = ido;
+      if (u.metrika === e.metrika) return false;
+      if (u.metrika < e.metrika) {
+        e.metrika = u.metrika;
+        e.utak = [e.utak[i]];
+        return true;
+      }
+      if (e.utak.length > 1) e.utak.splice(i, 1);
+      else e.metrika = u.metrika;
+      return true;
+    }
+    if (u.metrika < e.metrika) {
+      Object.assign(e, { metrika: u.metrika, utak: [ut], utolsoJo: ido });
+      return true;
+    }
+    if (u.metrika === e.metrika && e.utak.length < MAX_UT) {
+      e.utak.push(ut);
+      e.utolsoJo = ido;
+      return true;
+    }
+    return false;
+  }
+  function oregit(r, csalad) {
+    const a = all(r, csalad);
+    const t = idozitok(r, csalad);
+    const ido = most(r);
+    let valtozott2 = false;
+    for (const [k, e] of a.db) {
+      if (e.le) {
+        const torles = csalad === 4 ? e.utolsoJo + t.torles : e.leKezd + t.torles;
+        if (ido >= Math.max(torles, e.leKezd + 1)) a.db.delete(k);
+        continue;
+      }
+      const maradt = e.utak.filter((u) => ido - u.ido < t.ervenytelen);
+      if (maradt.length === e.utak.length) continue;
+      valtozott2 = true;
+      if (maradt.length) e.utak = maradt;
+      else leTesz(r, csalad, e);
+    }
+    return valtozott2;
+  }
+  function kapcsoltak(r, csalad) {
+    const l = [];
+    for (const p of r.portok) {
+      if (!porton(r, p, csalad) || !portFent(p)) continue;
+      if (csalad === 4) {
+        const h = prefixHossz(p.maszk);
+        l.push({ halozat: halozatSzam(ipSzam(p.ip), h), hossz: h, port: p.nev });
+      } else {
+        for (const c of p.ipv6) l.push({ halozat: ipv6Halozat(ipv6Elemez(c.cim), c.hossz), hossz: c.hossz, port: p.nev });
+      }
+    }
+    return l;
+  }
+  function hirdetes(r, csalad, p) {
+    const ki = /* @__PURE__ */ new Map();
+    const tesz = (halozat, hossz, metrika) => {
+      const k = kulcs(csalad, halozat, hossz);
+      const regi = ki.get(k);
+      if (!regi || metrika < regi.metrika) ki.set(k, { halozat, hossz, metrika });
+    };
+    const alap = csalad === 4 ? r.rip.alapUtvonal : p.ripngAlap;
+    const nulla = csalad === 4 ? 0 : [0, 0, 0, 0, 0, 0, 0, 0];
+    if (csalad === 6 && alap === "only") {
+      tesz(nulla, 0, 1);
+      return ki;
+    }
+    const kapcs = kapcsoltak(r, csalad);
+    const kapcsKulcs = new Set(kapcs.map((c) => kulcs(csalad, c.halozat, c.hossz)));
+    for (const c of kapcs) if (c.port !== p.nev) tesz(c.halozat, c.hossz, 1);
+    const rib = csalad === 4 ? tabla4(r) : tabla6(r);
+    const ribKod = new Map(rib.filter((e) => e.kod !== "L").map((e) => [kulcs(csalad, e.halozat, e.hossz), e.kod]));
+    for (const [k, e] of all(r, csalad).db) {
+      if (kapcsKulcs.has(k)) continue;
+      if (!e.le && ribKod.get(k) !== "R") continue;
+      if (e.utak.some((u) => u.port === p.nev)) continue;
+      const m = e.le ? VEGTELEN : Math.min(VEGTELEN, e.metrika + (csalad === 4 ? 1 : 0));
+      tesz(e.halozat, e.hossz, m);
+    }
+    if (alap) tesz(nulla, 0, 1);
+    if (csalad === 4 && (r.rip.autoSummary || r.rip.verzio !== 2)) {
+      const sajat = osztalyos(ipSzam(p.ip));
+      const v1 = r.rip.verzio !== 2;
+      const osszegzett = /* @__PURE__ */ new Map();
+      for (const [k, e] of ki) {
+        if (e.hossz === 0) {
+          osszegzett.set(k, e);
+          continue;
+        }
+        const o = osztalyos(e.halozat);
+        if (o.halozat !== sajat.halozat) {
+          if (e.hossz < o.hossz) continue;
+          const ok = kulcs(4, o.halozat, o.hossz);
+          const regi = osszegzett.get(ok);
+          if (!regi || e.metrika < regi.metrika) osszegzett.set(ok, { halozat: o.halozat, hossz: o.hossz, metrika: e.metrika });
+        } else if (!v1 || e.hossz === prefixHossz(p.maszk) || e.hossz === 32) {
+          osszegzett.set(k, e);
+        }
+      }
+      return osszegzett;
+    }
+    return ki;
+  }
+  function kuldVerzio(r) {
+    return r.rip && r.rip.verzio === 2 ? 2 : 1;
+  }
+  function csomagKuld4(r, p, bejegyzesek, parancs = "valasz") {
+    const h = r.halozat;
+    const v = kuldVerzio(r);
+    const celIp = v === 2 ? "224.0.0.9" : "255.255.255.255";
+    const celMac = v === 2 ? "01005e000009" : SZORAS;
+    const lista2 = bejegyzesek.map((e) => ({
+      halozat: ipSzoveg(e.halozat),
+      maszk: v === 2 ? maszkSzoveg(e.hossz) : null,
+      kovetkezo: "0.0.0.0",
+      metrika: e.metrika
+    }));
+    if (r.debug.rip) {
+      if (parancs === "keres") naplo(r, `RIP: sending request on ${p.nev} to ${celIp}`);
+      else {
+        naplo(r, `RIP: sending v${v} update to ${celIp} via ${p.nev} (${p.ip})`, "RIP: build update entries");
+        for (const e of lista2) {
+          naplo(r, v === 2 ? `      ${e.halozat}/${prefixHossz(e.maszk)} via 0.0.0.0, metric ${e.metrika}, tag 0` : `      network ${e.halozat} metric ${e.metrika}`);
+        }
+      }
+    }
+    const darabok = parancs === "keres" ? [[]] : [];
+    for (let i = 0; i < lista2.length; i += UZENET_MERET) darabok.push(lista2.slice(i, i + UZENET_MERET));
+    for (const d of darabok) {
+      keretKuld(h, r, p, celMac, "ipv4", {
+        forrasIp: p.ip,
+        celIp,
+        ttl: 2,
+        protokoll: "udp",
+        keses: 0,
+        udp: { port: 520, adat: { parancs, verzio: v, bejegyzesek: d } }
+      });
+    }
+  }
+  function csomagKuld6(r, p, bejegyzesek, parancs = "valasz") {
+    const h = r.halozat;
+    const forras = ipv6Szoveg(portLinkLocal(p));
+    const lista2 = bejegyzesek.map((e) => ({ prefix: ipv6Szoveg(e.halozat), hossz: e.hossz, metrika: e.metrika }));
+    if (r.debug.ripng) {
+      if (parancs === "keres") {
+        naplo(r, `RIPng: Sending multicast request on ${p.nev} for ${p.ripng}`, `       src=${forras}`, `       dst=FF02::9 (${p.nev})`);
+      } else {
+        naplo(
+          r,
+          `RIPng: Sending multicast update on ${p.nev} for ${p.ripng}`,
+          `       src=${forras}`,
+          `       dst=FF02::9 (${p.nev})`,
+          `       sport=521, dport=521, length=${4 + 20 * lista2.length}`,
+          `       command=2, version=1, mbz=0, #rte=${lista2.length}`
+        );
+        for (const e of lista2) naplo(r, `       tag=0, metric=${e.metrika}, prefix=${e.prefix}/${e.hossz}`);
+      }
+    }
+    const darabok = parancs === "keres" ? [[]] : [];
+    for (let i = 0; i < lista2.length; i += UZENET_MERET) darabok.push(lista2.slice(i, i + UZENET_MERET));
+    for (const d of darabok) {
+      keretKuld(h, r, p, "333300000009", "ipv6", {
+        forras,
+        cel: ipv6Szoveg(RIPNG_CSOPORT),
+        hop: 255,
+        protokoll: "udp",
+        keses: 0,
+        udp: { port: 521, adat: { parancs, folyamat: p.ripng, bejegyzesek: d } }
+      });
+    }
+  }
+  function csomagKuld(r, p, csalad, bejegyzesek, parancs) {
+    if (csalad === 4) csomagKuld4(r, p, bejegyzesek, parancs);
+    else csomagKuld6(r, p, bejegyzesek, parancs);
+  }
+  function frissitesKuld(r, csalad, p, teljes) {
+    const a = all(r, csalad);
+    const uj = hirdetes(r, csalad, p);
+    const regi = a.hirdetett.get(p.nev) || /* @__PURE__ */ new Map();
+    const kimegy = [];
+    for (const [k, e] of uj) if (teljes || regi.get(k) !== e.metrika) kimegy.push(e);
+    for (const [k, m] of regi) {
+      if (uj.has(k) || m >= VEGTELEN) continue;
+      const [h, l] = k.split("/");
+      kimegy.push({ halozat: csalad === 4 ? ipSzam(h) : ipv6Elemez(h), hossz: Number(l), metrika: VEGTELEN });
+    }
+    const tarol = /* @__PURE__ */ new Map();
+    for (const [k, e] of uj) if (e.metrika < VEGTELEN) tarol.set(k, e.metrika);
+    a.hirdetett.set(p.nev, tarol);
+    if (kimegy.length) csomagKuld(r, p, csalad, kimegy, "valasz");
+  }
+  function periodikus(r, csalad) {
+    const a = all(r, csalad);
+    a.periodikus++;
+    for (const p of r.portok) if (kuldhet(r, p, csalad)) frissitesKuld(r, csalad, p, true);
+  }
+  function villamUtemez(r, csalad) {
+    const a = all(r, csalad);
+    if (!r.halozat || a.villam) return;
+    a.villam = r.halozat.ora.utemez(VILLAM_KESES, () => {
+      a.villam = null;
+      if (!aktiv(r, csalad)) return;
+      a.valtozasra++;
+      for (const p of r.portok) if (kuldhet(r, p, csalad)) frissitesKuld(r, csalad, p, false);
+    });
+  }
+  function keresKuld(r, csalad, csakPort) {
+    for (const p of r.portok) {
+      if (csakPort && p !== csakPort) continue;
+      if (kuldhet(r, p, csalad)) csomagKuld(r, p, csalad, [], "keres");
+    }
+  }
+  function ripFogad4(h, r, p, cs) {
+    if (!ripPorton4(r, p)) return;
+    const u = cs.udp.adat;
+    if (!portHalozataban(p, cs.forrasIp)) {
+      if (r.debug.rip) naplo(r, `RIP: ignored v${u.verzio} update from bad source ${cs.forrasIp} on ${p.nev}`);
+      return;
+    }
+    const fogad = r.rip.verzio === 2 ? [2] : r.rip.verzio === 1 ? [1] : [1, 2];
+    if (!fogad.includes(u.verzio)) {
+      if (r.debug.rip) naplo(r, `RIP: ignored v${u.verzio} packet from ${cs.forrasIp} (illegal version)`);
+      return;
+    }
+    if (u.parancs === "keres") {
+      if (r.debug.rip) naplo(r, `RIP: received v${u.verzio} request from ${cs.forrasIp} on ${p.nev}`);
+      if (kuldhet(r, p, 4)) frissitesKuld(r, 4, p, true);
+      return;
+    }
+    const a = all(r, 4);
+    a.forrasok.set(cs.forrasIp, most(r));
+    if (r.debug.rip) {
+      naplo(r, `RIP: received v${u.verzio} update from ${cs.forrasIp} on ${p.nev}`);
+      for (const e of u.bejegyzesek) {
+        naplo(r, e.maszk ? `     ${e.halozat}/${prefixHossz(e.maszk)} via ${e.kovetkezo} in ${e.metrika} hops` : `     ${e.halozat} in ${e.metrika} hops`);
+      }
+    }
+    let valtozott2 = false;
+    const sajat = osztalyos(ipSzam(p.ip));
+    for (const e of u.bejegyzesek) {
+      if (e.metrika < 1 || e.metrika > VEGTELEN) continue;
+      const n = ipSzam(e.halozat);
+      let hossz;
+      if (e.maszk) hossz = prefixHossz(e.maszk);
+      else if (n === 0) hossz = 0;
+      else if (osztalyos(n).halozat === sajat.halozat) hossz = halozatSzam(n, prefixHossz(p.maszk)) === n ? prefixHossz(p.maszk) : 32;
+      else hossz = osztalyos(n).hossz;
+      if (frissit(r, 4, halozatSzam(n, hossz), hossz, { kovetkezo: ipSzam(cs.forrasIp), port: p.nev, metrika: e.metrika })) valtozott2 = true;
+    }
+    if (valtozott2) {
+      valtozas(r);
+      villamUtemez(r, 4);
+    }
+  }
+  function ripFogad6(h, r, p, cs) {
+    if (!ripPorton6(r, p)) return;
+    const u = cs.udp.adat;
+    if (!linkLocalE(ipv6Elemez(cs.forras))) return;
+    if (u.parancs === "keres") {
+      if (r.debug.ripng) naplo(r, `RIPng: request received from ${cs.forras} on ${p.nev} for ${p.ripng}`);
+      if (kuldhet(r, p, 6)) frissitesKuld(r, 6, p, true);
+      return;
+    }
+    const a = all(r, 6);
+    a.forrasok.set(cs.forras, most(r));
+    if (r.debug.ripng) {
+      naplo(
+        r,
+        `RIPng: response received from ${cs.forras} on ${p.nev} for ${p.ripng}`,
+        `       src=${cs.forras} (${p.nev})`,
+        "       dst=FF02::9",
+        `       sport=521, dport=521, length=${4 + 20 * u.bejegyzesek.length}`,
+        `       command=2, version=1, mbz=0, #rte=${u.bejegyzesek.length}`
+      );
+      for (const e of u.bejegyzesek) naplo(r, `       tag=0, metric=${e.metrika}, prefix=${e.prefix}/${e.hossz}`);
+    }
+    let valtozott2 = false;
+    for (const e of u.bejegyzesek) {
+      if (e.metrika < 1 || e.metrika > VEGTELEN) continue;
+      const m = Math.min(VEGTELEN, e.metrika + 1);
+      const hal = ipv6Halozat(ipv6Elemez(e.prefix), e.hossz);
+      if (frissit(r, 6, hal, e.hossz, { kovetkezo: ipv6Elemez(cs.forras), port: p.nev, metrika: m })) valtozott2 = true;
+    }
+    if (valtozott2) {
+      valtozas(r);
+      villamUtemez(r, 6);
+    }
+  }
+  function valtozas(r) {
+    if (r.halozat) r.halozat.esemeny({ tipus: "allapot" });
+  }
+  function ripValtozott(r, { keres = false, csalad } = {}) {
+    if (!r.halozat) return;
+    for (const c of csalad ? [csalad] : [4, 6]) {
+      if (!aktiv(r, c)) {
+        all(r, c).db.clear();
+        all(r, c).hirdetett.clear();
+        continue;
+      }
+      const a = all(r, c);
+      for (const [k, e] of a.db) {
+        e.utak = e.utak.filter((u) => {
+          const p = r.portok.find((x) => x.nev === u.port);
+          return p && porton(r, p, c);
+        });
+        if (!e.utak.length) a.db.delete(k);
+      }
+      for (const nev of [...a.hirdetett.keys()]) {
+        const p = r.portok.find((x) => x.nev === nev);
+        if (!p || !kuldhet(r, p, c)) a.hirdetett.delete(nev);
+      }
+      if (keres) keresKuld(r, c);
+      villamUtemez(r, c);
+    }
+    valtozas(r);
+  }
+  function ripPortValtozott(h, r, p) {
+    for (const c of [4, 6]) {
+      if (!aktiv(r, c)) continue;
+      const a = all(r, c);
+      if (!portFent(p)) {
+        for (const [k, e] of a.db) {
+          e.utak = e.utak.filter((u) => u.port !== p.nev);
+          if (!e.utak.length) a.db.delete(k);
+        }
+        a.hirdetett.delete(p.nev);
+      } else {
+        keresKuld(r, c, p);
+      }
+      villamUtemez(r, c);
+    }
+  }
+  function ripTorol(r) {
+    if (!aktiv(r, 4)) return;
+    const a = all(r, 4);
+    a.db.clear();
+    a.hirdetett.clear();
+    keresKuld(r, 4);
+    valtozas(r);
+  }
+  function ripIndit(h) {
+    const routerek = h.eszkozok.filter((e) => e.tipus === "router");
+    if (!routerek.length) return;
+    const lep = () => {
+      routerek.forEach((r, i) => {
+        for (const c of [4, 6]) {
+          const a = all(r, c);
+          if (!aktiv(r, c)) {
+            a.kovetkezo = null;
+            continue;
+          }
+          if (oregit(r, c)) {
+            valtozas(r);
+            villamUtemez(r, c);
+          }
+          const t = idozitok(r, c);
+          if (a.kovetkezo === null) a.kovetkezo = h.ora.ido + 5e3 + (i * 7e3 + (c === 6 ? 3e3 : 0)) % t.frissites;
+          if (h.ora.ido >= a.kovetkezo) {
+            a.kovetkezo = h.ora.ido + t.frissites;
+            periodikus(r, c);
+          }
+        }
+      });
+      h.ora.utemez(1e3, lep);
+    };
+    h.ora.utemez(1e3, lep);
+  }
+  function ripUtvonalak(r, csalad) {
+    if (!aktiv(r, csalad)) return [];
+    return [...all(r, csalad).db.values()].map((e) => ({ ...e, utak: e.utak.map((u) => ({ ...u })) }));
+  }
+  function ripAdatbazis(r, csalad) {
+    if (!aktiv(r, csalad)) return { kapcsolt: [], tanult: [] };
+    return {
+      kapcsolt: kapcsoltak(r, csalad),
+      tanult: ripUtvonalak(r, csalad)
+    };
+  }
+  function ripForrasok(r, csalad) {
+    return [...all(r, csalad).forrasok.entries()].map(([cim, ido]) => ({ cim, ido }));
+  }
+  function ripKovetkezo(r, csalad) {
+    const a = all(r, csalad);
+    if (a.kovetkezo === null) return null;
+    return Math.max(0, Math.ceil((a.kovetkezo - most(r)) / 1e3));
+  }
+  function ripSzamlalok(r, csalad) {
+    const a = all(r, csalad);
+    return { periodikus: a.periodikus, valtozasra: a.valtozasra };
+  }
+
+  // src/mag/utvonal.js
+  var AD = { C: 0, L: 0, S: 1, R: 120 };
+  function portFent(p) {
+    if (p.leallitva) return false;
+    return p.tipus === "Loopback" ? true : !!p.fent;
+  }
+  function ipv6Engedelyezve(p) {
+    return p.ipv6.length > 0 || !!p.linkLocal || p.ipv6Be;
+  }
+  function portLinkLocal(p) {
+    if (!ipv6Engedelyezve(p)) return null;
+    return p.linkLocal ? ipv6Elemez(p.linkLocal) : eui64LinkLocal(p.mac);
+  }
+  function kapcsolt4(r) {
+    const t = [];
+    for (const p of r.portok) {
+      if (!p.ip || !portFent(p)) continue;
+      const ip = ipSzam(p.ip);
+      const hossz = prefixHossz(p.maszk);
+      t.push({ kod: "C", halozat: halozatSzam(ip, hossz), hossz, ad: 0, metrika: 0, utak: [{ kovetkezo: null, port: p.nev }] });
+      if (hossz < 32) t.push({ kod: "L", halozat: ip, hossz: 32, ad: 0, metrika: 0, utak: [{ kovetkezo: null, port: p.nev }] });
+    }
+    return t;
+  }
+  function statikus4(r, alap) {
+    const t = [];
+    for (const s of r.statikus) {
+      const halozat = ipSzam(s.halozat);
+      const hossz = prefixHossz(s.maszk);
+      let ut = null;
+      if (s.interfesz) {
+        const p = r.portok.find((x) => x.nev === s.interfesz);
+        if (p && portFent(p)) ut = { kovetkezo: s.kovetkezo ? ipSzam(s.kovetkezo) : null, port: p.nev };
+      } else {
+        const kov = ipSzam(s.kovetkezo);
+        const talalt = legjobb4(alap, kov);
+        if (talalt) ut = { kovetkezo: kov, port: null };
+      }
+      if (!ut) continue;
+      let e = t.find((x) => x.halozat === halozat && x.hossz === hossz);
+      if (!e) t.push(e = { kod: "S", halozat, hossz, ad: 1, metrika: 0, utak: [] });
+      e.utak.push(ut);
+    }
+    return t;
+  }
+  function legjobb4(tabla, ip) {
+    let jo = null;
+    for (const e of tabla) {
+      if (e.lehetLe) continue;
+      if (halozatSzam(ip, e.hossz) !== e.halozat) continue;
+      if (!jo || e.hossz > jo.hossz) jo = e;
+    }
+    return jo;
+  }
+  function tabla4(r) {
+    const kapcsolt = kapcsolt4(r);
+    const rip = ripUtvonalak(r, 4).map((e) => ({
+      kod: "R",
+      halozat: e.halozat,
+      hossz: e.hossz,
+      ad: AD.R,
+      metrika: e.metrika,
+      utak: e.utak,
+      lehetLe: e.le
+    }));
+    const statikus = statikus4(r, [...kapcsolt, ...rip]);
+    const nyertes = /* @__PURE__ */ new Map();
+    for (const e of [...kapcsolt, ...statikus, ...rip]) {
+      const kulcs2 = `${e.halozat}/${e.hossz}/${e.kod === "L" ? "L" : ""}`;
+      const regi = nyertes.get(kulcs2);
+      if (!regi || e.ad < regi.ad || regi.lehetLe && !e.lehetLe) nyertes.set(kulcs2, e);
+    }
+    const t = [...nyertes.values()];
+    for (const e of t) e.alap = e.hossz === 0;
+    t.sort((a, b) => a.halozat - b.halozat || a.hossz - b.hossz);
+    return t;
+  }
+  var ecmpSzamlalo = /* @__PURE__ */ new WeakMap();
+  function utValaszt(r, e) {
+    if (e.utak.length === 1) return e.utak[0];
+    const n = ecmpSzamlalo.get(r) || 0;
+    ecmpSzamlalo.set(r, n + 1);
+    return e.utak[n % e.utak.length];
+  }
+  function keres4(r, ip) {
+    const t = tabla4(r);
+    let e = legjobb4(t, ip);
+    if (!e) return null;
+    let ut = utValaszt(r, e);
+    let kov = ut.kovetkezo;
+    let port2 = ut.port;
+    for (let i = 0; !port2 && i < 4; i++) {
+      const e2 = legjobb4(t, kov);
+      if (!e2) return null;
+      const u2 = utValaszt(r, e2);
+      port2 = u2.port;
+      if (u2.kovetkezo !== null) kov = u2.kovetkezo;
+    }
+    if (!port2) return null;
+    return { port: port2, kovetkezo: kov === null ? ip : kov, bejegyzes: e };
+  }
+  function utolsoMenedek4(r) {
+    const e = tabla4(r).find((x) => x.hossz === 0 && !x.lehetLe);
+    return e || null;
+  }
+  function kapcsolt6(r) {
+    const t = [];
+    for (const p of r.portok) {
+      if (!portFent(p)) continue;
+      for (const c of p.ipv6) {
+        const cim = ipv6Elemez(c.cim);
+        t.push({ kod: "C", halozat: ipv6Halozat(cim, c.hossz), hossz: c.hossz, ad: 0, metrika: 0, utak: [{ kovetkezo: null, port: p.nev }] });
+        t.push({ kod: "L", halozat: cim, hossz: 128, ad: 0, metrika: 0, utak: [{ kovetkezo: null, port: p.nev }] });
+      }
+    }
+    return t;
+  }
+  function legjobb6(tabla, cim) {
+    let jo = null;
+    for (const e of tabla) {
+      if (e.lehetLe) continue;
+      if (!ipv6EgyHalozat(cim, e.halozat, e.hossz)) continue;
+      if (!jo || e.hossz > jo.hossz) jo = e;
+    }
+    return jo;
+  }
+  function statikus6(r, alap) {
+    const t = [];
+    for (const s of r.statikus6) {
+      const pr = ipv6PrefixElemez(s.prefix);
+      let ut = null;
+      const kov = s.kovetkezo ? ipv6Elemez(s.kovetkezo) : null;
+      if (s.interfesz) {
+        const p = r.portok.find((x) => x.nev === s.interfesz);
+        if (p && portFent(p) && ipv6Engedelyezve(p)) ut = { kovetkezo: kov, port: p.nev };
+      } else if (kov && !linkLocalE(kov)) {
+        if (legjobb6(alap, kov)) ut = { kovetkezo: kov, port: null };
+      }
+      if (!ut) continue;
+      const halozat = ipv6Halozat(pr.cim, pr.hossz);
+      let e = t.find((x) => x.hossz === pr.hossz && ipv6EgyHalozat(x.halozat, halozat, 128));
+      if (!e) t.push(e = { kod: "S", halozat, hossz: pr.hossz, ad: 1, metrika: 0, utak: [] });
+      e.utak.push(ut);
+    }
+    return t;
+  }
+  function tabla6(r) {
+    const kapcsolt = kapcsolt6(r);
+    const rip = ripUtvonalak(r, 6).map((e) => ({
+      kod: "R",
+      halozat: e.halozat,
+      hossz: e.hossz,
+      ad: AD.R,
+      metrika: e.metrika,
+      utak: e.utak,
+      lehetLe: e.le
+    }));
+    const statikus = statikus6(r, [...kapcsolt, ...rip]);
+    const nyertes = /* @__PURE__ */ new Map();
+    for (const e of [...kapcsolt, ...statikus, ...rip]) {
+      const kulcs2 = `${ipv6Szoveg(e.halozat)}/${e.hossz}`;
+      const regi = nyertes.get(kulcs2);
+      if (!regi || e.ad < regi.ad) nyertes.set(kulcs2, e);
+    }
+    const t = [...nyertes.values()];
+    const cmp = (a, b) => {
+      for (let i = 0; i < 8; i++) if (a.halozat[i] !== b.halozat[i]) return a.halozat[i] - b.halozat[i];
+      return a.hossz - b.hossz;
+    };
+    t.sort(cmp);
+    return t;
+  }
+  function keres6(r, cim) {
+    const t = tabla6(r);
+    const e = legjobb6(t, cim);
+    if (!e) return null;
+    let ut = utValaszt(r, e);
+    let kov = ut.kovetkezo;
+    let port2 = ut.port;
+    for (let i = 0; !port2 && i < 4; i++) {
+      const e2 = legjobb6(t, kov);
+      if (!e2) return null;
+      const u2 = utValaszt(r, e2);
+      port2 = u2.port;
+      if (u2.kovetkezo) kov = u2.kovetkezo;
+    }
+    if (!port2) return null;
+    return { port: port2, kovetkezo: kov || cim, bejegyzes: e };
+  }
+  function bejegyzes(r, szoveg) {
+    const [h, l] = String(szoveg).split("/");
+    const hossz = Number(l);
+    if (h.includes(":")) {
+      const c = ipv6Elemez(h);
+      if (!c) return null;
+      return tabla6(r).find((e) => e.hossz === hossz && ipv6EgyHalozat(e.halozat, c, 128)) || null;
+    }
+    const n = ipSzam(h);
+    return tabla4(r).find((e) => e.hossz === hossz && e.halozat === halozatSzam(n, hossz) && e.kod !== "L") || null;
+  }
+
+  // src/mag/router.js
+  var ROUTER_TTL = 255;
+  var ELERHETETLEN_KORLAT = 500;
+  var ROUTER_PING_VARAKOZAS = 2e3;
+  var belso3 = /* @__PURE__ */ new WeakMap();
+  function allapot2(r) {
+    let a = belso3.get(r);
+    if (!a) belso3.set(r, a = { varok: /* @__PURE__ */ new Map(), sorszam: 1, utolsoElerhetetlen: -Infinity, ndSor: /* @__PURE__ */ new Map() });
+    return a;
+  }
+  function csoportMac(mac) {
+    return mac.startsWith("01005e") || mac.startsWith("3333");
+  }
+  function port(r, nev) {
+    return r.portok.find((p) => p.nev === nev);
+  }
+  function keretKuld(h, r, p, celMac, tipus, adat) {
+    h.kuld(r, p, { azon: ujKeretAzon(), forrasMac: p.mac, celMac, tipus, adat });
+  }
+  function sajat4(r, ip) {
+    return r.portok.some((p) => p.ip === ip && portFent(p));
+  }
+  function sajat62(r, cel, bePort) {
+    const c = ipv6Elemez(cel);
+    if (!c) return false;
+    if (linkLocalE(c)) {
+      const ll = bePort && portLinkLocal(bePort);
+      return !!ll && ipv6Szoveg(ll) === cel;
+    }
+    return r.portok.some((p) => portFent(p) && p.ipv6.some((x) => x.cim === cel));
+  }
+  function portForras6(p) {
+    if (p.ipv6.length) return p.ipv6[0].cim;
+    const ll = portLinkLocal(p);
+    return ll ? ipv6Szoveg(ll) : null;
+  }
+  function arpKerdez(h, r, p, celIp) {
+    keretKuld(h, r, p, SZORAS, "arp", { muvelet: "keres", kuldoMac: p.mac, kuldoIp: p.ip, celMac: "000000000000", celIp });
+  }
+  function ndKerdez(h, r, p, cel) {
+    const c = ipv6Elemez(cel);
+    const sn = solicitedNode(c);
+    const forras = ipv6Szoveg(portLinkLocal(p));
+    keretKuld(h, r, p, ipv6CsoportMac(sn), "ipv6", {
+      forras,
+      cel: ipv6Szoveg(sn),
+      hop: 255,
+      protokoll: "icmpv6",
+      icmp: { tipus: "ns", cel },
+      keses: 0
+    });
+  }
+  function kuld4Porton(h, r, p, kovetkezo, csomag) {
+    const b = r.arpTabla[kovetkezo];
+    if (b && b.port === p.nev) {
+      keretKuld(h, r, p, b.mac, "ipv4", csomag);
+      return true;
+    }
+    arpKerdez(h, r, p, kovetkezo);
+    return false;
+  }
+  var ND_VARAKOZAS = 3e3;
+  function kuld6Porton(h, r, p, kovetkezo, csomag) {
+    const b = r.ndTabla[kovetkezo];
+    if (b && b.port === p.nev) {
+      keretKuld(h, r, p, b.mac, "ipv6", csomag);
+      return true;
+    }
+    const a = allapot2(r);
+    const kulcs2 = `${p.nev}|${kovetkezo}`;
+    let sor2 = a.ndSor.get(kulcs2);
+    if (sor2) {
+      if (sor2.csomagok.length >= 3) return false;
+      sor2.csomagok.push(csomag);
+      return true;
+    }
+    sor2 = { csomagok: [csomag], idozito: null };
+    a.ndSor.set(kulcs2, sor2);
+    sor2.idozito = h.ora.utemez(ND_VARAKOZAS, () => a.ndSor.delete(kulcs2));
+    ndKerdez(h, r, p, kovetkezo);
+    return true;
+  }
+  function ndTanul2(h, r, p, cim, mac) {
+    r.ndTabla[cim] = { mac, port: p.nev, ido: h.ora.ido };
+    const a = allapot2(r);
+    const kulcs2 = `${p.nev}|${cim}`;
+    const sor2 = a.ndSor.get(kulcs2);
+    if (!sor2) return;
+    a.ndSor.delete(kulcs2);
+    h.ora.lemond(sor2.idozito);
+    for (const cs of sor2.csomagok) keretKuld(h, r, p, mac, "ipv6", cs);
+  }
+  function routerKuld4(h, r, celIp, adat, { forrasIp, ttl = ROUTER_TTL } = {}) {
+    const ut = keres4(r, ipSzam(celIp));
+    if (!ut) return false;
+    const p = port(r, ut.port);
+    return kuld4Porton(h, r, p, ipSzoveg(ut.kovetkezo), { forrasIp: forrasIp || p.ip, celIp, ttl, keses: 0, ...adat });
+  }
+  function routerKuld6(h, r, cel, adat, { forras, hop = 64 } = {}) {
+    const c = ipv6Elemez(cel);
+    const ut = keres6(r, c);
+    if (!ut) return false;
+    const p = port(r, ut.port);
+    const src = forras || (linkLocalE(c) ? ipv6Szoveg(portLinkLocal(p)) : portForras6(p));
+    return kuld6Porton(h, r, p, ipv6Szoveg(ut.kovetkezo), { forras: src, cel, hop, keses: 0, ...adat });
+  }
+  function hibaUzenet(csomag) {
+    return csomag.icmp && (csomag.icmp.tipus === "ido-lejart" || csomag.icmp.tipus === "elerhetetlen");
+  }
+  function icmpHiba4(h, r, bePort, csomag, tipus) {
+    if (hibaUzenet(csomag) || !bePort.ip) return;
+    if (tipus === "elerhetetlen") {
+      const a = allapot2(r);
+      if (h.ora.ido - a.utolsoElerhetetlen < ELERHETETLEN_KORLAT) return;
+      a.utolsoElerhetetlen = h.ora.ido;
+    }
+    const eredeti = { sorszam: csomag.icmp && csomag.icmp.sorszam, forrasIp: csomag.forrasIp, celIp: csomag.celIp };
+    routerKuld4(h, r, csomag.forrasIp, { protokoll: "icmp", icmp: { tipus, eredeti }, keses: csomag.keses || 0 }, { forrasIp: bePort.ip });
+  }
+  function icmpHiba6(h, r, bePort, csomag, tipus) {
+    if (hibaUzenet(csomag)) return;
+    if (tipus === "elerhetetlen") {
+      const a = allapot2(r);
+      if (h.ora.ido - a.utolsoElerhetetlen < ELERHETETLEN_KORLAT) return;
+      a.utolsoElerhetetlen = h.ora.ido;
+    }
+    const eredeti = { sorszam: csomag.icmp && csomag.icmp.sorszam, forras: csomag.forras, cel: csomag.cel };
+    routerKuld6(
+      h,
+      r,
+      csomag.forras,
+      { protokoll: "icmpv6", icmp: { tipus, eredeti }, keses: csomag.keses || 0 },
+      { forras: portForras6(bePort) }
+    );
+  }
+  function routerFogad(h, r, p, keret2) {
+    if (keret2.vlan !== void 0) {
+      return h.eldob(r, p, keret2, "A router ezen a porton nem ismeri a 802.1Q-címkés keretet (nincs alinterfész).");
+    }
+    if (keret2.celMac !== p.mac && keret2.celMac !== SZORAS && !csoportMac(keret2.celMac)) return;
+    if (!portFent(p)) return;
+    h.esemeny({ tipus: "fogadva", eszkoz: r, port: p, keret: keret2 });
+    if (keret2.tipus === "arp") return arpFogad(h, r, p, keret2.adat);
+    if (keret2.tipus === "ipv4") return ipv4Fogad(h, r, p, keret2.adat);
+    if (keret2.tipus === "ipv6") return ipv6Fogad2(h, r, p, keret2);
+    return void 0;
+  }
+  function arpFogad(h, r, p, arp) {
+    if (!p.ip || arp.celIp !== p.ip || arp.kuldoIp === "0.0.0.0") return;
+    r.arpTabla[arp.kuldoIp] = { mac: arp.kuldoMac, port: p.nev, ido: h.ora.ido };
+    if (arp.muvelet === "keres") {
+      keretKuld(h, r, p, arp.kuldoMac, "arp", { muvelet: "valasz", kuldoMac: p.mac, kuldoIp: p.ip, celMac: arp.kuldoMac, celIp: arp.kuldoIp });
+    }
+  }
+  function ipv4Fogad(h, r, p, cs) {
+    if (!p.ip) return;
+    if (cs.celIp === "255.255.255.255" || cs.celIp === "224.0.0.9" || sajat4(r, cs.celIp)) return helyi4(h, r, p, cs);
+    const ttl = cs.ttl - 1;
+    if (ttl <= 0) return icmpHiba4(h, r, p, cs, "ido-lejart");
+    const ut = keres4(r, ipSzam(cs.celIp));
+    if (!ut) {
+      h.eldob(r, p, { tipus: "ipv4", adat: cs }, `${r.hostname}: nincs útvonal ide: ${cs.celIp} – a router eldobta a csomagot.`);
+      return icmpHiba4(h, r, p, cs, "elerhetetlen");
+    }
+    const ki = port(r, ut.port);
+    const kov = ipSzoveg(ut.kovetkezo);
+    if (!kuld4Porton(h, r, ki, kov, { ...cs, ttl })) {
+      h.eldob(r, ki, { tipus: "ipv4", adat: cs }, `${r.hostname} még nem ismeri ${kov} MAC-címét: ARP-kérdést küldött, ezt a csomagot pedig eldobta.`);
+    }
+  }
+  function helyi4(h, r, p, cs) {
+    if (cs.protokoll === "icmp") {
+      const t = cs.icmp.tipus;
+      if (t === "echo-keres") {
+        routerKuld4(
+          h,
+          r,
+          cs.forrasIp,
+          { protokoll: "icmp", icmp: { tipus: "echo-valasz", sorszam: cs.icmp.sorszam }, keses: cs.keses || 0 },
+          { forrasIp: cs.celIp }
+        );
+        return;
+      }
+      const sorszam = t === "echo-valasz" ? cs.icmp.sorszam : cs.icmp.eredeti && cs.icmp.eredeti.sorszam;
+      const v = allapot2(r).varok.get(sorszam);
+      if (v) v({ tipus: t, kitol: cs.forrasIp, ttl: cs.ttl, keses: cs.keses || 0 });
+      return;
+    }
+    if (cs.protokoll === "udp" && cs.udp.port === 520) ripFogad4(h, r, p, cs);
+  }
+  function ipv6Fogad2(h, r, p, keret2) {
+    const cs = keret2.adat;
+    if (!ipv6Engedelyezve(p)) return;
+    if (cs.protokoll === "icmpv6" && cs.icmp.tipus === "ns") {
+      if (!sajat62(r, cs.icmp.cel, p)) return;
+      ndTanul2(h, r, p, cs.forras, keret2.forrasMac);
+      keretKuld(h, r, p, keret2.forrasMac, "ipv6", {
+        forras: cs.icmp.cel,
+        cel: cs.forras,
+        hop: 255,
+        protokoll: "icmpv6",
+        icmp: { tipus: "na", cel: cs.icmp.cel },
+        keses: 0
+      });
+      return;
+    }
+    if (cs.protokoll === "icmpv6" && cs.icmp.tipus === "na") {
+      ndTanul2(h, r, p, cs.icmp.cel, keret2.forrasMac);
+      return;
+    }
+    const c = ipv6Elemez(cs.cel);
+    if (csoportcimE(c) || sajat62(r, cs.cel, p)) return helyi6(h, r, p, cs, keret2);
+    if (!r.ipv6Routing) return;
+    const hop = cs.hop - 1;
+    if (hop <= 0) return icmpHiba6(h, r, p, cs, "ido-lejart");
+    const ut = keres6(r, c);
+    if (!ut) {
+      h.eldob(r, p, { tipus: "ipv6", adat: cs }, `${r.hostname}: nincs útvonal ide: ${cs.cel} – a router eldobta a csomagot.`);
+      return icmpHiba6(h, r, p, cs, "elerhetetlen");
+    }
+    const ki = port(r, ut.port);
+    const kov = ipv6Szoveg(ut.kovetkezo);
+    if (!kuld6Porton(h, r, ki, kov, { ...cs, hop })) {
+      h.eldob(r, ki, { tipus: "ipv6", adat: cs }, `${r.hostname} még nem ismeri ${kov} MAC-címét, és már túl sok csomag vár rá – ezt eldobta.`);
+    }
+  }
+  function helyi6(h, r, p, cs, keret2) {
+    if (cs.forras && linkLocalE(ipv6Elemez(cs.forras))) ndTanul2(h, r, p, cs.forras, keret2.forrasMac);
+    if (cs.protokoll === "icmpv6") {
+      const t = cs.icmp.tipus;
+      if (t === "echo-keres") {
+        routerKuld6(
+          h,
+          r,
+          cs.forras,
+          { protokoll: "icmpv6", icmp: { tipus: "echo-valasz", sorszam: cs.icmp.sorszam }, keses: cs.keses || 0 },
+          { forras: cs.cel }
+        );
+        return;
+      }
+      const sorszam = t === "echo-valasz" ? cs.icmp.sorszam : cs.icmp.eredeti && cs.icmp.eredeti.sorszam;
+      const v = allapot2(r).varok.get(sorszam);
+      if (v) v({ tipus: t, kitol: cs.forras, ttl: cs.hop, keses: cs.keses || 0 });
+      return;
+    }
+    if (cs.protokoll === "udp" && cs.udp.port === 521) ripFogad6(h, r, p, cs);
+  }
+  function routerPing(h, r, cel, cb, { ttl, varakozas = ROUTER_PING_VARAKOZAS } = {}) {
+    const a = allapot2(r);
+    const v6 = cel.includes(":");
+    const celNormal = v6 ? ipv6Normal(cel) : cel;
+    if (v6 ? sajat62(r, celNormal, null) : sajat4(r, celNormal)) {
+      return h.ora.utemez(1, () => cb({ fajta: "valasz", kitol: celNormal, keses: 0 }));
+    }
+    const sorszam = a.sorszam++;
+    let kesz = false;
+    const vege = (e) => {
+      if (kesz) return;
+      kesz = true;
+      a.varok.delete(sorszam);
+      h.ora.lemond(idozito);
+      cb(e);
+    };
+    const idozito = h.ora.utemez(varakozas, () => vege({ fajta: "idotullepes" }));
+    a.varok.set(sorszam, (v) => {
+      if (v.tipus === "echo-valasz") vege({ fajta: "valasz", kitol: v.kitol, keses: v.keses });
+      else if (v.tipus === "ido-lejart") vege({ fajta: "ido-lejart", kitol: v.kitol, keses: v.keses });
+      else vege({ fajta: "elerhetetlen", kitol: v.kitol, keses: v.keses });
+    });
+    if (v6) {
+      routerKuld6(h, r, celNormal, { protokoll: "icmpv6", icmp: { tipus: "echo-keres", sorszam } }, { hop: ttl || 64 });
+    } else {
+      routerKuld4(h, r, celNormal, { protokoll: "icmp", icmp: { tipus: "echo-keres", sorszam } }, { ttl: ttl || ROUTER_TTL });
+    }
+    return idozito;
+  }
+  function szomszedTorol(r, portNev) {
+    for (const t of [r.arpTabla, r.ndTabla]) {
+      for (const k of Object.keys(t)) if (t[k].port === portNev) delete t[k];
+    }
+  }
+  function portHalozataban(p, ip) {
+    if (!p.ip) return false;
+    const hl = prefixHossz(p.maszk);
+    return halozatSzam(ipSzam(p.ip), hl) === halozatSzam(ipSzam(ip), hl);
   }
 
   // src/mag/halozat.js
@@ -1441,12 +2720,12 @@
      * Kábel két port között. A kábel azonnal működik (nincs „link up” üzenet), ha mindkét
      * vég be van kapcsolva – mintha a hálózat már így indult volna.
      */
-    kabel(eszkozA, portNevA, eszkozB, portNevB) {
+    kabel(eszkozA, portNevA, eszkozB, portNevB, { soros = false } = {}) {
       const pa = eszkozA.portok.find((p) => p.nev === portNevA);
       const pb = eszkozB.portok.find((p) => p.nev === portNevB);
       if (!pa || !pb) throw new Error(`Nincs ilyen port: ${eszkozA.hostname} ${portNevA} / ${eszkozB.hostname} ${portNevB}`);
       if (this.kabelVege(eszkozA, pa) || this.kabelVege(eszkozB, pb)) throw new Error("A port már foglalt.");
-      const k = { a: { eszkoz: eszkozA, port: pa }, b: { eszkoz: eszkozB, port: pb }, fuggo: [] };
+      const k = { a: { eszkoz: eszkozA, port: pa }, b: { eszkoz: eszkozB, port: pb }, fuggo: [], soros, keses: soros ? 10 : 0, lassu: soros ? 2 : 1 };
       this.kabelek.push(k);
       const fent = !pa.leallitva && !pb.leallitva;
       pa.fent = fent;
@@ -1454,14 +2733,14 @@
       return k;
     }
     /** A porthoz csatlakozó kábel, vagy null. */
-    kabelVege(eszkoz, port) {
-      return this.kabelek.find((k) => k.a.eszkoz === eszkoz && k.a.port === port || k.b.eszkoz === eszkoz && k.b.port === port) || null;
+    kabelVege(eszkoz, port2) {
+      return this.kabelek.find((k) => k.a.eszkoz === eszkoz && k.a.port === port2 || k.b.eszkoz === eszkoz && k.b.port === port2) || null;
     }
     /** A kábel túlsó vége: {eszkoz, port}, vagy null, ha nincs kábel. */
-    szomszed(eszkoz, port) {
-      const k = this.kabelVege(eszkoz, port);
+    szomszed(eszkoz, port2) {
+      const k = this.kabelVege(eszkoz, port2);
       if (!k) return null;
-      return k.a.eszkoz === eszkoz && k.a.port === port ? k.b : k.a;
+      return k.a.eszkoz === eszkoz && k.a.port === port2 ? k.b : k.a;
     }
     /** Feliratkozás az eseményekre. Visszaad egy függvényt, amivel le lehet iratkozni. */
     figyel(fn) {
@@ -1476,7 +2755,7 @@
     }
     /** Időbélyeges konzolüzenet egy eszközön (a nézet a konzoljára írja). */
     naplo(eszkoz, uzenet) {
-      if (eszkoz.tipus !== "switch") return;
+      if (eszkoz.tipus === "pc") return;
       this.esemeny({ tipus: "naplo", eszkoz, sor: `${naploIdobelyeg(this.ora.ido)}: ${uzenet}` });
     }
     /**
@@ -1485,30 +2764,49 @@
      * @param {Object} port
      * @param {Object} keret
      */
-    kuld(eszkoz, port, keret2) {
-      if (!port.fent) return;
-      const tul = this.szomszed(eszkoz, port);
-      if (!tul) return;
-      this.esemeny({ tipus: "keret", honnan: { eszkoz, port }, hova: tul, keret: keret2, idotartam: this.kesleltetes });
-      this.ora.utemez(this.kesleltetes, () => this.fogad(tul.eszkoz, tul.port, keret2));
+    kuld(eszkoz, port2, keret2) {
+      if (!port2.fent) return;
+      const k = this.kabelVege(eszkoz, port2);
+      if (!k) return;
+      const tul = k.a.eszkoz === eszkoz && k.a.port === port2 ? k.b : k.a;
+      if (k.keses && keret2.adat && (keret2.tipus === "ipv4" || keret2.tipus === "ipv6")) {
+        keret2 = { ...keret2, adat: { ...keret2.adat, keses: (keret2.adat.keses || 0) + k.keses } };
+      }
+      const ido = this.kesleltetes * k.lassu;
+      this.esemeny({ tipus: "keret", honnan: { eszkoz, port: port2 }, hova: tul, keret: keret2, idotartam: ido });
+      this.ora.utemez(ido, () => this.fogad(tul.eszkoz, tul.port, keret2));
     }
     /** @private – egy keret megérkezett egy portra */
-    fogad(eszkoz, port, keret2) {
-      if (!port.fent) return;
-      if (eszkoz.tipus === "switch") kapcsoloFogad(this, eszkoz, port, keret2);
-      else vegpontFogad(this, eszkoz, port, keret2);
+    fogad(eszkoz, port2, keret2) {
+      if (!port2.fent) return;
+      if (eszkoz.tipus === "switch") kapcsoloFogad(this, eszkoz, port2, keret2);
+      else if (eszkoz.tipus === "router") routerFogad(this, eszkoz, port2, keret2);
+      else vegpontFogad(this, eszkoz, port2, keret2);
     }
     /** Eldobott keret (a nézet egy jelet tesz ki, a tanuló láthatja, hol akadt el a csomag). */
-    eldob(eszkoz, port, keret2, ok) {
-      this.esemeny({ tipus: "eldobva", eszkoz, port, keret: keret2, ok });
+    eldob(eszkoz, port2, keret2, ok) {
+      this.esemeny({ tipus: "eldobva", eszkoz, port: port2, keret: keret2, ok });
     }
     /**
      * Egy port beállítása megváltozott (shutdown / no shutdown). Kiszámolja, működik-e a kábel,
      * és ha változott, kiírja a konzolüzeneteket – a valódi eszközhöz hasonló időzítéssel.
      */
-    portValtozott(eszkoz, port) {
-      const k = this.kabelVege(eszkoz, port);
+    portValtozott(eszkoz, port2) {
+      const k = this.kabelVege(eszkoz, port2);
       if (!k) {
+        if (eszkoz.tipus === "router") {
+          if (port2.tipus === "Loopback") {
+            const fent = !port2.leallitva;
+            if (fent !== port2.fent) {
+              port2.fent = fent;
+              if (fent) this.naplo(eszkoz, `%LINK-3-UPDOWN: Interface ${port2.nev}, changed state to up`);
+              this.naplo(eszkoz, `%LINEPROTO-5-UPDOWN: Line protocol on Interface ${port2.nev}, changed state to ${fent ? "up" : "down"}`);
+            }
+          } else if (!port2.leallitva) {
+            this.naplo(eszkoz, `%LINK-3-UPDOWN: Interface ${port2.nev}, changed state to down`);
+          }
+          ripPortValtozott(this, eszkoz, port2);
+        }
         this.esemeny({ tipus: "allapot" });
         return;
       }
@@ -1521,6 +2819,10 @@
           for (const v of vegek) {
             v.port.fent = false;
             if (v.eszkoz.tipus === "switch") macTorolPort(v.eszkoz, v.port.nev);
+            if (v.eszkoz.tipus === "router") {
+              szomszedTorol(v.eszkoz, v.port.nev);
+              ripPortValtozott(this, v.eszkoz, v.port);
+            }
             if (!v.port.leallitva) this.naplo(v.eszkoz, `%LINK-3-UPDOWN: Interface ${v.port.nev}, changed state to down`);
           }
           k.fuggo.push(this.ora.utemez(PROTOKOLL_LE_IDO, () => {
@@ -1543,27 +2845,28 @@
           }
           if (k.a.eszkoz.tipus === "switch") vtpTrunkValtozas(k.a.eszkoz, k.a.port);
           else if (k.b.eszkoz.tipus === "switch") vtpTrunkValtozas(k.b.eszkoz, k.b.port);
+          for (const v of vegek) if (v.eszkoz.tipus === "router") ripPortValtozott(this, v.eszkoz, v.port);
           this.esemeny({ tipus: "allapot" });
         }));
       }
       this.esemeny({ tipus: "allapot" });
     }
   };
-  function portValtozott(eszkoz, port) {
-    if (eszkoz.halozat) eszkoz.halozat.portValtozott(eszkoz, port);
+  function portValtozott(eszkoz, port2) {
+    if (eszkoz.halozat) eszkoz.halozat.portValtozott(eszkoz, port2);
   }
 
   // src/gyartok/ios/parancsok/interfesz.js
   var INTERFACE_SZO = { szo: "interface", sugo: "Interfész (port) kiválasztása a beállításhoz" };
   var IF_MODOK = ["konfig-if", "konfig-if-tartomany"];
-  var interfeszParancsok = [
-    {
-      modok: ["konfig"],
-      szavak: [INTERFACE_SZO, { param: "interfesz", kulcs: "interfesz", sugo: "Az interfész neve" }],
-      vegrehajt(ctx, { interfesz }) {
-        ctx.modValt("konfig-if", { portok: [interfesz] });
-      }
-    },
+  var interfeszValaszto = {
+    modok: ["konfig"],
+    szavak: [INTERFACE_SZO, { param: "interfesz", kulcs: "interfesz", sugo: "Az interfész neve" }],
+    vegrehajt(ctx, { interfesz }) {
+      ctx.modValt("konfig-if", { portok: [interfesz] });
+    }
+  };
+  var interfeszKozos = [
     {
       modok: ["konfig"],
       szavak: [
@@ -1602,6 +2905,7 @@
       }
     }
   ];
+  var interfeszParancsok = [interfeszValaszto, ...interfeszKozos];
 
   // src/gyartok/ios/kimenetek/vlan-brief.js
   var PORT_OSZLOP_SZELESSEG = 31;
@@ -1630,9 +2934,9 @@
     const szamok = Object.keys(sw.vlanok).map(Number).sort((a, b) => a - b);
     for (const szam of szamok) {
       const vlan = sw.vlanok[szam];
-      const allapot2 = vlan.tamogatott === false ? "act/unsup" : "active";
+      const allapot3 = vlan.tamogatott === false ? "act/unsup" : "active";
       const portok = sw.portok.filter((p) => p.accessVlan === szam && uzemmod(sw, p) !== "trunk").map((p) => p.rovid);
-      const elso = `${String(szam).padEnd(4)} ${vlan.nev.padEnd(32)} ${allapot2.padEnd(9)} `;
+      const elso = `${String(szam).padEnd(4)} ${vlan.nev.padEnd(32)} ${allapot3.padEnd(9)} `;
       const ps = portSorok(portok);
       sorok.push((elso + (ps[0] || "")).trimEnd());
       for (const folytatas of ps.slice(1)) sorok.push(BEHUZAS + folytatas);
@@ -1709,7 +3013,7 @@
     const portok = sw.portok.filter((p) => p.mod === "trunk" || p.mod !== "access" && uzemmod(sw, p) === "trunk");
     if (portok.length === 0) return [];
     const aktivak = Object.keys(sw.vlanok).map(Number).filter((n) => n < 1002 || n > 1005).filter((n) => vlanAktiv(sw, n));
-    const sor2 = (port, szoveg) => `${port.padEnd(12)}${szoveg}`;
+    const sor2 = (port2, szoveg) => `${port2.padEnd(12)}${szoveg}`;
     const s = ["", "Port        Mode             Encapsulation  Status        Native vlan"];
     for (const p of portok) {
       s.push(sor2(p.rovid, `${MOD_NEV[p.mod].padEnd(17)}${"802.1q".padEnd(15)}${(p.fent ? "trunking" : "other").padEnd(14)}${p.nativVlan}`));
@@ -1726,16 +3030,16 @@
   function showInterfacesStatus(sw) {
     const s = ["", "Port      Name               Status       Vlan       Duplex  Speed Type"];
     for (const p of sw.portok) {
-      let allapot2;
-      if (p.leallitva) allapot2 = "disabled";
-      else if (p.fent) allapot2 = "connected";
-      else allapot2 = "notconnect";
+      let allapot3;
+      if (p.leallitva) allapot3 = "disabled";
+      else if (p.fent) allapot3 = "connected";
+      else allapot3 = "notconnect";
       const vlan = p.fent && uzemmod(sw, p) === "trunk" ? "trunk" : String(p.accessVlan);
       const giga = p.tipus === "GigabitEthernet";
       const duplex = p.fent ? "a-full" : "auto";
       const sebesseg = p.fent ? giga ? "a-1000" : "a-100" : "auto";
       const tipus = giga ? "10/100/1000BaseTX" : "10/100BaseTX";
-      s.push(`${p.rovid.padEnd(9)} ${"".padEnd(18)} ${allapot2.padEnd(12)} ${vlan.padEnd(10)} ${duplex.padStart(6)} ${sebesseg.padStart(6)} ${tipus}`);
+      s.push(`${p.rovid.padEnd(9)} ${"".padEnd(18)} ${allapot3.padEnd(12)} ${vlan.padEnd(10)} ${duplex.padStart(6)} ${sebesseg.padStart(6)} ${tipus}`);
     }
     return s;
   }
@@ -1752,8 +3056,8 @@
     const m = /^([A-Za-z]+)(.*)$/.exec(nev);
     return (ROVID_TIPUSNEV[m[1]] || m[1]) + m[2];
   }
-  function sor(vlan, mac, tipus, port) {
-    return `${String(vlan).padStart(4)}    ${mac}    ${tipus.padEnd(8)}    ${port}`;
+  function sor(vlan, mac, tipus, port2) {
+    return `${String(vlan).padStart(4)}    ${mac}    ${tipus.padEnd(8)}    ${port2}`;
   }
   function showMacTabla(sw, { csakDinamikus = false } = {}) {
     const s = [
@@ -2144,22 +3448,1262 @@
       "switchport voice"
     ]
   };
-  var megNincsParancsok = Object.entries(LISTA).flatMap(
-    ([mod, nevek]) => nevek.map((nev) => ({
-      modok: [mod],
-      // Csak az utolsó szó új; az előtte lévők (pl. switchport) már meglévő parancsok szavai.
-      szavak: nev.split(" ").map((szo) => ({ szo, sugo: MEG_NINCS })),
-      nincsMeg: true,
-      vegrehajt(ctx) {
-        ctx.kiir(`[Szimulátor] A(z) „${nev}” parancs a valódi eszközön létezik, de a szimulátorban még nincs meg.`, "");
+  function megNincsBol(lista2) {
+    return Object.entries(lista2).flatMap(
+      ([mod, nevek]) => nevek.map((nev) => ({
+        modok: [mod],
+        // Csak az utolsó szó új; az előtte lévők (pl. switchport) már meglévő parancsok szavai.
+        szavak: nev.split(" ").map((szo) => ({ szo, sugo: MEG_NINCS })),
+        nincsMeg: true,
+        vegrehajt(ctx) {
+          ctx.kiir(`[Szimulátor] A(z) „${nev}” parancs a valódi eszközön létezik, de a szimulátorban még nincs meg.`, "");
+        }
+      }))
+    );
+  }
+  var megNincsParancsok = megNincsBol(LISTA);
+  var routerMegNincsParancsok = megNincsBol({
+    felhasznalo: [
+      "connect",
+      "disconnect",
+      "ssh",
+      "telnet",
+      "terminal",
+      "show interfaces",
+      "show version",
+      "show clock",
+      "show cdp",
+      "show ipv6 neighbors",
+      "show ip ospf",
+      "show ip eigrp"
+    ],
+    priv: [
+      "clock",
+      "connect",
+      "copy",
+      "delete",
+      "dir",
+      "disconnect",
+      "erase",
+      "more",
+      "reload",
+      "setup",
+      "ssh",
+      "telnet",
+      "terminal",
+      "write",
+      "show interfaces",
+      "show version",
+      "show clock",
+      "show cdp",
+      "show startup-config",
+      "show ipv6 neighbors",
+      "show ip ospf",
+      "show ip eigrp",
+      "debug ip ospf",
+      "debug ip icmp",
+      "clear arp-cache",
+      "clear ipv6"
+    ],
+    konfig: [
+      "aaa",
+      "access-list",
+      "banner",
+      "boot",
+      "cdp",
+      "clock",
+      "crypto",
+      "enable",
+      "line",
+      "logging",
+      "ntp",
+      "service",
+      "snmp-server",
+      "username",
+      "ip dhcp",
+      "ip domain-name",
+      "ip nat",
+      "ip ssh",
+      "ip access-list",
+      "ip name-server",
+      "router ospf",
+      "router eigrp",
+      "ipv6 dhcp",
+      "ipv6 access-list"
+    ],
+    "konfig-if": [
+      "cdp",
+      "description",
+      "duplex",
+      "speed",
+      "encapsulation",
+      "ip nat",
+      "ip ospf",
+      "ip helper-address",
+      "ip access-group",
+      "ip summary-address",
+      "ipv6 ospf",
+      "ipv6 nd"
+    ],
+    "konfig-router": ["distance", "distribute-list", "maximum-paths", "neighbor", "offset-list", "redistribute"],
+    "konfig-rtr": ["distance", "maximum-paths", "redistribute", "split-horizon", "poison-reverse", "timers"]
+  });
+
+  // src/modell/router.js
+  var ALAP_ROUTER_HOSTNAME = "Router";
+  var ROUTER_ROVID = { GigabitEthernet: "Gi", Serial: "Se", Loopback: "Lo" };
+  var LOOPBACK_MAX = 99;
+  function ujPort2(hostname, tipus, szam) {
+    return {
+      nev: tipus + szam,
+      rovid: ROUTER_ROVID[tipus] + szam,
+      tipus,
+      szam,
+      leallitva: tipus !== "Loopback",
+      fent: false,
+      mac: macNevbol(`router:${hostname}:${tipus}${szam}`),
+      ip: "",
+      maszk: "",
+      ipv6: [],
+      linkLocal: "",
+      ipv6Be: false,
+      ripng: "",
+      ripngAlap: ""
+    };
+  }
+  function ujRip() {
+    return {
+      verzio: null,
+      halozatok: [],
+      passziv: [],
+      autoSummary: true,
+      alapUtvonal: false,
+      idozitok: { frissites: 30, ervenytelen: 180, visszatartas: 180, torles: 240 }
+    };
+  }
+  function ujRouter4331(b = {}) {
+    const hostname = b.hostname || ALAP_ROUTER_HOSTNAME;
+    const portok = [];
+    for (let i = 0; i <= 2; i++) portok.push(ujPort2(hostname, "GigabitEthernet", `0/0/${i}`));
+    for (let i = 0; i <= 1; i++) portok.push(ujPort2(hostname, "Serial", `0/1/${i}`));
+    return {
+      tipus: "router",
+      modell: "ISR4331",
+      hostname,
+      portok,
+      /** IPv4 ARP-gyorstár: ip → { mac, port, ido } */
+      arpTabla: {},
+      /** IPv6-szomszédok (ND): cím (normál alak) → { mac, port, ido } */
+      ndTabla: {},
+      /** ip route: { halozat, maszk, kovetkezo?, interfesz? } (szövegként) */
+      statikus: [],
+      /** ipv6 route: { prefix: 'X::/n', kovetkezo?, interfesz? } */
+      statikus6: [],
+      ipv6Routing: false,
+      /** @type {RipBeallitas|null} */
+      rip: null,
+      /** RIPng-folyamatok: név → {} (a beállítások az interfészeken vannak) */
+      ripng: {},
+      /** debug ip rip, debug ipv6 rip */
+      debug: { rip: false, ripng: false }
+    };
+  }
+  function routerPort(r, nev) {
+    return r.portok.find((p) => p.nev === nev);
+  }
+  function loopbackLetrehoz(r, szam) {
+    const nev = `Loopback${szam}`;
+    let p = routerPort(r, nev);
+    if (!p) {
+      p = ujPort2(r.hostname, "Loopback", String(szam));
+      p.fent = true;
+      r.portok.push(p);
+      r.portok.sort(portSorrend);
+    }
+    return p;
+  }
+  var TIPUS_SORREND = { GigabitEthernet: 0, Serial: 1, Loopback: 2 };
+  function portSorrend(a, b) {
+    if (a.tipus !== b.tipus) return TIPUS_SORREND[a.tipus] - TIPUS_SORREND[b.tipus];
+    const x = a.szam.split("/").map(Number);
+    const y = b.szam.split("/").map(Number);
+    for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0);
+    return 0;
+  }
+  function routerPortTipusok(r) {
+    const e = {};
+    for (const p of r.portok) if (p.tipus !== "Loopback") (e[p.tipus] = e[p.tipus] || []).push(p.szam);
+    e.Loopback = [];
+    for (let i = 0; i <= LOOPBACK_MAX; i++) e.Loopback.push(String(i));
+    return e;
+  }
+
+  // src/gyartok/ios/parancsok/router.js
+  var IP = { szo: "ip", sugo: "IPv4-beállítások" };
+  var IPV6 = { szo: "ipv6", sugo: "IPv6-beállítások" };
+  var ADDRESS = { szo: "address", sugo: "Az interfész címe" };
+  var ROUTE = { szo: "route", sugo: "Statikus útvonal" };
+  var RIP = { szo: "rip", sugo: "RIP (Routing Information Protocol)" };
+  var ROUTER = { szo: "router", sugo: "Forgalomirányító protokoll indítása / beállítása" };
+  var IF_MODOK3 = ["konfig-if", "konfig-if-tartomany"];
+  var EGY_IF = ["konfig-if"];
+  function portjai(ctx) {
+    return ctx.kontextus.portok.map((n) => routerPort(ctx.eszkoz, n)).filter(Boolean);
+  }
+  function valtozott(ctx, b) {
+    ripValtozott(ctx.eszkoz, b);
+    if (ctx.eszkoz.halozat) ctx.eszkoz.halozat.esemeny({ tipus: "allapot" });
+  }
+  function hexMaszk(m) {
+    return "0x" + (ipSzam(m) >>> 0).toString(16).toUpperCase().padStart(8, "0");
+  }
+  var interfeszParancsokR = [
+    {
+      modok: ["konfig"],
+      szavak: [{ szo: "interface", sugo: "Interfész (port) kiválasztása a beállításhoz" }, { param: "interfesz", kulcs: "interfesz", sugo: "Az interfész neve" }],
+      vegrehajt(ctx, { interfesz }) {
+        if (/^Loopback/.test(interfesz) && !routerPort(ctx.eszkoz, interfesz)) {
+          loopbackLetrehoz(ctx.eszkoz, Number(interfesz.slice(8)));
+          ctx.naplo(`%LINK-3-UPDOWN: Interface ${interfesz}, changed state to up`);
+          ctx.naplo(`%LINEPROTO-5-UPDOWN: Line protocol on Interface ${interfesz}, changed state to up`);
+          valtozott(ctx);
+        }
+        ctx.modValt("konfig-if", { portok: [interfesz] });
       }
-    }))
-  );
+    },
+    {
+      modok: EGY_IF,
+      szavak: [IP, ADDRESS, { param: "ipv4", kulcs: "cim", sugo: "IP-cím" }, { param: "ipv4", kulcs: "maszk", sugo: "Alhálózati maszk" }],
+      vegrehajt(ctx, { cim, maszk }) {
+        const p = portjai(ctx)[0];
+        if (!ervenyesMaszk(maszk)) {
+          ctx.kiir(`Bad mask ${hexMaszk(maszk)} for address ${cim}`);
+          return;
+        }
+        const h = prefixHossz(maszk);
+        const n = ipSzam(cim);
+        const elso = n >>> 24;
+        if (h < 31 && ((n & ~maszkSzam(h)) >>> 0 === 0 || (n | ~maszkSzam(h)) >>> 0 === 4294967295)) {
+          ctx.kiir(`Bad mask /${h} for address ${cim}`);
+          return;
+        }
+        if (elso === 0 || elso === 127 || elso >= 224) {
+          ctx.kiir(`Not a valid host address - ${cim}`);
+          return;
+        }
+        for (const q of ctx.eszkoz.portok) {
+          if (q === p || !q.ip) continue;
+          const hq = Math.min(h, prefixHossz(q.maszk));
+          if (halozatSzam(ipSzam(q.ip), hq) === halozatSzam(n, hq)) {
+            ctx.kiir(`% ${ipSzoveg(halozatSzam(n, h))} overlaps with ${q.nev}`);
+            return;
+          }
+        }
+        p.ip = cim;
+        p.maszk = maszk;
+        for (const k of Object.keys(ctx.eszkoz.arpTabla)) if (ctx.eszkoz.arpTabla[k].port === p.nev) delete ctx.eszkoz.arpTabla[k];
+        valtozott(ctx, { keres: true, csalad: 4 });
+      }
+    },
+    {
+      modok: IF_MODOK3,
+      szavak: [SZO.no, IP, { szo: "address", sugo: "Az IPv4-cím törlése" }],
+      vegrehajt(ctx) {
+        for (const p of portjai(ctx)) {
+          p.ip = "";
+          p.maszk = "";
+        }
+        valtozott(ctx, { csalad: 4 });
+      }
+    },
+    {
+      // ipv6 address 2001:DB8:ACAD:1::1/64
+      modok: EGY_IF,
+      szavak: [IPV6, ADDRESS, { param: "ipv6-prefix", kulcs: "pr", sugo: "IPv6-cím és előtaghossz (pl. 2001:DB8:1::1/64)" }],
+      vegrehajt(ctx, { pr }) {
+        const p = portjai(ctx)[0];
+        const c = ipv6Elemez(pr.cim);
+        if (linkLocalE(c)) {
+          ctx.kiir("% Use the link-local keyword to configure a link-local address");
+          return;
+        }
+        if (csoportcimE(c) || pr.hossz === 0) {
+          ctx.kiir(`% Invalid address ${pr.cim}/${pr.hossz}`);
+          return;
+        }
+        for (const q of ctx.eszkoz.portok) {
+          if (q === p) continue;
+          for (const x of q.ipv6) {
+            const hl = Math.min(x.hossz, pr.hossz);
+            if (ipv6EgyHalozat(ipv6Elemez(x.cim), c, hl)) {
+              ctx.kiir(`% ${ipv6Szoveg(ipv6Halozat(c, pr.hossz))}/${pr.hossz} overlaps with ${q.nev}`);
+              return;
+            }
+          }
+        }
+        if (!p.ipv6.some((x) => x.cim === pr.cim)) p.ipv6.push({ cim: pr.cim, hossz: pr.hossz });
+        valtozott(ctx, { keres: true, csalad: 6 });
+      }
+    },
+    {
+      // ipv6 address FE80::1 link-local
+      modok: IF_MODOK3,
+      szavak: [
+        IPV6,
+        ADDRESS,
+        { param: "ipv6", kulcs: "cim", sugo: "IPv6-cím (link-local címhez)" },
+        { szo: "link-local", sugo: "Ez a cím legyen az interfész link-local címe" }
+      ],
+      vegrehajt(ctx, { cim }) {
+        if (!linkLocalE(ipv6Elemez(cim))) {
+          ctx.kiir(`% Invalid link-local address ${cim}`);
+          return;
+        }
+        for (const p of portjai(ctx)) p.linkLocal = cim;
+        valtozott(ctx, { keres: true, csalad: 6 });
+      }
+    },
+    {
+      modok: IF_MODOK3,
+      szavak: [SZO.no, IPV6, { szo: "address", sugo: "Az IPv6-címek törlése" }],
+      vegrehajt(ctx) {
+        for (const p of portjai(ctx)) {
+          p.ipv6 = [];
+          p.linkLocal = "";
+        }
+        valtozott(ctx, { csalad: 6 });
+      }
+    },
+    {
+      modok: IF_MODOK3,
+      szavak: [SZO.no, IPV6, ADDRESS, { param: "ipv6-prefix", kulcs: "pr", sugo: "A törlendő IPv6-cím" }],
+      vegrehajt(ctx, { pr }) {
+        for (const p of portjai(ctx)) p.ipv6 = p.ipv6.filter((x) => !(x.cim === pr.cim && x.hossz === pr.hossz));
+        valtozott(ctx, { csalad: 6 });
+      }
+    },
+    {
+      modok: IF_MODOK3,
+      szavak: [IPV6, { szo: "enable", sugo: "IPv6 bekapcsolása (csak link-local címmel)" }],
+      vegrehajt(ctx) {
+        for (const p of portjai(ctx)) p.ipv6Be = true;
+        valtozott(ctx, { keres: true, csalad: 6 });
+      }
+    },
+    {
+      modok: IF_MODOK3,
+      szavak: [SZO.no, IPV6, { szo: "enable", sugo: "Az IPv6 kikapcsolása (ha nincs globális cím)" }],
+      vegrehajt(ctx) {
+        for (const p of portjai(ctx)) p.ipv6Be = false;
+        valtozott(ctx, { csalad: 6 });
+      }
+    },
+    {
+      modok: IF_MODOK3,
+      szavak: [
+        IPV6,
+        { szo: "rip", sugo: "RIPng ezen az interfészen" },
+        { param: "szo", kulcs: "nev", nev: "WORD", sugo: "A RIPng-folyamat neve" },
+        { szo: "enable", sugo: "RIPng bekapcsolása ezen az interfészen" }
+      ],
+      vegrehajt(ctx, { nev }) {
+        const r = ctx.eszkoz;
+        if (!r.ipv6Routing) {
+          ctx.kiir("% IPv6 routing not enabled");
+          return;
+        }
+        if (!r.ripng[nev]) r.ripng[nev] = {};
+        for (const p of portjai(ctx)) p.ripng = nev;
+        valtozott(ctx, { keres: true, csalad: 6 });
+      }
+    },
+    {
+      modok: IF_MODOK3,
+      szavak: [
+        SZO.no,
+        IPV6,
+        { szo: "rip", sugo: "RIPng ezen az interfészen" },
+        { param: "szo", kulcs: "nev", nev: "WORD", sugo: "A RIPng-folyamat neve" },
+        { szo: "enable", sugo: "RIPng kikapcsolása ezen az interfészen" }
+      ],
+      vegrehajt(ctx, { nev }) {
+        for (const p of portjai(ctx)) {
+          if (p.ripng === nev) {
+            p.ripng = "";
+            p.ripngAlap = "";
+          }
+        }
+        valtozott(ctx, { csalad: 6 });
+      }
+    },
+    ...["originate", "only"].map((mit) => ({
+      modok: IF_MODOK3,
+      szavak: [
+        IPV6,
+        { szo: "rip", sugo: "RIPng ezen az interfészen" },
+        { param: "szo", kulcs: "nev", nev: "WORD", sugo: "A RIPng-folyamat neve" },
+        { szo: "default-information", sugo: "Alapértelmezett útvonal (::/0) hirdetése ezen az interfészen" },
+        mit === "originate" ? { szo: "originate", sugo: "A ::/0 hirdetése a többi útvonallal együtt" } : { szo: "only", sugo: "Csak a ::/0 hirdetése (a többi útvonal nélkül)" }
+      ],
+      vegrehajt(ctx, { nev }) {
+        const r = ctx.eszkoz;
+        if (!r.ipv6Routing) {
+          ctx.kiir("% IPv6 routing not enabled");
+          return;
+        }
+        if (!r.ripng[nev]) r.ripng[nev] = {};
+        for (const p of portjai(ctx)) {
+          if (p.ripng && p.ripng !== nev) continue;
+          p.ripngAlap = mit;
+        }
+        valtozott(ctx, { csalad: 6 });
+      }
+    })),
+    {
+      modok: IF_MODOK3,
+      szavak: [
+        SZO.no,
+        IPV6,
+        { szo: "rip", sugo: "RIPng ezen az interfészen" },
+        { param: "szo", kulcs: "nev", nev: "WORD", sugo: "A RIPng-folyamat neve" },
+        { szo: "default-information", sugo: "Az alapértelmezett útvonal hirdetésének kikapcsolása" }
+      ],
+      vegrehajt(ctx) {
+        for (const p of portjai(ctx)) p.ripngAlap = "";
+        valtozott(ctx, { csalad: 6 });
+      }
+    },
+    {
+      modok: IF_MODOK3,
+      szavak: [
+        { szo: "clock", sugo: "Órajel (soros vonal DCE oldalán)" },
+        { szo: "rate", sugo: "Az órajel sebessége" },
+        { param: "szam", kulcs: "n", min: 1200, max: 8e6, nev: "<1200-8000000>", sugo: "Bit/másodperc" }
+      ],
+      vegrehajt(ctx, { n }) {
+        for (const p of portjai(ctx)) {
+          if (p.tipus !== "Serial") {
+            ctx.kiir("[Szimulátor] Órajelet csak soros interfészen lehet megadni.");
+            continue;
+          }
+          p.orajel = n;
+        }
+      }
+    },
+    {
+      modok: IF_MODOK3,
+      szavak: [
+        { szo: "bandwidth", sugo: "Az interfész sávszélessége (a protokollok számolnak vele, a RIP nem)" },
+        { param: "szam", kulcs: "n", min: 1, max: 1e7, nev: "<1-10000000>", sugo: "Sávszélesség kbit/s-ban" }
+      ],
+      vegrehajt(ctx, { n }) {
+        for (const p of portjai(ctx)) p.savszel = n;
+      }
+    },
+    {
+      modok: IF_MODOK3,
+      szavak: [SZO.no, { szo: "bandwidth", sugo: "A sávszélesség visszaállítása az alapértékre" }],
+      vegrehajt(ctx) {
+        for (const p of portjai(ctx)) delete p.savszel;
+      }
+    }
+  ];
+  var KOVETKEZO4 = { param: "ipv4", kulcs: "kovetkezo", sugo: "A következő ugrás (szomszéd router) címe" };
+  var KIMENO = { param: "interfesz", kulcs: "interfesz", sugo: "A kimenő interfész" };
+  function ipRoute(ctx, { halozat, maszk, kovetkezo, interfesz }, torol) {
+    const r = ctx.eszkoz;
+    if (!ervenyesMaszk(maszk) && maszk !== "0.0.0.0") {
+      ctx.kiir("%Inconsistent address and mask");
+      return;
+    }
+    const h = prefixHossz(maszk);
+    if (halozatSzam(ipSzam(halozat), h) !== ipSzam(halozat)) {
+      ctx.kiir("%Inconsistent address and mask");
+      return;
+    }
+    if (interfesz && !routerPort(r, interfesz)) {
+      ctx.kiir("% Interface not found");
+      return;
+    }
+    const egyezik = (s) => s.halozat === halozat && s.maszk === maszk && (s.kovetkezo || null) === (kovetkezo || null) && (s.interfesz || null) === (interfesz || null);
+    if (torol) {
+      const elotte = r.statikus.length;
+      r.statikus = r.statikus.filter((s) => !egyezik(s));
+      if (r.statikus.length === elotte) ctx.kiir("%No matching route to delete");
+    } else {
+      if (kovetkezo && r.portok.some((p) => p.ip === kovetkezo)) {
+        ctx.kiir("%Invalid next hop address (it's this router)");
+        return;
+      }
+      if (!r.statikus.some(egyezik)) r.statikus.push({ halozat, maszk, kovetkezo, interfesz });
+    }
+    valtozott(ctx, { csalad: 4 });
+  }
+  function ipv6Route(ctx, { pr, kovetkezo, interfesz }, torol) {
+    const r = ctx.eszkoz;
+    if (kovetkezo && linkLocalE(ipv6Elemez(kovetkezo)) && !interfesz) {
+      ctx.kiir("% Interface has to be specified for a link-local nexthop");
+      return;
+    }
+    const halozat = ipv6Elemez(pr.cim);
+    const prefix = `${ipv6Szoveg(ipv6Halozat(halozat, pr.hossz))}/${pr.hossz}`;
+    const egyezik = (s) => s.prefix === prefix && (s.kovetkezo || null) === (kovetkezo || null) && (s.interfesz || null) === (interfesz || null);
+    if (torol) {
+      const elotte = r.statikus6.length;
+      r.statikus6 = r.statikus6.filter((s) => !egyezik(s));
+      if (r.statikus6.length === elotte) ctx.kiir("%No matching route to delete");
+    } else if (!r.statikus6.some(egyezik)) {
+      r.statikus6.push({ prefix, kovetkezo, interfesz });
+    }
+    valtozott(ctx, { csalad: 6 });
+  }
+  function utvonalParancsok() {
+    const l = [];
+    for (const torol of [false, true]) {
+      const eleje = torol ? [SZO.no, IP, ROUTE] : [IP, ROUTE];
+      const cel = [{ param: "ipv4", kulcs: "halozat", sugo: "A célhálózat címe" }, { param: "ipv4", kulcs: "maszk", sugo: "A célhálózat maszkja" }];
+      l.push({ modok: ["konfig"], szavak: [...eleje, ...cel, KOVETKEZO4], vegrehajt: (ctx, e) => ipRoute(ctx, e, torol) });
+      l.push({ modok: ["konfig"], szavak: [...eleje, ...cel, KIMENO], vegrehajt: (ctx, e) => ipRoute(ctx, e, torol) });
+      l.push({ modok: ["konfig"], szavak: [...eleje, ...cel, KIMENO, { ...KOVETKEZO4, sugo: "A következő ugrás címe (a kimenő interfészen)" }], vegrehajt: (ctx, e) => ipRoute(ctx, e, torol) });
+      const eleje6 = torol ? [SZO.no, IPV6, ROUTE] : [IPV6, ROUTE];
+      const pr = { param: "ipv6-prefix", kulcs: "pr", sugo: "A célhálózat (előtag/hossz, pl. ::/0)" };
+      const kov6 = { param: "ipv6", kulcs: "kovetkezo", sugo: "A következő ugrás IPv6-címe" };
+      l.push({ modok: ["konfig"], szavak: [...eleje6, pr, kov6], vegrehajt: (ctx, e) => ipv6Route(ctx, e, torol) });
+      l.push({ modok: ["konfig"], szavak: [...eleje6, pr, KIMENO], vegrehajt: (ctx, e) => ipv6Route(ctx, e, torol) });
+      l.push({ modok: ["konfig"], szavak: [...eleje6, pr, KIMENO, kov6], vegrehajt: (ctx, e) => ipv6Route(ctx, e, torol) });
+    }
+    return l;
+  }
+  var RR = ["konfig-router"];
+  var ripParancsok = [
+    {
+      modok: ["konfig"],
+      szavak: [ROUTER, RIP],
+      vegrehajt(ctx) {
+        if (!ctx.eszkoz.rip) ctx.eszkoz.rip = ujRip();
+        ctx.modValt("konfig-router", { protokoll: "rip" });
+        valtozott(ctx, { csalad: 4 });
+      }
+    },
+    {
+      modok: ["konfig"],
+      szavak: [SZO.no, ROUTER, RIP],
+      vegrehajt(ctx) {
+        ctx.eszkoz.rip = null;
+        valtozott(ctx, { csalad: 4 });
+      }
+    },
+    {
+      modok: RR,
+      szavak: [{ szo: "version", sugo: "A RIP verziója" }, { param: "szam", kulcs: "v", min: 1, max: 2, nev: "<1-2>", sugo: "Verziószám (1 vagy 2)" }],
+      vegrehajt(ctx, { v }) {
+        ctx.eszkoz.rip.verzio = v;
+        valtozott(ctx, { keres: true, csalad: 4 });
+      }
+    },
+    {
+      modok: RR,
+      szavak: [SZO.no, { szo: "version", sugo: "Vissza az alapértékre (v1-et küld, v1-et és v2-t fogad)" }],
+      vegrehajt(ctx) {
+        ctx.eszkoz.rip.verzio = null;
+        valtozott(ctx, { csalad: 4 });
+      }
+    },
+    {
+      modok: RR,
+      szavak: [
+        { szo: "network", sugo: "Hálózat felvétele: ezeken az interfészeken fut a RIP, és ezeket hirdeti" },
+        { param: "ipv4", kulcs: "cim", sugo: "Hálózatcím (osztályos hálózatként tárolódik)" }
+      ],
+      vegrehajt(ctx, { cim }) {
+        const n = osztalyos(ipSzam(cim));
+        const szoveg = ipSzoveg(n.halozat);
+        const rip = ctx.eszkoz.rip;
+        if (!rip.halozatok.includes(szoveg)) {
+          rip.halozatok.push(szoveg);
+          rip.halozatok.sort((a, b) => ipSzam(a) - ipSzam(b));
+        }
+        valtozott(ctx, { keres: true, csalad: 4 });
+      }
+    },
+    {
+      modok: RR,
+      szavak: [SZO.no, { szo: "network", sugo: "Hálózat törlése a RIP-ből" }, { param: "ipv4", kulcs: "cim", sugo: "Hálózatcím" }],
+      vegrehajt(ctx, { cim }) {
+        const szoveg = ipSzoveg(osztalyos(ipSzam(cim)).halozat);
+        const rip = ctx.eszkoz.rip;
+        if (!rip.halozatok.includes(szoveg)) {
+          ctx.kiir(`%RIP: Network ${szoveg} not configured`);
+          return;
+        }
+        rip.halozatok = rip.halozatok.filter((x) => x !== szoveg);
+        valtozott(ctx, { csalad: 4 });
+      }
+    },
+    {
+      modok: RR,
+      szavak: [
+        { szo: "passive-interface", sugo: "Ezen az interfészen nem küld frissítést (a hálózatát továbbra is hirdeti)" },
+        { param: "interfesz", kulcs: "interfesz", sugo: "Az interfész neve" }
+      ],
+      vegrehajt(ctx, { interfesz }) {
+        const rip = ctx.eszkoz.rip;
+        if (!routerPort(ctx.eszkoz, interfesz)) return;
+        if (!rip.passziv.includes(interfesz)) rip.passziv.push(interfesz);
+        valtozott(ctx, { csalad: 4 });
+      }
+    },
+    {
+      modok: RR,
+      szavak: [
+        SZO.no,
+        { szo: "passive-interface", sugo: "Az interfész ismét küld frissítést" },
+        { param: "interfesz", kulcs: "interfesz", sugo: "Az interfész neve" }
+      ],
+      vegrehajt(ctx, { interfesz }) {
+        const rip = ctx.eszkoz.rip;
+        rip.passziv = rip.passziv.filter((x) => x !== interfesz);
+        valtozott(ctx, { keres: true, csalad: 4 });
+      }
+    },
+    {
+      modok: RR,
+      szavak: [{ szo: "auto-summary", sugo: "Automatikus összegzés az osztályhatáron (gyárilag bekapcsolva)" }],
+      vegrehajt(ctx) {
+        ctx.eszkoz.rip.autoSummary = true;
+        valtozott(ctx, { csalad: 4 });
+      }
+    },
+    {
+      modok: RR,
+      szavak: [SZO.no, { szo: "auto-summary", sugo: "Az automatikus összegzés kikapcsolása: az alhálózatok maszkkal együtt mennek ki" }],
+      vegrehajt(ctx) {
+        ctx.eszkoz.rip.autoSummary = false;
+        valtozott(ctx, { csalad: 4 });
+      }
+    },
+    {
+      modok: RR,
+      szavak: [{ szo: "default-information", sugo: "Alapértelmezett útvonal hirdetése" }, { szo: "originate", sugo: "A 0.0.0.0/0 hirdetése a többi routernek" }],
+      vegrehajt(ctx) {
+        ctx.eszkoz.rip.alapUtvonal = true;
+        valtozott(ctx, { csalad: 4 });
+      }
+    },
+    {
+      modok: RR,
+      szavak: [SZO.no, { szo: "default-information", sugo: "Az alapértelmezett útvonal hirdetésének kikapcsolása" }, { szo: "originate", sugo: "A 0.0.0.0/0 hirdetése" }],
+      vegrehajt(ctx) {
+        ctx.eszkoz.rip.alapUtvonal = false;
+        valtozott(ctx, { csalad: 4 });
+      }
+    },
+    {
+      modok: RR,
+      szavak: [
+        { szo: "timers", sugo: "A RIP időzítői" },
+        { szo: "basic", sugo: "Frissítés, invalid, holddown, flush (másodpercben)" },
+        { param: "szam", kulcs: "u", min: 1, max: 4294967, nev: "<1-4294967>", sugo: "Frissítési időköz (alapból 30)" },
+        { param: "szam", kulcs: "i", min: 1, max: 4294967, nev: "<1-4294967>", sugo: "Ennyi idő után érvénytelen az útvonal (alapból 180)" },
+        { param: "szam", kulcs: "hd", min: 0, max: 4294967, nev: "<0-4294967>", sugo: "Visszatartás – holddown (alapból 180)" },
+        { param: "szam", kulcs: "fl", min: 1, max: 4294967, nev: "<1-4294967>", sugo: "Ennyi idő után törlődik az útvonal (alapból 240)" }
+      ],
+      vegrehajt(ctx, { u, i, hd, fl }) {
+        ctx.eszkoz.rip.idozitok = { frissites: u, ervenytelen: i, visszatartas: hd, torles: fl };
+      }
+    },
+    {
+      modok: RR,
+      szavak: [SZO.no, { szo: "timers", sugo: "Az időzítők visszaállítása" }, { szo: "basic", sugo: "Az alapértékek: 30, 180, 180, 240" }],
+      vegrehajt(ctx) {
+        ctx.eszkoz.rip.idozitok = ujRip().idozitok;
+      }
+    },
+    // IPv6
+    {
+      modok: ["konfig"],
+      szavak: [IPV6, { szo: "unicast-routing", sugo: "IPv6-csomagok továbbítása (gyárilag kikapcsolva)" }],
+      vegrehajt(ctx) {
+        ctx.eszkoz.ipv6Routing = true;
+        valtozott(ctx, { keres: true, csalad: 6 });
+      }
+    },
+    {
+      modok: ["konfig"],
+      szavak: [SZO.no, IPV6, { szo: "unicast-routing", sugo: "Az IPv6-továbbítás kikapcsolása" }],
+      vegrehajt(ctx) {
+        ctx.eszkoz.ipv6Routing = false;
+        valtozott(ctx, { csalad: 6 });
+      }
+    },
+    {
+      modok: ["konfig"],
+      szavak: [IPV6, ROUTER, { szo: "rip", sugo: "RIPng (RIP IPv6-hoz)" }, { param: "szo", kulcs: "nev", nev: "WORD", sugo: "A folyamat neve (csak ezen a routeren számít)" }],
+      vegrehajt(ctx, { nev }) {
+        if (!ctx.eszkoz.ipv6Routing) {
+          ctx.kiir("% IPv6 routing not enabled");
+          return;
+        }
+        if (!ctx.eszkoz.ripng[nev]) ctx.eszkoz.ripng[nev] = {};
+        ctx.modValt("konfig-rtr", { ripng: nev });
+        valtozott(ctx, { csalad: 6 });
+      }
+    },
+    {
+      modok: ["konfig"],
+      szavak: [SZO.no, IPV6, ROUTER, { szo: "rip", sugo: "RIPng-folyamat törlése" }, { param: "szo", kulcs: "nev", nev: "WORD", sugo: "A folyamat neve" }],
+      vegrehajt(ctx, { nev }) {
+        delete ctx.eszkoz.ripng[nev];
+        for (const p of ctx.eszkoz.portok) {
+          if (p.ripng === nev) {
+            p.ripng = "";
+            p.ripngAlap = "";
+          }
+        }
+        valtozott(ctx, { csalad: 6 });
+      }
+    }
+  ];
+  var routerKonfigParancsok = [...interfeszParancsokR, ...utvonalParancsok(), ...ripParancsok];
+
+  // src/gyartok/ios/kimenetek/router.js
+  function kor(ms) {
+    const s = Math.max(0, Math.floor(ms / 1e3));
+    const p = (x) => String(x).padStart(2, "0");
+    return `${p(Math.floor(s / 3600))}:${p(Math.floor(s / 60) % 60)}:${p(s % 60)}`;
+  }
+  function most2(r) {
+    return r.halozat ? r.halozat.ora.ido : 0;
+  }
+  function allapotSzoveg(p) {
+    if (p.leallitva) return "administratively down";
+    return portFent(p) ? "up" : "down";
+  }
+  function showIpIntBrief(r) {
+    const s = ["Interface              IP-Address      OK? Method Status                Protocol"];
+    for (const p of r.portok) {
+      const ip = p.ip || "unassigned";
+      const mod = p.ip ? "manual" : "unset ";
+      const allapot3 = allapotSzoveg(p);
+      const proto = portFent(p) ? "up" : "down";
+      s.push(`${p.nev.padEnd(23)}${ip.padEnd(16)}YES ${mod.padEnd(7)}${allapot3.padEnd(22)}${proto}`.trimEnd());
+    }
+    return s;
+  }
+  function showIpv6IntBrief(r) {
+    const s = [];
+    for (const p of r.portok) {
+      s.push(`${p.nev.padEnd(23)}[${allapotSzoveg(p)}/${portFent(p) ? "up" : "down"}]`);
+      if (!ipv6Engedelyezve(p)) {
+        s.push("    unassigned");
+        continue;
+      }
+      s.push(`    ${ipv6Szoveg(portLinkLocal(p))}`);
+      for (const c of p.ipv6) s.push(`    ${c.cim}`);
+    }
+    return s;
+  }
+  var KODOK4 = [
+    "Codes: L - local, C - connected, S - static, R - RIP, O - OSPF, D - EIGRP",
+    "       * - candidate default"
+  ];
+  function utSorok(r, e, eleje) {
+    if (e.kod === "C" || e.kod === "L") return [`${eleje} is directly connected, ${e.utak[0].port}`];
+    if (e.lehetLe) {
+      const u = e.utak[0];
+      return [`${eleje} is possibly down, routing via ${ipSzoveg(u.kovetkezo)}, ${u.port}`];
+    }
+    const sorok = [];
+    e.utak.forEach((u, i) => {
+      let resz;
+      if (e.kod === "S" && u.kovetkezo === null) resz = `is directly connected, ${u.port}`;
+      else {
+        resz = `[${e.ad}/${e.metrika}] via ${ipSzoveg(u.kovetkezo)}`;
+        if (e.kod === "R") resz += `, ${kor(most2(r) - u.ido)}`;
+        if (u.port) resz += `, ${u.port}`;
+      }
+      if (i === 0) sorok.push(`${eleje} ${resz}`);
+      else sorok.push(`${" ".repeat(eleje.length + 1)}${resz}`);
+    });
+    return sorok;
+  }
+  function showIpRoute(r, szuro = null) {
+    const s = [...KODOK4, ""];
+    const gw = utolsoMenedek4(r);
+    if (gw && !szuro) {
+      const u = gw.utak[0];
+      s.push(`Gateway of last resort is ${u.kovetkezo !== null ? ipSzoveg(u.kovetkezo) : "0.0.0.0"} to network 0.0.0.0`);
+    } else if (!szuro) {
+      s.push("Gateway of last resort is not set");
+    } else if (gw) {
+      s.push(`Gateway of last resort is ${gw.utak[0].kovetkezo !== null ? ipSzoveg(gw.utak[0].kovetkezo) : "0.0.0.0"} to network 0.0.0.0`);
+    } else {
+      s.push("Gateway of last resort is not set");
+    }
+    s.push("");
+    const teljes = tabla4(r);
+    const kell = (e) => !szuro || szuro === "rip" && e.kod === "R" || szuro === "static" && e.kod === "S" || szuro === "connected" && (e.kod === "C" || e.kod === "L");
+    const csoportok = /* @__PURE__ */ new Map();
+    for (const e of teljes) {
+      const o = e.hossz === 0 ? { halozat: 0, hossz: 0 } : osztalyos(e.halozat);
+      const k = `${o.halozat}/${o.hossz}`;
+      if (!csoportok.has(k)) csoportok.set(k, { o, elemek: [] });
+      csoportok.get(k).elemek.push(e);
+    }
+    const kod = (e) => `${e.kod}${e.alap ? "*" : ""}`;
+    for (const { o, elemek } of [...csoportok.values()].sort((a, b) => a.o.halozat - b.o.halozat)) {
+      const latszik = elemek.filter(kell);
+      if (!latszik.length) continue;
+      if (o.hossz === 0 || elemek.length === 1 && elemek[0].hossz === o.hossz) {
+        for (const e of latszik) s.push(...utSorok(r, e, `${kod(e).padEnd(6)}${ipSzoveg(e.halozat)}/${e.hossz}`));
+        continue;
+      }
+      const maszkok = new Set(elemek.map((e) => e.hossz));
+      if (maszkok.size === 1) {
+        const h = elemek[0].hossz;
+        s.push(`      ${ipSzoveg(o.halozat)}/${h} is subnetted, ${elemek.length} subnets`);
+        for (const e of latszik) s.push(...utSorok(r, e, `${kod(e).padEnd(9)}${ipSzoveg(e.halozat)}`));
+      } else {
+        s.push(`      ${ipSzoveg(o.halozat)}/${o.hossz} is variably subnetted, ${elemek.length} subnets, ${maszkok.size} masks`);
+        for (const e of latszik) s.push(...utSorok(r, e, `${kod(e).padEnd(9)}${ipSzoveg(e.halozat)}/${e.hossz}`));
+      }
+    }
+    return s;
+  }
+  function showIpv6Route(r, szuro = null) {
+    const t = tabla6(r);
+    const kell = (e) => !szuro || szuro === "rip" && e.kod === "R" || szuro === "static" && e.kod === "S" || szuro === "connected" && (e.kod === "C" || e.kod === "L");
+    const latszik = t.filter(kell);
+    const null0 = !szuro || szuro === "connected";
+    const s = [
+      `IPv6 Routing Table - default - ${t.length + 1} entries`,
+      "Codes: C - Connected, L - Local, S - Static, R - RIP, O - OSPF Intra, D - EIGRP",
+      ""
+    ];
+    for (const e of latszik) {
+      const cim = `${ipv6Szoveg(e.halozat)}/${e.hossz}`;
+      if (e.lehetLe) {
+        s.push(`${e.kod.padEnd(4)}${cim} [${e.ad}/16]`, `     via ${ipv6Szoveg(e.utak[0].kovetkezo)}, ${e.utak[0].port}`);
+        continue;
+      }
+      s.push(`${e.kod.padEnd(4)}${cim} [${e.ad}/${e.metrika}]`);
+      for (const u of e.utak) {
+        if (e.kod === "C") s.push(`     via ${u.port}, directly connected`);
+        else if (e.kod === "L") s.push(`     via ${u.port}, receive`);
+        else if (!u.kovetkezo) s.push(`     via ${u.port}, directly connected`);
+        else s.push(`     via ${ipv6Szoveg(u.kovetkezo)}${u.port ? `, ${u.port}` : ""}`);
+      }
+    }
+    if (null0) s.push("L   FF00::/8 [0/0]", "     via Null0, receive");
+    return s;
+  }
+  function showIpProtocols(r) {
+    const s = ["*** IP Routing is NSF aware ***", ""];
+    const rip = r.rip;
+    if (!rip) return s;
+    const t = rip.idozitok;
+    const kov = ripKovetkezo(r, 4);
+    s.push(
+      'Routing Protocol is "rip"',
+      "  Outgoing update filter list for all interfaces is not set",
+      "  Incoming update filter list for all interfaces is not set",
+      `  Sending updates every ${t.frissites} seconds${kov !== null ? `, next due in ${kov} seconds` : ""}`,
+      `  Invalid after ${t.ervenytelen} seconds, hold down ${t.visszatartas}, flushed after ${t.torles}`,
+      "  Redistributing: rip"
+    );
+    const kuld2 = rip.verzio === 2 ? "2" : "1";
+    const fogad = rip.verzio === 2 ? "2" : rip.verzio === 1 ? "1" : "1 2";
+    const fogadSzoveg = rip.verzio ? `receive version ${rip.verzio}` : "receive any version";
+    s.push(`  Default version control: send version ${kuld2}, ${fogadSzoveg}`);
+    s.push("    Interface                           Send  Recv  Triggered RIP  Key-chain");
+    for (const p of ripPortok(r, 4)) {
+      if (rip.passziv.includes(p.nev)) continue;
+      s.push(`    ${p.nev.padEnd(36)}${kuld2.padEnd(6)}${fogad.padEnd(6)}     No        none`);
+    }
+    s.push(`  Automatic network summarization is ${rip.autoSummary ? "" : "not "}in effect`);
+    s.push("  Maximum path: 4", "  Routing for Networks:");
+    for (const n of rip.halozatok) s.push(`    ${n}`);
+    if (rip.passziv.length) {
+      s.push("  Passive Interface(s):");
+      for (const p of rip.passziv) s.push(`    ${p}`);
+    }
+    s.push("  Routing Information Sources:", "    Gateway         Distance      Last Update");
+    for (const f of ripForrasok(r, 4).sort((a, b) => ipSzam(a.cim) - ipSzam(b.cim))) {
+      s.push(`    ${f.cim.padEnd(15)}${"120".padStart(9)}      ${kor(most2(r) - f.ido)}`);
+    }
+    s.push("  Distance: (default is 120)", "");
+    return s;
+  }
+  function showIpv6Protocols(r) {
+    const s = ['IPv6 Routing Protocol is "connected"', 'IPv6 Routing Protocol is "application"', 'IPv6 Routing Protocol is "ND"'];
+    if (r.statikus6.length) s.push('IPv6 Routing Protocol is "static"');
+    for (const nev of Object.keys(r.ripng)) {
+      s.push(`IPv6 Routing Protocol is "rip ${nev}"`, "  Interfaces:");
+      for (const p of r.portok) if (p.ripng === nev) s.push(`    ${p.nev}`);
+      s.push("  Redistribution:", "    None");
+    }
+    s.push("");
+    return s;
+  }
+  function showIpRipDatabase(r) {
+    if (!r.rip) return [];
+    const db = ripAdatbazis(r, 4);
+    const sorok = [];
+    for (const c of db.kapcsolt) sorok.push({ h: c.halozat, l: c.hossz, s: [`${ipSzoveg(c.halozat)}/${c.hossz}    directly connected, ${c.port}`] });
+    for (const e of db.tanult) {
+      if (db.kapcsolt.some((c) => c.halozat === e.halozat && c.hossz === e.hossz)) continue;
+      const fej = `${ipSzoveg(e.halozat)}/${e.hossz}`;
+      if (e.le) {
+        sorok.push({ h: e.halozat, l: e.hossz, s: [`${fej}    is possibly down`] });
+        continue;
+      }
+      sorok.push({ h: e.halozat, l: e.hossz, s: [fej, ...e.utak.map((u) => `    [${e.metrika}] via ${ipSzoveg(u.kovetkezo)}, ${kor(most2(r) - u.ido)}, ${u.port}`)] });
+    }
+    if (r.rip.autoSummary) {
+      const fok = /* @__PURE__ */ new Map();
+      for (const x of sorok) {
+        if (x.l === 0) continue;
+        const o = osztalyos(x.h);
+        if (o.hossz < x.l) fok.set(o.halozat, o);
+      }
+      for (const o of fok.values()) sorok.push({ h: o.halozat, l: o.hossz - 0.5, s: [`${ipSzoveg(o.halozat)}/${o.hossz}    auto-summary`] });
+    }
+    if (r.rip.alapUtvonal) sorok.push({ h: 0, l: -0.5, s: ["0.0.0.0/0    auto-summary"] });
+    sorok.sort((a, b) => a.h - b.h || a.l - b.l);
+    return sorok.flatMap((x) => x.s);
+  }
+  function showIpv6Rip(r) {
+    const s = [];
+    let pid = 290;
+    for (const nev of Object.keys(r.ripng)) {
+      const sz = ripSzamlalok(r, 6);
+      const alap = r.portok.some((p) => p.ripng === nev && p.ripngAlap);
+      const t = RIPNG_IDOZITOK;
+      s.push(
+        `RIP process "${nev}", port 521, multicast-group FF02::9, pid ${pid++}`,
+        "     Administrative distance is 120. Maximum paths is 16",
+        `     Updates every ${t.frissites} seconds, expire after ${t.ervenytelen}`,
+        `     Holddown lasts ${t.visszatartas} seconds, garbage collect after ${t.torles}`,
+        "     Split horizon is on; poison reverse is off",
+        `     Default routes are ${alap ? "" : "not "}generated`,
+        `     Periodic updates ${sz.periodikus}, trigger updates ${sz.valtozasra}`,
+        "     Full Advertisement 0, Delayed Events 0",
+        "  Interfaces:"
+      );
+      for (const p of r.portok) if (p.ripng === nev) s.push(`    ${p.nev}`);
+      s.push("  Redistribution:", "    None");
+    }
+    if (!s.length) s.push("");
+    return s;
+  }
+  function showIpv6RipDatabase(r) {
+    const s = [];
+    const rib = new Map(tabla6(r).map((e) => [`${ipv6Szoveg(e.halozat)}/${e.hossz}`, e.kod]));
+    for (const nev of Object.keys(r.ripng)) {
+      s.push(`RIP process "${nev}", local RIB`);
+      if (!r.ipv6Routing) continue;
+      for (const e of ripAdatbazis(r, 6).tanult) {
+        const k = `${ipv6Szoveg(e.halozat)}/${e.hossz}`;
+        if (e.le) {
+          s.push(` ${k}, metric 16, expired`);
+          continue;
+        }
+        s.push(` ${k}, metric ${e.metrika}${rib.get(k) === "R" ? ", installed" : ""}`);
+        for (const u of e.utak) {
+          const lejar = Math.max(0, Math.ceil((u.ido + RIPNG_IDOZITOK.ervenytelen * 1e3 - most2(r)) / 1e3));
+          s.push(`     ${u.port}/${ipv6Szoveg(u.kovetkezo)}, expires in ${lejar} secs`);
+        }
+      }
+    }
+    return s;
+  }
+  function showIpArp(r) {
+    const s = ["Protocol  Address          Age (min)  Hardware Addr   Type   Interface"];
+    const sorok = [];
+    for (const p of r.portok) {
+      if (p.ip && portFent(p) && p.tipus === "GigabitEthernet") sorok.push([p.ip, "-", p.mac, p.nev]);
+    }
+    for (const [ip, b] of Object.entries(r.arpTabla)) {
+      const port2 = r.portok.find((p) => p.nev === b.port);
+      if (port2 && port2.tipus === "GigabitEthernet") sorok.push([ip, String(Math.floor((most2(r) - b.ido) / 6e4)), b.mac, b.port]);
+    }
+    sorok.sort((a, b) => ipSzam(a[0]) - ipSzam(b[0]));
+    for (const [ip, kor_, mac, port2] of sorok) {
+      s.push(`Internet  ${ip.padEnd(17)}${kor_.padStart(9)}   ${macPontos(mac)}  ARPA   ${port2}`);
+    }
+    return s;
+  }
+  function routerKonfiguracio(r) {
+    const s = [
+      "!",
+      "version 16.9",
+      "service timestamps debug datetime msec",
+      "service timestamps log datetime msec",
+      "platform qfp utilization monitor load 80",
+      "no platform punt-keepalive disable-kernel-core",
+      "!",
+      `hostname ${r.hostname}`,
+      "!",
+      "boot-start-marker",
+      "boot-end-marker",
+      "!",
+      "!",
+      "no aaa new-model",
+      "!"
+    ];
+    if (r.ipv6Routing) s.push("ipv6 unicast-routing");
+    s.push("!", "!", "!", "!");
+    for (const p of r.portok) {
+      s.push(`interface ${p.nev}`);
+      if (p.savszel) s.push(` bandwidth ${p.savszel}`);
+      s.push(p.ip ? ` ip address ${p.ip} ${p.maszk}` : " no ip address");
+      if (p.leallitva) s.push(" shutdown");
+      if (p.tipus === "GigabitEthernet") s.push(" negotiation auto");
+      if (p.tipus === "Serial" && p.orajel) s.push(` clock rate ${p.orajel}`);
+      if (p.linkLocal) s.push(` ipv6 address ${p.linkLocal} link-local`);
+      for (const c of p.ipv6) s.push(` ipv6 address ${c.cim}/${c.hossz}`);
+      if (p.ipv6Be) s.push(" ipv6 enable");
+      if (p.ripng) {
+        s.push(` ipv6 rip ${p.ripng} enable`);
+        if (p.ripngAlap) s.push(` ipv6 rip ${p.ripng} default-information ${p.ripngAlap}`);
+      }
+      s.push("!");
+    }
+    if (r.rip) {
+      const rip = r.rip;
+      s.push("router rip");
+      if (rip.verzio) s.push(` version ${rip.verzio}`);
+      const t = rip.idozitok;
+      if (t.frissites !== 30 || t.ervenytelen !== 180 || t.visszatartas !== 180 || t.torles !== 240) {
+        s.push(` timers basic ${t.frissites} ${t.ervenytelen} ${t.visszatartas} ${t.torles}`);
+      }
+      for (const p of rip.passziv) s.push(` passive-interface ${p}`);
+      for (const n of rip.halozatok) s.push(` network ${n}`);
+      if (rip.alapUtvonal) s.push(" default-information originate");
+      if (!rip.autoSummary) s.push(" no auto-summary");
+      s.push("!");
+    }
+    s.push("ip forward-protocol nd", "no ip http server", "ip http secure-server");
+    for (const st of r.statikus) {
+      s.push(`ip route ${st.halozat} ${st.maszk}${st.interfesz ? ` ${st.interfesz}` : ""}${st.kovetkezo ? ` ${st.kovetkezo}` : ""}`);
+    }
+    s.push("!");
+    for (const st of r.statikus6) {
+      s.push(`ipv6 route ${st.prefix}${st.interfesz ? ` ${st.interfesz}` : ""}${st.kovetkezo ? ` ${st.kovetkezo}` : ""}`);
+    }
+    for (const nev of Object.keys(r.ripng)) s.push(`ipv6 router rip ${nev}`);
+    s.push(
+      "!",
+      "!",
+      "!",
+      "control-plane",
+      "!",
+      "!",
+      "line con 0",
+      " transport input none",
+      " stopbits 1",
+      "line aux 0",
+      " stopbits 1",
+      "line vty 0 4",
+      " login",
+      "!",
+      "!",
+      "end"
+    );
+    return s;
+  }
+  function showRunningConfigRouter(r) {
+    const torzs = routerKonfiguracio(r);
+    const bajt = torzs.reduce((o, sor2) => o + sor2.length + 1, 0);
+    return ["Building configuration...", "", `Current configuration : ${bajt} bytes`, ...torzs, ""];
+  }
+
+  // src/gyartok/ios/parancsok/router-exec.js
+  var EXEC2 = ["felhasznalo", "priv"];
+  var SHOW2 = { szo: "show", sugo: "Információk megjelenítése az eszközről" };
+  var IP2 = { szo: "ip", sugo: "IPv4-információk" };
+  var IPV62 = { szo: "ipv6", sugo: "IPv6-információk" };
+  var ROUTE2 = { szo: "route", sugo: "A routing tábla (melyik hálózat merre érhető el)" };
+  var RIP2 = { szo: "rip", sugo: "Csak a RIP-ből tanult útvonalak" };
+  var INTERFACE = { szo: "interface", sugo: "Az interfészek IP-beállításai" };
+  var BRIEF = { szo: "brief", sugo: "Rövid összefoglaló: interfészenként cím és állapot" };
+  var PROTOCOLS = { szo: "protocols", sugo: "A futó forgalomirányító protokollok és beállításaik" };
+  var DATABASE = { szo: "database", sugo: "A RIP adatbázisa (minden tanult útvonal)" };
+  function lista(modok, szavak, fn, lapozhato = true) {
+    return { modok, szavak, lapozhato, vegrehajt: (ctx, e) => ctx.kiir(...fn(ctx.eszkoz, e)) };
+  }
+  var szurok = [
+    [null, null],
+    ["rip", RIP2],
+    ["connected", { szo: "connected", sugo: "Csak a közvetlenül kapcsolt hálózatok" }],
+    ["static", { szo: "static", sugo: "Csak a statikus útvonalak" }]
+  ];
+  var showParancsok2 = [
+    lista(["priv"], [SHOW2, { szo: "running-config", sugo: "Az éppen futó (érvényes) konfiguráció" }], (r) => showRunningConfigRouter(r)),
+    lista(EXEC2, [SHOW2, IP2, INTERFACE, BRIEF], (r) => showIpIntBrief(r)),
+    lista(EXEC2, [SHOW2, IPV62, INTERFACE, BRIEF], (r) => showIpv6IntBrief(r)),
+    ...szurok.map(([sz, szo]) => lista(EXEC2, [SHOW2, IP2, ROUTE2, ...szo ? [szo] : []], (r) => showIpRoute(r, sz))),
+    ...szurok.map(([sz, szo]) => lista(EXEC2, [SHOW2, IPV62, ROUTE2, ...szo ? [szo] : []], (r) => showIpv6Route(r, sz))),
+    lista(EXEC2, [SHOW2, IP2, PROTOCOLS], (r) => showIpProtocols(r)),
+    lista(EXEC2, [SHOW2, IPV62, PROTOCOLS], (r) => showIpv6Protocols(r)),
+    lista(EXEC2, [SHOW2, IP2, { szo: "rip", sugo: "RIP-információk" }, DATABASE], (r) => showIpRipDatabase(r)),
+    lista(EXEC2, [SHOW2, IPV62, { szo: "rip", sugo: "RIPng-folyamatok és beállításaik" }], (r) => showIpv6Rip(r)),
+    lista(EXEC2, [SHOW2, IPV62, { szo: "rip", sugo: "RIPng-információk" }, { szo: "database", sugo: "A RIPng adatbázisa" }], (r) => showIpv6RipDatabase(r)),
+    lista(EXEC2, [SHOW2, IP2, { szo: "arp", sugo: "Az ARP-tábla: IP-cím → MAC-cím" }], (r) => showIpArp(r))
+  ];
+  function pingFolyamat(r, cel) {
+    return {
+      folyamat: (kiir, kesz, hozzafuz) => {
+        let jelek = "";
+        const fuz = (j) => {
+          jelek += j;
+          if (hozzafuz) hozzafuz(j);
+        };
+        const idok = [];
+        let i = 0;
+        const egy = () => {
+          if (i >= 5 || !r.halozat) return vege();
+          i++;
+          routerPing(r.halozat, r, cel, (e) => {
+            if (e.fajta === "valasz") {
+              idok.push(Math.max(1, e.keses || 0));
+              fuz("!");
+            } else if (e.fajta === "elerhetetlen") fuz("U");
+            else if (e.fajta === "ido-lejart") fuz("&");
+            else fuz(".");
+            r.halozat.ora.utemez(e.fajta === "elerhetetlen" ? 300 : 1, egy);
+          });
+        };
+        const vege = () => {
+          if (!hozzafuz) kiir(jelek.padEnd(5, "."));
+          const db = idok.length;
+          let sor2 = `Success rate is ${Math.round(db / 5 * 100)} percent (${db}/5)`;
+          if (db) {
+            const min = Math.min(...idok);
+            const max = Math.max(...idok);
+            const atl = Math.round(idok.reduce((a, b) => a + b, 0) / db);
+            sor2 += `, round-trip min/avg/max = ${min}/${atl}/${max} ms`;
+          }
+          kiir(sor2);
+          kesz();
+        };
+        egy();
+      }
+    };
+  }
+  function ping(ctx, { cim }) {
+    const cel = cim.includes(":") ? ipv6Normal(cim) : cim;
+    ctx.kiir("Type escape sequence to abort.", `Sending 5, 100-byte ICMP Echos to ${cel}, timeout is 2 seconds:`, pingFolyamat(ctx.eszkoz, cel));
+  }
+  var TRACE_TURELEM = 5;
+  function traceFolyamat(r, cel) {
+    return {
+      folyamat: (kiir, kesz) => {
+        let ttl = 1;
+        let ures = 0;
+        const ugras = () => {
+          if (!r.halozat || ttl > 30) return kesz();
+          const valaszok = [];
+          let proba = 0;
+          const egy = () => {
+            proba++;
+            routerPing(r.halozat, r, cel, (e) => {
+              valaszok.push(e);
+              if (proba < 3) return r.halozat.ora.utemez(1, egy);
+              return sorKesz();
+            }, { ttl, varakozas: 3e3 });
+          };
+          const sorKesz = () => {
+            let sor2 = `  ${ttl}`;
+            let elozo = null;
+            let celba = false;
+            for (const v of valaszok) {
+              if (v.fajta === "idotullepes") {
+                sor2 += " *";
+                continue;
+              }
+              if (v.kitol !== elozo) {
+                sor2 += ` ${v.kitol}`;
+                elozo = v.kitol;
+              }
+              if (v.fajta === "elerhetetlen") {
+                sor2 += " !N";
+                celba = true;
+              } else {
+                sor2 += ` ${Math.max(1, v.keses || 0)} msec`;
+                if (v.fajta === "valasz") celba = true;
+              }
+            }
+            kiir(sor2);
+            ures = valaszok.every((v) => v.fajta === "idotullepes") ? ures + 1 : 0;
+            if (celba) return kesz();
+            if (ures >= TRACE_TURELEM) {
+              kiir("[Szimulátor] Több ugrás óta nem jön válasz – a valódi eszköz 30 ugrásig próbálkozna (megszakítás: Ctrl+Shift+6).");
+              return kesz();
+            }
+            ttl++;
+            ugras();
+          };
+          egy();
+        };
+        ugras();
+      }
+    };
+  }
+  function traceroute(ctx, { cim }) {
+    const cel = cim.includes(":") ? ipv6Normal(cim) : cim;
+    ctx.kiir("Type escape sequence to abort.", `Tracing the route to ${cel}`, "VRF info: (vrf in name/id, vrf out name/id)", traceFolyamat(ctx.eszkoz, cel));
+  }
+  var CIM4 = { param: "ipv4", kulcs: "cim", sugo: "A cél IPv4-címe" };
+  var CIM6 = { param: "ipv6", kulcs: "cim", sugo: "A cél IPv6-címe" };
+  var PING = { szo: "ping", sugo: "Elérhető-e egy cím (ICMP echo)" };
+  var TRACE = { szo: "traceroute", sugo: "Merre jutnak el a csomagok a célig (ugrásonként)" };
+  var DEBUG = { szo: "debug", sugo: "Hibakereső üzenetek bekapcsolása" };
+  var UNDEBUG = { szo: "undebug", sugo: "Hibakereső üzenetek kikapcsolása" };
+  var RIP_D = { szo: "rip", sugo: "A RIP üzenetei (küldött és fogadott frissítések)" };
+  function debugAll(ctx, mit, be) {
+    ctx.eszkoz.debug[mit] = be;
+    const nev = mit === "rip" ? "RIP protocol debugging" : "RIP Routing Protocol debugging";
+    ctx.kiir(`${nev} is ${be ? "on" : "off"}`);
+  }
+  function mindKi(ctx) {
+    ctx.eszkoz.debug.rip = false;
+    ctx.eszkoz.debug.ripng = false;
+    ctx.kiir("All possible debugging has been turned off");
+  }
+  var egyebParancsok = [
+    { modok: EXEC2, szavak: [PING, CIM4], vegrehajt: ping },
+    { modok: EXEC2, szavak: [PING, CIM6], vegrehajt: ping },
+    { modok: EXEC2, szavak: [TRACE, CIM4], vegrehajt: traceroute },
+    { modok: EXEC2, szavak: [TRACE, CIM6], vegrehajt: traceroute },
+    { modok: ["priv"], szavak: [DEBUG, { szo: "ip", sugo: "IPv4-es hibakeresés" }, RIP_D], vegrehajt: (ctx) => debugAll(ctx, "rip", true) },
+    { modok: ["priv"], szavak: [DEBUG, { szo: "ipv6", sugo: "IPv6-os hibakeresés" }, { szo: "rip", sugo: "A RIPng üzenetei" }], vegrehajt: (ctx) => debugAll(ctx, "ripng", true) },
+    { modok: ["priv"], szavak: [UNDEBUG, { szo: "ip", sugo: "IPv4-es hibakeresés" }, RIP_D], vegrehajt: (ctx) => debugAll(ctx, "rip", false) },
+    { modok: ["priv"], szavak: [UNDEBUG, { szo: "ipv6", sugo: "IPv6-os hibakeresés" }, { szo: "rip", sugo: "A RIPng üzenetei" }], vegrehajt: (ctx) => debugAll(ctx, "ripng", false) },
+    { modok: ["priv"], szavak: [UNDEBUG, { szo: "all", sugo: "Minden hibakereső üzenet kikapcsolása" }], vegrehajt: mindKi },
+    { modok: ["priv"], szavak: [SZO.no, { szo: "debug", sugo: "Hibakereső üzenetek kikapcsolása" }, { szo: "all", sugo: "Mindegyiket" }], vegrehajt: mindKi },
+    { modok: ["priv"], szavak: [SZO.no, { szo: "debug", sugo: "Hibakereső üzenetek kikapcsolása" }, { szo: "ip", sugo: "IPv4-es hibakeresés" }, RIP_D], vegrehajt: (ctx) => debugAll(ctx, "rip", false) },
+    {
+      modok: ["priv"],
+      szavak: [
+        { szo: "clear", sugo: "Törlés (táblák, számlálók)" },
+        { szo: "ip", sugo: "IPv4-táblák" },
+        { szo: "route", sugo: "A routing tábla" },
+        { szo: "*", sugo: "Minden tanult útvonal törlése (a RIP újra megkérdezi a szomszédokat)" }
+      ],
+      vegrehajt(ctx) {
+        ripTorol(ctx.eszkoz);
+      }
+    }
+  ];
+  var routerExecParancsok = [...showParancsok2, ...egyebParancsok];
 
   // src/gyartok/ios/index.js
   var TIPUS_LEIRASOK = {
     FastEthernet: "FastEthernet (100 Mbit/s) port",
-    GigabitEthernet: "GigabitEthernet (1 Gbit/s) port"
+    GigabitEthernet: "GigabitEthernet (1 Gbit/s) port",
+    Serial: "Soros (WAN) port",
+    Loopback: "Loopback (virtuális, mindig működő) interfész"
   };
   var ios = {
     nev: "ios",
@@ -2188,6 +4732,16 @@
       if (MODOK[ctx.mod].konfig) ctx.modValt("priv");
     }
   };
+  var iosRouter = {
+    ...ios,
+    parancsok: [...alapParancsok, ...interfeszKozos, ...routerKonfigParancsok, ...routerExecParancsok, ...routerMegNincsParancsok],
+    kornyezet(eszkoz) {
+      return { portTipusok: routerPortTipusok(eszkoz), tipusLeirasok: TIPUS_LEIRASOK };
+    }
+  };
+  function szemelyiseg(eszkoz) {
+    return eszkoz && eszkoz.tipus === "router" ? iosRouter : ios;
+  }
 
   // src/nezet/terminal.js
   var OLDAL_SOROK = 23;
@@ -2340,8 +4894,22 @@
       } else {
         for (const e of elemek) {
           if (typeof e === "string") this.kiirSor(e);
-          else if (e.folyamat) await new Promise((kesz) => e.folyamat((sor2) => this.kiirSor(sor2), kesz));
-          else if (e.torles) this.kimenet.textContent = "";
+          else if (e.folyamat) {
+            let folytatott = null;
+            const kiir = (sor2) => {
+              folytatott = null;
+              this.kiirSor(sor2);
+            };
+            const hozzafuz = (t) => {
+              if (!folytatott) {
+                folytatott = elem("div", "hsz-terminal__kisor");
+                this.kimenet.append(folytatott);
+              }
+              folytatott.textContent += t;
+              this.vagas();
+            };
+            await new Promise((kesz) => e.folyamat(kiir, kesz, hozzafuz));
+          } else if (e.torles) this.kimenet.textContent = "";
           else await new Promise((r) => setTimeout(r, e.varj));
         }
       }
@@ -2491,21 +5059,21 @@
     /** Előzmények: -1 = régebbi, +1 = újabb. */
     tortenetLep(irany) {
       if (this.foglalt) return;
-      const lista = this.mm.tortenet();
-      if (lista.length === 0) return;
+      const lista2 = this.mm.tortenet();
+      if (lista2.length === 0) return;
       if (this.tortenetIndex === null) {
         if (irany > 0) return;
         this.piszkozat = this.bevitel.value;
-        this.tortenetIndex = lista.length;
+        this.tortenetIndex = lista2.length;
       }
       const uj = this.tortenetIndex + irany;
       if (uj < 0) return;
-      if (uj >= lista.length) {
+      if (uj >= lista2.length) {
         this.tortenetIndex = null;
         this.bevitel.value = this.piszkozat;
       } else {
         this.tortenetIndex = uj;
-        this.bevitel.value = lista[uj];
+        this.bevitel.value = lista2[uj];
       }
       const n = this.bevitel.value.length;
       requestAnimationFrame(() => this.bevitel.setSelectionRange(n, n));
@@ -2522,7 +5090,11 @@
   }
   var SW = { szel: 520, mag: 96, portSzel: 22, portMag: 17, koz: 4, nagyitas: 0.6 };
   var PC = { szel: 80, mag: 66 };
+  var RT = { szel: 76, mag: 48 };
   var MOD_SZOVEG = { access: "access", trunk: "trunk", "dinamikus-auto": "dynamic auto", "dinamikus-kezdemenyezo": "dynamic desirable" };
+  function adatFeliratok(adat) {
+    return adat && adat.feliratok || [];
+  }
   function swPortHely(p) {
     const sorszam = Number(p.szam.split("/")[1]);
     const kezdX = 82;
@@ -2548,10 +5120,13 @@
      *          meret?: {szel: number, mag: number}}} adat
      * @param {{valaszt?: (eszkoz: Object) => void, sebesseg?: () => number}} [beallitasok]
      */
-    constructor(szulo, { elemek, halozat, meret }, beallitasok = {}) {
+    constructor(szulo, { elemek, halozat, meret, feliratok }, beallitasok = {}) {
       this.elemek = elemek;
       this.halozat = halozat;
       this.vanVtp = elemek.filter((e) => e.tipus === "switch").length > 1;
+      this.vanSwitch = elemek.some((e) => e.tipus === "switch");
+      this.vanRouter = elemek.some((e) => e.tipus === "router");
+      this.vanSoros = halozat.kabelek.some((k) => k.soros);
       this.beallitasok = beallitasok;
       const m = meret || { szel: 800, mag: 400 };
       this.doboz = document.createElement("section");
@@ -2559,6 +5134,11 @@
       this.doboz.setAttribute("aria-label", "Topológia");
       this.rajz = svg("svg", { viewBox: `0 0 ${m.szel} ${m.mag}`, class: "hsz-topologia__rajz", role: "group" });
       this.rajz.append(svg("title", {}, "A hálózat rajza – kattints egy eszközre a kezeléséhez"));
+      const defs = svg("defs");
+      const marker = svg("marker", { id: "hsz-nyilhegy", viewBox: "0 0 10 10", refX: 6, refY: 5, markerWidth: 4, markerHeight: 4, orient: "auto-start-reverse" });
+      marker.append(svg("path", { d: "M 0 0 L 10 5 L 0 10 z", class: "hsz-router__nyilhegy" }));
+      defs.append(marker);
+      this.rajz.append(defs);
       this.kabelReteg = svg("g", { class: "hsz-kabelek" });
       this.eszkozReteg = svg("g");
       this.animReteg = svg("g", { class: "hsz-anim" });
@@ -2567,8 +5147,10 @@
       szulo.append(this.doboz);
       this.rajzok = /* @__PURE__ */ new Map();
       for (const e of elemek) {
-        this.rajzok.set(e.eszkoz, e.tipus === "switch" ? this.switchRajz(e) : this.pcRajz(e));
+        const r = e.tipus === "switch" ? this.switchRajz(e) : e.tipus === "router" ? this.routerRajz(e) : this.pcRajz(e);
+        this.rajzok.set(e.eszkoz, r);
       }
+      for (const f of adatFeliratok({ feliratok })) this.felirat(f);
       this.kabelek = halozat.kabelek.map((k) => this.kabelRajz(k));
       this.mozgok = [];
       this.animFut = false;
@@ -2579,7 +5161,7 @@
     jelmagyarazat() {
       const j = document.createElement("p");
       j.className = "hsz-jelmagyarazat";
-      j.innerHTML = '<span><i class="hsz-potty hsz-potty--arp"></i>ARP</span><span><i class="hsz-potty hsz-potty--icmp"></i>ping (ICMP)</span>' + (this.vanVtp ? '<span><i class="hsz-potty hsz-potty--vtp"></i>VTP-hirdetés</span>' : "") + '<span><b class="hsz-cimke-minta">10</b>802.1Q-címke (VLAN)</span><span><b class="hsz-x-minta">✕</b>eldobott keret</span><span><i class="hsz-vonal-minta"></i>trunk</span>';
+      j.innerHTML = `<span><i class="hsz-potty hsz-potty--arp"></i>${this.vanRouter ? "ARP / ND" : "ARP"}</span><span><i class="hsz-potty hsz-potty--icmp"></i>ping (ICMP)</span>` + (this.vanRouter ? '<span><i class="hsz-potty hsz-potty--rip"></i>RIP / RIPng</span>' : "") + (this.vanVtp ? '<span><i class="hsz-potty hsz-potty--vtp"></i>VTP-hirdetés</span>' : "") + (this.vanSwitch ? '<span><b class="hsz-cimke-minta">10</b>802.1Q-címke (VLAN)</span>' : "") + '<span><b class="hsz-x-minta">✕</b>eldobott keret</span>' + (this.vanSwitch ? '<span><i class="hsz-vonal-minta"></i>trunk</span>' : "") + (this.vanSoros ? '<span><i class="hsz-vonal-minta hsz-vonal-minta--soros"></i>soros vonal (lassú)</span>' : "");
       return j;
     }
     /** @private – kattintható csoport egy eszköznek */
@@ -2657,6 +5239,47 @@
       const portok = /* @__PURE__ */ new Map([[eszkoz.portok[0].nev, { x: x + PC.szel / 2, y, led, cim }]]);
       return { g, felirat, ipFelirat, portok, tipus: "pc" };
     }
+    /** @private – egy router kirajzolása (saját rajz: henger, rajta négy nyíl) */
+    routerRajz({ eszkoz, x, y, felirat: hely }) {
+      const g = svg("g", { class: "hsz-eszkoz hsz-eszkoz--router", transform: `translate(${x} ${y})` });
+      this.kattinthato(g, eszkoz, `Router: ${eszkoz.hostname} – kattints, és írj a parancssorába`);
+      const w = RT.szel / 2;
+      const fel = RT.mag / 2;
+      const ry = 11;
+      g.append(svg("path", {
+        d: `M ${-w} ${-fel + ry} L ${-w} ${fel - ry} A ${w} ${ry} 0 0 0 ${w} ${fel - ry} L ${w} ${-fel + ry} Z`,
+        class: "hsz-eszkoz__haz"
+      }));
+      g.append(svg("ellipse", { cx: 0, cy: -fel + ry, rx: w, ry, class: "hsz-router__teto" }));
+      const nyil = (x1, y1, x2, y2) => g.append(svg("path", { d: `M ${x1} ${y1} L ${x2} ${y2}`, class: "hsz-router__nyil", "marker-end": "url(#hsz-nyilhegy)" }));
+      const ty = -fel + ry;
+      nyil(-27, ty - 5, -10, ty - 1);
+      nyil(27, ty + 5, 10, ty + 1);
+      nyil(-6, ty + 2, -24, ty + 7);
+      nyil(6, ty - 2, 24, ty - 7);
+      const cim = svg("title");
+      g.append(cim);
+      const HELYEK = {
+        lent: { x: 0, y: fel + 17, d: 13, igazit: "middle" },
+        fent: { x: 0, y: -fel - 20, d: 13, igazit: "middle" },
+        balra: { x: -w - 8, y: -2, d: 14, igazit: "end" },
+        jobbra: { x: w + 8, y: -2, d: 14, igazit: "start" }
+      };
+      const h = HELYEK[hely] || HELYEK.lent;
+      const nev = svg("text", { x: h.x, y: h.y, class: "hsz-eszkoz__nev", "text-anchor": h.igazit });
+      const tipus = svg("text", { x: h.x, y: h.y + h.d, class: "hsz-eszkoz__tipus", "text-anchor": h.igazit }, "ISR 4331 jellegű router");
+      g.append(nev, tipus);
+      this.eszkozReteg.append(g);
+      const portok = /* @__PURE__ */ new Map();
+      for (const p of eszkoz.portok) portok.set(p.nev, { x, y });
+      return { g, felirat: nev, cim, portok, tipus: "router", kozep: { x, y } };
+    }
+    /** @private – szöveg a rajzon (pl. egy link hálózatcíme); több sor: \n */
+    felirat({ x, y, szoveg, igazit = "middle", halvany = false }) {
+      const t = svg("text", { x, y, class: `hsz-terkep-felirat${halvany ? " hsz-terkep-felirat--halvany" : ""}`, "text-anchor": igazit });
+      String(szoveg).split("\n").forEach((sor2, i) => t.append(svg("tspan", { x, dy: i ? 13 : 0 }, sor2)));
+      this.kabelReteg.append(t);
+    }
     /** @private – egy kábel útvonala és portcímkéi */
     kabelRajz(k) {
       const ra = this.rajzok.get(k.a.eszkoz);
@@ -2665,7 +5288,27 @@
       const pb = rb.portok.get(k.b.port.nev);
       let d;
       const cimkek = [];
-      if (ra.tipus === "switch" && rb.tipus === "switch") {
+      if (ra.tipus === "router" || rb.tipus === "router") {
+        d = `M ${pa.x} ${pa.y} L ${pb.x} ${pb.y}`;
+        const dx = pb.x - pa.x;
+        const dy = pb.y - pa.y;
+        const hossz = Math.hypot(dx, dy) || 1;
+        const ux = dx / hossz;
+        const uy = dy / hossz;
+        const cimke = (vege, r, p, tav2) => {
+          const elojel = vege === "a" ? 1 : -1;
+          const bx = p.x + ux * tav2 * elojel;
+          const by = p.y + uy * tav2 * elojel;
+          const szoveg = (vege === "a" ? k.a : k.b).port.rovid;
+          const tol = Math.abs(uy) * (szoveg.length * 3.4 + 5) + Math.abs(ux) * 9;
+          const nx = -uy * tol * elojel;
+          const ny = ux * tol * elojel;
+          return { x: bx + nx, y: by + ny + 4, szoveg, igazit: "middle" };
+        };
+        const tav = (r) => r.tipus === "router" ? 62 : 14;
+        cimkek.push(cimke("a", ra, pa, tav(ra)));
+        cimkek.push(cimke("b", rb, pb, tav(rb)));
+      } else if (ra.tipus === "switch" && rb.tipus === "switch") {
         const fent = Math.min(ra.felso, rb.felso) - 30;
         d = `M ${pa.x} ${pa.y} L ${pa.x} ${fent} L ${pb.x} ${fent} L ${pb.x} ${pb.y}`;
         cimkek.push({ x: pa.x + 5, y: ra.felso - 5, szoveg: k.a.port.rovid, igazit: "start" });
@@ -2679,7 +5322,7 @@
         cimkek.push({ x: swp.x + (balra ? -5 : 5), y: sw.also + 14, szoveg: swk.port.rovid, igazit: balra ? "end" : "start" });
         cimkek.push({ x: pcp.x + 5, y: pcp.y - 6, szoveg: "Fa0", igazit: "start" });
       }
-      const ut = svg("path", { d, class: "hsz-kabel" });
+      const ut = svg("path", { d, class: `hsz-kabel${k.soros ? " hsz-kabel--soros" : ""}` });
       this.kabelReteg.append(ut);
       for (const c of cimkek) {
         this.kabelReteg.append(svg("text", { x: c.x, y: c.y, class: "hsz-kabel__cimke", "text-anchor": c.igazit }, c.szoveg));
@@ -2699,18 +5342,26 @@
           r.ipFelirat.classList.toggle("hsz-eszkoz__ip--nincs", !eszkoz.ip);
           const p = r.portok.get(eszkoz.portok[0].nev);
           p.led.classList.toggle("hsz-led--be", eszkoz.portok[0].fent);
-          p.cim.textContent = `${eszkoz.hostname} – ${eszkoz.ip || "nincs IP-cím"}${eszkoz.maszk ? " / " + eszkoz.maszk : ""}`;
+          p.cim.textContent = `${eszkoz.hostname} – ${eszkoz.ip || "nincs IP-cím"}${eszkoz.maszk ? " / " + eszkoz.maszk : ""}` + (eszkoz.ipv6 ? `, ${eszkoz.ipv6.toLowerCase()}/${eszkoz.ipv6Hossz || 64}` : "");
+          continue;
+        }
+        if (r.tipus === "router") {
+          const sorok = eszkoz.portok.filter((p) => p.ip || p.ipv6.length).map((p) => {
+            const allapot3 = p.leallitva ? "shutdown" : p.fent || p.tipus === "Loopback" ? "működik" : "nincs link";
+            return `${p.rovid}: ${[p.ip, ...p.ipv6.map((c) => `${c.cim}/${c.hossz}`)].filter(Boolean).join(", ")} (${allapot3})`;
+          });
+          r.cim.textContent = [`${eszkoz.hostname} – router`, ...sorok].join("\n");
           continue;
         }
         for (const p of eszkoz.portok) {
           const pe = r.portok.get(p.nev);
           pe.pg.classList.toggle("hsz-port--lekapcsolva", p.leallitva);
           pe.led.classList.toggle("hsz-led--be", p.fent);
-          let allapot2;
-          if (p.leallitva) allapot2 = "lekapcsolva (shutdown)";
-          else if (p.fent) allapot2 = uzemmod(eszkoz, p) === "trunk" ? "működik, trunk" : `működik, VLAN ${p.accessVlan}`;
-          else allapot2 = "nincs kábel";
-          pe.cim.textContent = `${p.nev} – ${allapot2} (mód: ${MOD_SZOVEG[p.mod]})`;
+          let allapot3;
+          if (p.leallitva) allapot3 = "lekapcsolva (shutdown)";
+          else if (p.fent) allapot3 = uzemmod(eszkoz, p) === "trunk" ? "működik, trunk" : `működik, VLAN ${p.accessVlan}`;
+          else allapot3 = "nincs kábel";
+          pe.cim.textContent = `${p.nev} – ${allapot3} (mód: ${MOD_SZOVEG[p.mod]})`;
         }
       }
       for (const kr of this.kabelek) {
@@ -2735,7 +5386,7 @@
       const kr = this.kabelek.find((x) => x.k === this.halozat.kabelVege(e.honnan.eszkoz, e.honnan.port));
       if (!kr || typeof kr.ut.getTotalLength !== "function") return;
       const elore = kr.k.a.eszkoz === e.honnan.eszkoz && kr.k.a.port === e.honnan.port;
-      const fajta = e.keret.tipus === "arp" || e.keret.tipus === "vtp" ? e.keret.tipus : "icmp";
+      const fajta = csomagFajta(e.keret);
       const g = svg("g", { class: `hsz-csomag hsz-csomag--${fajta}` });
       g.append(svg("circle", { r: 7 }));
       if (e.keret.vlan !== void 0) {
@@ -2768,9 +5419,9 @@
       this.mozgok = this.mozgok.filter((x) => x !== m);
     }
     /** @private */
-    kepkocka(most) {
+    kepkocka(most3) {
       for (const m of this.mozgok.slice()) {
-        const arany = (most - m.kezd) / m.ido;
+        const arany = (most3 - m.kezd) / m.ido;
         if (arany >= 1) this.torolMozgo(m);
         else this.helyez(m, Math.max(0, arany));
       }
@@ -2790,20 +5441,52 @@
       setTimeout(() => g.remove(), 2500);
     }
   };
+  function csomagFajta(k) {
+    if (k.tipus === "arp" || k.tipus === "vtp") return k.tipus;
+    const a = k.adat || {};
+    if (a.protokoll === "udp") return "rip";
+    if (a.protokoll === "icmpv6" && (a.icmp.tipus === "ns" || a.icmp.tipus === "na")) return "arp";
+    return "icmp";
+  }
+  var ICMP_NEV = {
+    "echo-keres": "ping-kérés (echo request)",
+    "echo-valasz": "ping-válasz (echo reply)",
+    "ido-lejart": "ICMP „Time exceeded” – lejárt a TTL",
+    elerhetetlen: "ICMP „Destination unreachable” – nincs útvonal"
+  };
   function csomagLeiras(k) {
+    const a = k.adat || {};
+    if (k.tipus === "ipv4" && a.protokoll === "udp") {
+      const r = a.udp.adat;
+      if (r.parancs === "keres") return `RIP-kérés: ${a.forrasIp} → ${a.celIp} (küldjétek el a táblátokat!)`;
+      return `RIPv${r.verzio}-frissítés: ${a.forrasIp} → ${a.celIp}, ${r.bejegyzesek.length} útvonal: ` + r.bejegyzesek.slice(0, 6).map((e) => `${e.halozat}${e.maszk ? "" : ""} (${e.metrika})`).join(", ") + (r.bejegyzesek.length > 6 ? " …" : "");
+    }
+    if (k.tipus === "ipv6") {
+      if (a.protokoll === "udp") {
+        const r = a.udp.adat;
+        if (r.parancs === "keres") return `RIPng-kérés: ${a.forras} → ${a.cel}`;
+        return `RIPng-frissítés: ${a.forras} → ${a.cel}, ${r.bejegyzesek.length} útvonal: ` + r.bejegyzesek.slice(0, 5).map((e) => `${e.prefix}/${e.hossz} (${e.metrika})`).join(", ") + (r.bejegyzesek.length > 5 ? " …" : "");
+      }
+      if (a.icmp && a.icmp.tipus === "ns") return `IPv6 szomszédkérdés (NS): kié a(z) ${a.icmp.cel}? Kérdezi: ${a.forras}`;
+      if (a.icmp && a.icmp.tipus === "na") return `IPv6 szomszédhirdetés (NA): a(z) ${a.icmp.cel} az enyém`;
+      if (a.icmp) return `${ICMP_NEV[a.icmp.tipus] || "ICMPv6"} (IPv6): ${a.forras} → ${a.cel}, hop limit ${a.hop}`;
+    }
+    if (k.tipus === "ipv4" && a.icmp && a.icmp.tipus !== "echo-keres" && a.icmp.tipus !== "echo-valasz") {
+      return `${ICMP_NEV[a.icmp.tipus]}: ${a.forrasIp} → ${a.celIp}`;
+    }
     if (k.tipus === "vtp") {
-      const a = k.adat;
-      return `VTP-${a.keres ? "kérés és hirdetés" : "hirdetés"} (${a.kuldo}): tartomány ${a.tartomany}, revízió ${a.revizio}, VLAN-ok: ${Object.keys(a.vlanok).join(", ") || "–"}`;
+      const a2 = k.adat;
+      return `VTP-${a2.keres ? "kérés és hirdetés" : "hirdetés"} (${a2.kuldo}): tartomány ${a2.tartomany}, revízió ${a2.revizio}, VLAN-ok: ${Object.keys(a2.vlanok).join(", ") || "–"}`;
     }
     const cimke = k.vlan !== void 0 ? ` – 802.1Q-címke: VLAN ${k.vlan}` : "";
     if (k.tipus === "arp") {
-      const a = k.adat;
-      if (a.muvelet === "keres") return `ARP-kérdés (szórás): kié a(z) ${a.celIp}? Kérdezi: ${a.kuldoIp}${cimke}`;
-      return `ARP-válasz: a(z) ${a.kuldoIp} az enyém${cimke}`;
+      const a2 = k.adat;
+      if (a2.muvelet === "keres") return `ARP-kérdés (szórás): kié a(z) ${a2.celIp}? Kérdezi: ${a2.kuldoIp}${cimke}`;
+      return `ARP-válasz: a(z) ${a2.kuldoIp} az enyém${cimke}`;
     }
     if (k.adat && k.adat.protokoll === "icmp") {
       const fajta = k.adat.icmp.tipus === "echo-keres" ? "ping-kérés (echo request)" : "ping-válasz (echo reply)";
-      return `${fajta}: ${k.adat.forrasIp} → ${k.adat.celIp}${cimke}`;
+      return `${fajta}: ${k.adat.forrasIp} → ${k.adat.celIp}, TTL ${k.adat.ttl}${cimke}`;
     }
     return `keret${cimke}`;
   }
@@ -2935,7 +5618,10 @@
   };
   var MOD_SZOVEG2 = { access: "access", trunk: "trunk", "dinamikus-auto": "dynamic auto", "dinamikus-kezdemenyezo": "dynamic desirable" };
   function rovid(nev) {
-    return nev.replace(/^FastEthernet/, "Fa").replace(/^GigabitEthernet/, "Gi");
+    return nev.replace(/^FastEthernet/, "Fa").replace(/^GigabitEthernet/, "Gi").replace(/^Serial/, "Se").replace(/^Loopback/, "Lo");
+  }
+  function kovSzoveg(k) {
+    return Array.isArray(k) ? ipv6Szoveg(k) : ipSzoveg(k);
   }
   var ALLAPOT_CELOK = {
     vlan(f, c) {
@@ -2992,9 +5678,9 @@
     "vtp-szinkron"(f, c) {
       const sw = f.eszkoz(c.eszkoz);
       const forras = f.eszkoz(c.forras);
-      const lista = (e) => Object.entries(e.vlanok).filter(([, v]) => !v.gyari).map(([n, v]) => `${n} ${v.nev}`).sort().join(", ");
-      const sajat = lista(sw);
-      const ott = lista(forras);
+      const lista2 = (e) => Object.entries(e.vlanok).filter(([, v]) => !v.gyari).map(([n, v]) => `${n} ${v.nev}`).sort().join(", ");
+      const sajat = lista2(sw);
+      const ott = lista2(forras);
       if (sw.vtpRevizio === forras.vtpRevizio && sajat === ott) {
         return { ok: true, megjegyzes: `Azonos revízió (${sw.vtpRevizio}) és azonos VLAN-ok: ${sajat || "–"}.` };
       }
@@ -3003,6 +5689,73 @@
       else if (sw.vtpRevizio === forras.vtpRevizio) megj += " Egyenlő revíziónál nincs átvétel: módosíts valamit a serveren (pl. hozz létre és törölj egy VLAN-t).";
       else megj += " A hirdetés nem ért ide: nézd meg a trunkokat, a tartománynevet, a jelszót és a köztes switch verzióját.";
       return { ok: false, megjegyzes: megj };
+    },
+    /** RIP-beállítás egy routeren: verzió, hálózatok, passzív interfészek, auto-summary, default route hirdetése. */
+    rip(f, c) {
+      const r = f.eszkoz(c.eszkoz);
+      if (!r.rip) return { ok: false, megjegyzes: `${c.eszkoz}-en nem fut RIP.` };
+      const hibak = [];
+      if (c.verzio && r.rip.verzio !== c.verzio) hibak.push(`a verzió most ${r.rip.verzio || "nincs megadva (v1-et küld)"} (${c.verzio} kellene)`);
+      for (const n of c.halozatok || []) {
+        const o = ipSzoveg(osztalyos(ipSzam(n)).halozat);
+        if (!r.rip.halozatok.includes(o)) hibak.push(`hiányzik a ${o} hálózat`);
+      }
+      for (const n of c.nemHalozatok || []) {
+        const o = ipSzoveg(osztalyos(ipSzam(n)).halozat);
+        if (r.rip.halozatok.includes(o)) hibak.push(`a ${o} hálózat nem kellene a RIP-be`);
+      }
+      for (const p of c.passziv || []) if (!r.rip.passziv.includes(p)) hibak.push(`${rovid(p)} nem passzív`);
+      if (c.autoSummary !== void 0 && r.rip.autoSummary !== c.autoSummary) {
+        hibak.push(c.autoSummary ? "az automatikus összegzés ki van kapcsolva" : "az automatikus összegzés még be van kapcsolva");
+      }
+      if (c.alapUtvonal !== void 0 && r.rip.alapUtvonal !== c.alapUtvonal) {
+        hibak.push(c.alapUtvonal ? "nem hirdeti az alapértelmezett útvonalat" : "hirdeti az alapértelmezett útvonalat, pedig nem kellene");
+      }
+      if (hibak.length) return { ok: false, megjegyzes: hibak.join("; ") + "." };
+      const reszek = [`RIPv${r.rip.verzio || 1}`, `hálózatok: ${r.rip.halozatok.join(", ") || "–"}`];
+      if (r.rip.passziv.length) reszek.push(`passzív: ${r.rip.passziv.map(rovid).join(", ")}`);
+      reszek.push(r.rip.autoSummary ? "auto-summary be" : "auto-summary ki");
+      return { ok: true, megjegyzes: reszek.join(", ") + "." };
+    },
+    /** RIPng egy routeren: IPv6-továbbítás, mely interfészeken fut (és melyiken nem), default route hirdetése. */
+    ripng(f, c) {
+      const r = f.eszkoz(c.eszkoz);
+      if (!r.ipv6Routing) return { ok: false, megjegyzes: `${c.eszkoz}-en nincs bekapcsolva az IPv6-továbbítás (unicast routing).` };
+      const hibak = [];
+      const port2 = (n) => r.portok.find((p) => p.nev === n);
+      for (const n of c.interfeszek || []) if (!port2(n).ripng) hibak.push(`${rovid(n)}: nincs rajta RIPng`);
+      for (const n of c.nemInterfeszek || []) if (port2(n).ripng) hibak.push(`${rovid(n)}: fut rajta RIPng, pedig nem kellene`);
+      for (const [n, mit] of Object.entries(c.alapUtvonal || {})) {
+        if (port2(n).ripngAlap !== mit) hibak.push(`${rovid(n)}: nem hirdeti a ::/0-t (${mit})`);
+      }
+      if (hibak.length) return { ok: false, megjegyzes: hibak.join("; ") + "." };
+      const be = r.portok.filter((p) => p.ripng).map((p) => rovid(p.nev));
+      return { ok: true, megjegyzes: `RIPng fut itt: ${be.join(", ") || "–"}.` };
+    },
+    /** IPv6-továbbítás be van-e kapcsolva. */
+    "ipv6-routing"(f, c) {
+      const r = f.eszkoz(c.eszkoz);
+      return r.ipv6Routing ? { ok: true, megjegyzes: "Az IPv6-továbbítás be van kapcsolva." } : { ok: false, megjegyzes: `${c.eszkoz} nem továbbít IPv6-csomagokat (gyárilag ki van kapcsolva).` };
+    },
+    /**
+     * Útvonal a routing táblában: { eszkoz, halozat: '172.16.3.0/24', kod?: 'R', port?: 'Serial0/1/0', nincs?: true }.
+     * „nincs: true” – ellenpróba: ez az útvonal NE legyen a táblában.
+     */
+    utvonal(f, c) {
+      const r = f.eszkoz(c.eszkoz);
+      const e = bejegyzes(r, c.halozat);
+      const jo = e && !e.lehetLe;
+      if (c.nincs) {
+        if (jo) return { ok: false, megjegyzes: `${c.eszkoz} táblájában ott van: ${e.kod} ${c.halozat} – pedig nem kellene.` };
+        return { ok: true, megjegyzes: `${c.eszkoz} táblájában nincs ${c.halozat} – ahogy kell.` };
+      }
+      if (!jo) return { ok: false, megjegyzes: `${c.eszkoz} táblájában nincs ${c.halozat}${e && e.lehetLe ? " (csak „possibly down” állapotban)" : ""}.` };
+      if (c.kod && e.kod !== c.kod) return { ok: false, megjegyzes: `${c.halozat} megvan, de ${e.kod} kódú (${c.kod} kellene).` };
+      const utak = e.utak.map((u) => u.port || (u.kovetkezo !== null && u.kovetkezo !== void 0 ? kovSzoveg(u.kovetkezo) : "")).filter(Boolean);
+      if (c.port && !e.utak.some((u) => u.port === c.port)) {
+        return { ok: false, megjegyzes: `${c.halozat} most erre megy: ${utak.map(rovid).join(", ")} (${rovid(c.port)} felé kellene).` };
+      }
+      return { ok: true, megjegyzes: `${e.kod} ${c.halozat} [${e.ad}/${e.metrika}]${utak.length ? " – " + utak.map(rovid).join(", ") : ""}` };
     },
     "pc-ip"(f, c) {
       const pc = f.eszkoz(c.eszkoz);
@@ -3022,18 +5775,55 @@
     valasz: "Megjött a válasz.",
     idotullepes: "Nem jött válasz (Request timed out).",
     elerhetetlen: "Nem jött ARP-válasz: a cél nem érhető el ebben a szórási tartományban (Destination host unreachable).",
-    hiba: "A ping el sem indult: nincs IP-cím, vagy a cél másik hálózatban van, és nincs alapértelmezett átjáró."
+    hiba: "A ping el sem indult: nincs IP-cím, vagy a cél másik hálózatban van, és nincs alapértelmezett átjáró.",
+    "halozat-elerhetetlen": "Egy router visszaszólt: nincs útvonala a célhálózat felé (Destination net unreachable).",
+    "ttl-lejart": "Lejárt a TTL útközben (hurok?).",
+    "ido-lejart": "Lejárt a TTL útközben (hurok?)."
   };
+  function egyProbaPing(f, honnan, ip, cb) {
+    const e = f.eszkoz(honnan);
+    if (e.tipus === "router") {
+      routerPing(f.halozat, e, ip, (v) => cb(v.fajta === "elerhetetlen" ? { ...v, fajta: "halozat-elerhetetlen" } : v));
+    } else {
+      egyPing(f.halozat, e, ip, cb);
+    }
+  }
   var PROBA_CELOK = {
+    /**
+     * ping { honnan, cel (a címterv szerinti gép) vagy ip, vart: true|false, db: hány pingnek kell sikerülnie }
+     * Ha routerek is vannak, előtte „bemelegítő” pingek mennek (nem számítanak): az első csomagok
+     * gyakran elvesznek, amíg a routerek ARP-pal megkeresik a következő ugrást.
+     */
     ping(f, c, kesz) {
-      const ip = tervezettIp(f, c.cel);
-      egyPing(f.halozat, f.eszkoz(c.honnan), ip, (e) => {
-        const ment = e.fajta === "valasz";
-        const vart = c.vart !== false;
-        let megjegyzes = `${c.honnan} → ${ip}: ${PING_SZOVEG[e.fajta]}`;
-        if (!vart && ment) megjegyzes += " Pedig ennek nem szabadna sikerülnie!";
-        kesz({ ok: ment === vart, megjegyzes });
-      });
+      const ip = c.ip || tervezettIp(f, c.cel);
+      const db = c.db || 1;
+      const vart = c.vart !== false;
+      const eredmenyek = [];
+      let bemelegites = f.halozat.eszkozok.some((x) => x.tipus === "router") ? 3 : 0;
+      let elment = bemelegites === 0;
+      const kovetkezo = () => {
+        egyProbaPing(f, c.honnan, ip, (e) => {
+          if (bemelegites > 0) {
+            if (e.fajta === "valasz") elment = true;
+            bemelegites = e.fajta === "idotullepes" ? bemelegites - 1 : 0;
+            return f.halozat.ora.utemez(1, kovetkezo);
+          }
+          eredmenyek.push(e);
+          const kell = elment || e.fajta === "valasz" ? db : 1;
+          if (eredmenyek.length < kell) return f.halozat.ora.utemez(1, kovetkezo);
+          const sikeres = eredmenyek.filter((x) => x.fajta === "valasz").length;
+          const ok = vart ? sikeres === db && eredmenyek.length === db : sikeres === 0;
+          const rossz = eredmenyek.find((x) => x.fajta === "valasz" !== vart) || eredmenyek[0];
+          let megjegyzes = `${c.honnan} → ${ip}: `;
+          if (eredmenyek.length > 1) megjegyzes += `${eredmenyek.length} pingből ${sikeres} sikerült. `;
+          megjegyzes += PING_SZOVEG[rossz.fajta] || rossz.fajta;
+          if (rossz.kitol && rossz.fajta !== "valasz") megjegyzes += ` (${rossz.kitol})`;
+          if (!vart && sikeres) megjegyzes += " Pedig ennek nem szabadna sikerülnie!";
+          if (vart && eredmenyek.length > 1 && sikeres > 0 && sikeres < eredmenyek.length) megjegyzes += " Hol megy, hol nem – nézd meg, nincs-e két út ugyanoda.";
+          kesz({ ok, megjegyzes });
+        });
+      };
+      kovetkezo();
     },
     szoras(f, c, kesz) {
       szorasProba(f.halozat, f.eszkoz(c.honnan), (kik) => {
@@ -3233,6 +6023,7 @@
       const parancs = szavak[0].toLowerCase();
       const arg = szavak.slice(1);
       if (parancs === "ping") kimenet.push(...this.ping(arg));
+      else if (parancs === "tracert") kimenet.push(...this.tracert(arg));
       else if (parancs === "ipconfig") kimenet.push(...this.ipconfig(arg));
       else if (parancs === "arp") kimenet.push(...this.arp(arg));
       else if (parancs === "hostname") kimenet.push(this.eszkoz.hostname, "");
@@ -3243,7 +6034,7 @@
           `'${szavak[0]}' is not recognized as an internal or external command,`,
           "operable program or batch file.",
           "",
-          "[Szimulátor] A gépen használható parancsok: ping, ipconfig, arp -a, hostname, cls, help",
+          "[Szimulátor] A gépen használható parancsok: ping, tracert, ipconfig, arp -a, hostname, cls, help",
           ""
         );
       }
@@ -3269,36 +6060,46 @@
         }
       }
       if (cel === null) return pingHasznalat();
-      if (!ervenyesIp(cel)) {
+      if (!ervenyesIp(cel) && !ipv6Normal(cel)) {
         return [`Ping request could not find host ${cel}. Please check the name and try again.`, ""];
       }
+      const v6 = !ervenyesIp(cel);
+      if (v6) cel = ipv6Normal(cel).toLowerCase();
       return ["", `Pinging ${cel} with 32 bytes of data:`, { folyamat: (kiir, kesz) => this.pingFolyamat(cel, db, kiir, kesz) }];
     }
     /** @private – a ping válaszai egyenként, ahogy megérkeznek */
     pingFolyamat(cel, db, kiir, kesz) {
       const h = this.halozat;
       const pc = this.eszkoz;
+      const v6 = cel.includes(":");
       let elkuldve = 0;
       let fogadva = 0;
-      let valaszok = 0;
-      const fajtak = /* @__PURE__ */ new Set();
+      const idok = [];
+      const fajtak = [];
+      const ido = (ms) => ms ? `=${ms}ms` : "<1ms";
       const egy = () => {
         if (elkuldve >= db) return vege();
         elkuldve++;
         egyPing(h, pc, cel, (e) => {
-          fajtak.add(e.fajta);
+          fajtak.push(e);
           let szunet = 1e3;
           if (e.fajta === "valasz") {
-            kiir(`Reply from ${cel}: bytes=32 time<1ms TTL=${e.ttl}`);
+            kiir(v6 ? `Reply from ${cel}: time${ido(e.keses)}` : `Reply from ${cel}: bytes=32 time${ido(e.keses)} TTL=${e.ttl}`);
             fogadva++;
-            valaszok++;
+            idok.push(e.keses || 0);
           } else if (e.fajta === "idotullepes") {
             kiir("Request timed out.");
             szunet = 0;
           } else if (e.fajta === "elerhetetlen") {
-            kiir(`Reply from ${pc.ip}: Destination host unreachable.`);
+            kiir(`Reply from ${v6 ? (pc.ipv6 || pcLinkLocal(pc)).toLowerCase() : pc.ip}: Destination host unreachable.`);
             fogadva++;
             szunet = 0;
+          } else if (e.fajta === "halozat-elerhetetlen") {
+            kiir(`Reply from ${v6 ? e.kitol.toLowerCase() : e.kitol}: Destination net unreachable.`);
+            fogadva++;
+          } else if (e.fajta === "ttl-lejart") {
+            kiir(`Reply from ${v6 ? e.kitol.toLowerCase() : e.kitol}: TTL expired in transit.`);
+            fogadva++;
           } else {
             kiir("PING: transmit failed. General failure. ");
             szunet = 500;
@@ -3312,9 +6113,10 @@
         kiir("");
         kiir(`Ping statistics for ${cel}:`);
         kiir(`    Packets: Sent = ${elkuldve}, Received = ${fogadva}, Lost = ${elveszett} (${Math.round(elveszett / elkuldve * 100)}% loss),`);
-        if (valaszok > 0) {
+        if (idok.length > 0) {
+          const atl = Math.round(idok.reduce((a, b) => a + b, 0) / idok.length);
           kiir("Approximate round trip times in milli-seconds:");
-          kiir("    Minimum = 0ms, Maximum = 0ms, Average = 0ms");
+          kiir(`    Minimum = ${Math.min(...idok)}ms, Maximum = ${Math.max(...idok)}ms, Average = ${atl}ms`);
         }
         kiir("");
         for (const m of this.magyarazat(cel, fajtak)) kiir(m);
@@ -3323,21 +6125,107 @@
       egy();
     }
     /** @private – rövid magyarázat a sikertelen pinghez (a szimulátor saját megjegyzése) */
-    magyarazat(cel, fajtak) {
+    magyarazat(cel, eredmenyek) {
       const pc = this.eszkoz;
+      const fajtak = new Set(eredmenyek.map((e) => e.fajta));
+      const v6 = cel.includes(":");
       const m = [];
       if (fajtak.has("hiba")) {
-        if (!vanIp(pc)) m.push("[Szimulátor] Ennek a gépnek még nincs IP-címe vagy maszkja (kattints a beállításokra fent).");
+        if (v6 && !vanIpv6(pc)) m.push("[Szimulátor] Ennek a gépnek még nincs IPv6-címe (kattints a beállításokra fent).");
+        else if (!v6 && !vanIp(pc)) m.push("[Szimulátor] Ennek a gépnek még nincs IP-címe vagy maszkja (kattints a beállításokra fent).");
         else if (!pc.portok[0].fent) m.push("[Szimulátor] Nincs link: a gép kábele egy lekapcsolt portra csatlakozik.");
-        else if (!kovetkezoUgras(pc, cel)) {
+        else if (!kovetkezoUgras(pc, v6 ? ipv6Normal(cel) : cel)) {
           m.push("[Szimulátor] A cél másik hálózatban van, és nincs alapértelmezett átjáró, ezért a csomag el sem indul.");
         }
       }
       if (fajtak.has("elerhetetlen")) {
-        m.push("[Szimulátor] A „Destination host unreachable” a saját gépedtől jön: senki nem válaszolt az ARP-kérdésre, hogy kié ez a cím. A gép ezt is „Received”-nek számolja.");
+        m.push(v6 ? "[Szimulátor] A „Destination host unreachable” a saját gépedtől jön: senki nem válaszolt a szomszédkérdésre (ND)." : "[Szimulátor] A „Destination host unreachable” a saját gépedtől jön: senki nem válaszolt az ARP-kérdésre, hogy kié ez a cím. A gép ezt is „Received”-nek számolja.");
+      }
+      const nincsUt = eredmenyek.find((e) => e.fajta === "halozat-elerhetetlen");
+      if (nincsUt) {
+        m.push(`[Szimulátor] A „Destination net unreachable” a(z) ${nincsUt.kitol} routertől jött: nincs útvonala a célhálózat felé (nézd meg a routing tábláját: show ip route).`);
+      }
+      const elso = eredmenyek.findIndex((e) => e.fajta !== "idotullepes");
+      const elsoElveszett = elso > 0 && eredmenyek.slice(elso).every((e) => e.fajta === "valasz");
+      if (elsoElveszett) {
+        m.push(`[Szimulátor] ${elso === 1 ? "Az első csomag elveszett" : "Az első csomagok elvesztek"}, a többi átment: útközben egy router még nem ismerte a következő ugrás MAC-címét. Ilyenkor ${v6 ? "szomszédkérdést (ND)" : "ARP-kérdést"} küld, az éppen továbbítandó csomagot pedig eldobja.`);
       }
       if (m.length) m.push("");
       return m;
+    }
+    /** @private – tracert: ugrásonként 3 próba egyre nagyobb TTL-lel */
+    tracert(arg) {
+      const cel0 = arg.find((a) => !a.startsWith("-") && !a.startsWith("/"));
+      if (!cel0) return ["", "Usage: tracert target_name", "", "[Szimulátor] Példa: tracert 172.16.3.10", ""];
+      if (!ervenyesIp(cel0) && !ipv6Normal(cel0)) return [`Unable to resolve target system name ${cel0}.`, ""];
+      const v6 = !ervenyesIp(cel0);
+      const cel = v6 ? ipv6Normal(cel0).toLowerCase() : cel0;
+      return ["", `Tracing route to ${cel} over a maximum of 30 hops`, "", {
+        folyamat: (kiir, kesz) => this.tracertFolyamat(cel, kiir, kesz)
+      }];
+    }
+    /** @private */
+    tracertFolyamat(cel, kiir, kesz) {
+      const h = this.halozat;
+      const pc = this.eszkoz;
+      const v6 = cel.includes(":");
+      let ttl = 1;
+      let ures = 0;
+      const oszlop = (e) => {
+        if (e.fajta === "idotullepes" || e.fajta === "hiba" || e.fajta === "elerhetetlen") return "    *    ";
+        return (e.keses ? `${e.keses} ms` : "<1 ms").padStart(9);
+      };
+      const ugras = () => {
+        const valaszok = [];
+        const egy = () => {
+          egyPing(h, pc, cel, (e) => {
+            valaszok.push(e);
+            if (valaszok.length < 3 && e.fajta !== "hiba") return h.ora.utemez(1, egy);
+            return sorKesz();
+          }, { ttl });
+        };
+        const sorKesz = () => {
+          const sor2 = String(ttl).padStart(3);
+          if (valaszok[0].fajta === "hiba") {
+            kiir("Unable to contact IP driver. General failure.");
+            kiir("");
+            return kesz();
+          }
+          const ki = valaszok.find((e) => e.kitol);
+          const halozat = valaszok.find((e) => e.fajta === "halozat-elerhetetlen");
+          if (halozat) {
+            kiir(`${sor2}  ${v6 ? halozat.kitol.toLowerCase() : halozat.kitol}  reports: Destination net unreachable.`);
+            kiir("");
+            kiir("Trace complete.");
+            kiir("");
+            return kesz();
+          }
+          const cimek = valaszok.map(oszlop).join("");
+          if (!ki) {
+            kiir(`${sor2}${cimek}  Request timed out.`);
+            ures++;
+          } else {
+            kiir(`${sor2}${cimek}  ${v6 ? ki.kitol.toLowerCase() : ki.kitol}`);
+            ures = 0;
+          }
+          if (valaszok.some((e) => e.fajta === "valasz") || ttl >= 30) {
+            kiir("");
+            kiir("Trace complete.");
+            kiir("");
+            return kesz();
+          }
+          if (ures >= 5) {
+            kiir("");
+            kiir("[Szimulátor] Több ugrás óta nem jön válasz – a valódi gép 30 ugrásig próbálkozna (megszakítás: Ctrl+C).");
+            kiir("");
+            return kesz();
+          }
+          ttl++;
+          ugras();
+        };
+        egy();
+      };
+      ugras();
     }
     /** @private */
     ipconfig(arg) {
@@ -3352,9 +6240,17 @@
       }
       s.push("   Connection-specific DNS Suffix  . :");
       if (minden) s.push(`   Physical Address. . . . . . . . . : ${macKotojeles(pc.mac)}`);
+      const v6 = vanIpv6(pc) || !!pc.ipv6Atjaro;
+      if (v6 && pc.ipv6) s.push(`   IPv6 Address. . . . . . . . . . . : ${pc.ipv6.toLowerCase()}`);
+      if (v6) s.push(`   Link-local IPv6 Address . . . . . : ${pcLinkLocal(pc).toLowerCase()}`);
       s.push(`   IPv4 Address. . . . . . . . . . . : ${pc.ip || "0.0.0.0"}`);
       s.push(`   Subnet Mask . . . . . . . . . . . : ${pc.maszk || "0.0.0.0"}`);
-      s.push(`   Default Gateway . . . . . . . . . : ${pc.atjaro}`.trimEnd());
+      if (v6 && pc.ipv6Atjaro) {
+        s.push(`   Default Gateway . . . . . . . . . : ${pc.ipv6Atjaro.toLowerCase()}`);
+        if (pc.atjaro) s.push(`                                       ${pc.atjaro}`);
+      } else {
+        s.push(`   Default Gateway . . . . . . . . . : ${pc.atjaro}`.trimEnd());
+      }
       s.push("");
       return s;
     }
@@ -3390,7 +6286,8 @@
     return [
       "",
       "[Szimulátor] A gépen használható parancsok:",
-      "[Szimulátor]   ping <IP-cím>      – elér-e egy másik gépet (ping -n 2 … = csak 2 csomag)",
+      "[Szimulátor]   ping <IP-cím>      – elér-e egy másik gépet (ping -n 2 … = csak 2 csomag; IPv6-címmel is)",
+      "[Szimulátor]   tracert <IP-cím>   – merre, mely routereken át jut el a csomag a célig",
       "[Szimulátor]   ipconfig           – a gép IP-beállításai (ipconfig /all: MAC-címmel együtt)",
       "[Szimulátor]   arp -a             – az ARP-gyorstár: melyik IP-címhez melyik MAC tartozik",
       "[Szimulátor]   arp -d             – az ARP-gyorstár törlése",
@@ -3416,12 +6313,14 @@
   var PcAblak = class {
     /**
      * @param {HTMLElement} szulo
-     * @param {{eszkoz: Object, halozat: Object, valtozott?: () => void, parancsUtan?: (sor: string) => void}} p
+     * @param {{eszkoz: Object, halozat: Object, valtozott?: () => void, parancsUtan?: (sor: string) => void,
+     *          ipv6?: boolean, atjaroKell?: boolean}} p
+     *   ipv6: legyenek-e IPv6-mezők; atjaroKell: a feladatban kell-e átjáró (a mező mintaszövegéhez)
      */
-    constructor(szulo, { eszkoz, halozat, valtozott = () => {
-    }, parancsUtan }) {
+    constructor(szulo, { eszkoz, halozat, valtozott: valtozott2 = () => {
+    }, parancsUtan, ipv6 = false, atjaroKell = false }) {
       this.pc = eszkoz;
-      this.valtozott = valtozott;
+      this.valtozott = valtozott2;
       this.doboz = elem3("section", "hsz-pc-ablak");
       this.doboz.setAttribute("aria-label", `${eszkoz.hostname} – IP-beállítások és parancssor`);
       const urlap = elem3("form", "hsz-pc-urlap");
@@ -3432,8 +6331,14 @@
       this.mezok = {
         ip: this.mezo(urlap, "IP-cím", "pl. 192.168.10.11"),
         maszk: this.mezo(urlap, "Alhálózati maszk", "pl. 255.255.255.0"),
-        atjaro: this.mezo(urlap, "Alapértelmezett átjáró", "most nem kell")
+        atjaro: this.mezo(urlap, "Alapértelmezett átjáró", atjaroKell ? "a router címe" : "most nem kell")
       };
+      if (ipv6) {
+        this.mezok.ipv6 = this.mezo(urlap, "IPv6-cím / előtag", "pl. 2001:DB8:1::10/64");
+        this.mezok.ipv6Atjaro = this.mezo(urlap, "IPv6-átjáró", "pl. FE80::1");
+        this.mezok.ipv6.inputMode = "text";
+        this.mezok.ipv6Atjaro.inputMode = "text";
+      }
       const sor2 = elem3("div", "hsz-pc-urlap__gombsor");
       const mentes = elem3("button", "hsz-gomb", "Mentés");
       mentes.type = "submit";
@@ -3468,6 +6373,10 @@
       this.mezok.ip.value = this.pc.ip;
       this.mezok.maszk.value = this.pc.maszk;
       this.mezok.atjaro.value = this.pc.atjaro;
+      if (this.mezok.ipv6) {
+        this.mezok.ipv6.value = this.pc.ipv6 ? `${this.pc.ipv6}/${this.pc.ipv6Hossz || 64}` : "";
+        this.mezok.ipv6Atjaro.value = this.pc.ipv6Atjaro || "";
+      }
     }
     /** @private */
     jelez(szoveg, hiba, mezo) {
@@ -3485,9 +6394,27 @@
       const maszk = maszkAlak(this.mezok.maszk.value);
       const atjaro = this.mezok.atjaro.value.trim();
       this.mezok.maszk.value = maszk;
+      const v6 = {};
+      if (this.mezok.ipv6) {
+        const szoveg = this.mezok.ipv6.value.trim();
+        const gw = this.mezok.ipv6Atjaro.value.trim();
+        if (szoveg === "") {
+          v6.ipv6 = "";
+        } else {
+          const [cim, hossz = "64"] = szoveg.split("/");
+          const c = ipv6Elemez(cim);
+          const h = Number(hossz);
+          if (!c || !/^\d{1,3}$/.test(hossz) || h < 1 || h > 128) return this.jelez("Érvénytelen IPv6-cím (pl. 2001:DB8:1::10/64).", true, this.mezok.ipv6);
+          if (linkLocalE(c) || csoportcimE(c)) return this.jelez("Ide globális IPv6-cím kell (a link-local címet a gép magától kapja).", true, this.mezok.ipv6);
+          v6.ipv6 = ipv6Normal(cim);
+          v6.ipv6Hossz = h;
+        }
+        if (gw !== "" && !ipv6Elemez(gw)) return this.jelez("Érvénytelen IPv6-átjáró (pl. FE80::1).", true, this.mezok.ipv6Atjaro);
+        v6.ipv6Atjaro = gw === "" ? "" : ipv6Normal(gw);
+      }
       if (ip === "" && maszk === "" && atjaro === "") {
-        ipBeallit(this.pc, { ip: "", maszk: "", atjaro: "" });
-        this.jelez("A beállítás törölve.");
+        ipBeallit(this.pc, { ip: "", maszk: "", atjaro: "", ...v6 });
+        this.jelez(v6.ipv6 ? "Mentve (IPv4-cím nélkül)." : "A beállítás törölve.");
         return this.valtozott();
       }
       if (!ervenyesIp(ip)) return this.jelez("Érvénytelen IP-cím (négy 0–255 közötti szám, ponttal elválasztva).", true, this.mezok.ip);
@@ -3495,7 +6422,7 @@
       const hiba = gepcimHiba(ip, maszk);
       if (hiba) return this.jelez(hiba, true, /maszk/.test(hiba) ? this.mezok.maszk : this.mezok.ip);
       if (atjaro !== "" && !ervenyesIp(atjaro)) return this.jelez("Érvénytelen átjárócím.", true, this.mezok.atjaro);
-      ipBeallit(this.pc, { ip, maszk, atjaro });
+      ipBeallit(this.pc, { ip, maszk, atjaro, ...v6 });
       if (atjaro !== "" && !egyHalozat(ip, atjaro, maszk)) {
         this.jelez("Mentve – de figyelem: az átjáró nincs a gép hálózatában, így nem használható.");
       } else {
@@ -3720,11 +6647,11 @@
         if (c.ellenproba) cim.classList.add("hsz-cel__cim--ellenproba");
         const megj = elem4("span", "hsz-cel__megj");
         megj.hidden = !this.feloldva;
-        const allapot2 = elem4("span", "hsz-rejtett", probaE(c) ? "vár" : "");
+        const allapot3 = elem4("span", "hsz-rejtett", probaE(c) ? "vár" : "");
         szoveg.append(cim, megj);
-        li.append(jel, allapot2, szoveg);
+        li.append(jel, allapot3, szoveg);
         this.lista.append(li);
-        return { li, jel, megj, allapot: allapot2 };
+        return { li, jel, megj, allapot: allapot3 };
       });
       ellenoriz(this.f, {
         szunet: PROBA_SZUNET,
@@ -3817,14 +6744,30 @@
   function cimtervTabla(cimterv) {
     const cim = elem4("h3", "hsz-panel__alcim", "Címterv");
     const tabla = elem4("table", "hsz-panel__tabla");
+    const vanInterfesz = cimterv.some((s) => s.interfesz);
+    const OSZLOPOK = [
+      ["eszkoz", vanInterfesz ? "Eszköz" : "Gép"],
+      ["interfesz", "Interfész"],
+      ["ip", vanInterfesz ? "IPv4-cím" : "IP-cím"],
+      ["maszk", "Maszk"],
+      ["ipv6", "IPv6-cím"],
+      ["atjaro", "Átjáró"],
+      ["vlan", "VLAN"],
+      ["hova", "Port"]
+    ].filter(([k]) => cimterv.some((s) => s[k] !== void 0 && s[k] !== ""));
     const fejsor = elem4("tr");
-    for (const c of ["Gép", "IP-cím", "Maszk", "VLAN", "Port"]) fejsor.append(elem4("th", "", c));
+    for (const [, c] of OSZLOPOK) fejsor.append(elem4("th", "", c));
     const thead = elem4("thead");
     thead.append(fejsor);
     const tbody = elem4("tbody");
+    let elozo = null;
     for (const s of cimterv) {
       const tr = elem4("tr");
-      for (const c of [s.eszkoz, s.ip, s.maszk, s.vlan, s.hova]) tr.append(elem4("td", "", c === void 0 ? "" : String(c)));
+      for (const [k] of OSZLOPOK) {
+        const v = k === "eszkoz" && vanInterfesz && s.eszkoz === elozo ? "" : s[k];
+        tr.append(elem4("td", "", v === void 0 ? "" : String(v)));
+      }
+      elozo = s.eszkoz;
       tbody.append(tr);
     }
     tabla.append(thead, tbody);
@@ -3861,6 +6804,10 @@
       maszk: "",
       atjaro: "",
       arpTabla: {},
+      ipv6: "",
+      ipv6Hossz: 64,
+      ipv6Atjaro: "",
+      ndTabla: {},
       portok: [{ nev: "FastEthernet0", rovid: "Fa0", tipus: "FastEthernet", szam: "0", leallitva: false, fent: false }]
     };
   }
@@ -3871,9 +6818,9 @@
     return g.HaloszimFeladatok || [];
   }
   function feladatKeres(azon) {
-    const lista = feladatLista();
-    if (!azon) return lista[0] || null;
-    return lista.find((f) => f.azon === azon) || null;
+    const lista2 = feladatLista();
+    if (!azon) return lista2[0] || null;
+    return lista2.find((f) => f.azon === azon) || null;
   }
   function feladatBetolt(feladat, beallitasok = {}) {
     const halozat = new Halozat(beallitasok);
@@ -3883,18 +6830,20 @@
       let eszkoz;
       if (e.tipus === "switch") eszkoz = ujSwitch2960({ hostname: e.nev });
       else if (e.tipus === "pc") eszkoz = ujPc({ nev: e.nev });
+      else if (e.tipus === "router") eszkoz = ujRouter4331({ hostname: e.nev });
       else throw new Error(`Ismeretlen eszköztípus: ${e.tipus}`);
       halozat.hozzaad(eszkoz);
       nevek.set(e.nev, eszkoz);
-      elemek.push({ nev: e.nev, eszkoz, x: e.x, y: e.y, tipus: e.tipus });
-    }
-    for (const [a, pa, b, pb] of feladat.topologia.kabelek || []) {
-      halozat.kabel(nevek.get(a), pa, nevek.get(b), pb);
+      elemek.push({ nev: e.nev, eszkoz, x: e.x, y: e.y, tipus: e.tipus, felirat: e.felirat });
     }
     for (const [nev, beall] of Object.entries(feladat.kiindulo || {})) {
       const eszkoz = nevek.get(nev);
       if (eszkoz.tipus === "pc") {
         ipBeallit(eszkoz, beall);
+        continue;
+      }
+      if (eszkoz.tipus === "router") {
+        routerBeallit(eszkoz, beall);
         continue;
       }
       if (beall.hostname) eszkoz.hostname = beall.hostname;
@@ -3908,7 +6857,12 @@
         eszkoz.vlanok[szam] = { nev: vnev, gyari: false, tamogatott: true };
       }
     }
+    for (const [a, pa, b, pb, opciok] of feladat.topologia.kabelek || []) {
+      halozat.kabel(nevek.get(a), pa, nevek.get(b), pb, opciok || {});
+    }
     vtpIdozitoIndit(halozat);
+    ripIndit(halozat);
+    for (const e of halozat.eszkozok) if (e.tipus === "router") ripValtozott(e, { keres: true });
     return {
       feladat,
       halozat,
@@ -3919,6 +6873,29 @@
         return e;
       }
     };
+  }
+  function routerBeallit(r, b) {
+    if (b.hostname) r.hostname = b.hostname;
+    for (const [pnev, pb] of Object.entries(b.portok || {})) {
+      let p = routerPort(r, pnev);
+      if (!p && /^Loopback\d+$/.test(pnev)) p = loopbackLetrehoz(r, Number(pnev.slice(8)));
+      if (!p) throw new Error(`Nincs ilyen port: ${r.hostname} ${pnev}`);
+      if (pb.ip) {
+        p.ip = pb.ip;
+        p.maszk = pb.maszk;
+      }
+      for (const c of pb.ipv6 || []) {
+        const pr = ipv6PrefixElemez(c);
+        if (!pr) throw new Error(`Hibás IPv6-cím: ${c}`);
+        p.ipv6.push({ cim: ipv6Normal(c.split("/")[0]), hossz: pr.hossz });
+      }
+      if (pb.linkLocal) p.linkLocal = ipv6Normal(pb.linkLocal);
+      p.leallitva = pb.be === false;
+      if (p.tipus === "Loopback") p.fent = !p.leallitva;
+    }
+    for (const s of b.statikus || []) r.statikus.push({ ...s });
+    for (const s of b.statikus6 || []) r.statikus6.push({ prefix: s.prefix, kovetkezo: s.kovetkezo ? ipv6Normal(s.kovetkezo) : void 0, interfesz: s.interfesz });
+    if (b.ipv6Routing) r.ipv6Routing = true;
   }
 
   // src/feladat/veletlen.js
@@ -4006,7 +6983,7 @@
   }
 
   // src/fo.js
-  var VERZIO = true ? "0.7.0" : "fejlesztői";
+  var VERZIO = true ? "0.8.0" : "fejlesztői";
   var HIBAJELENTO = "https://routerrantotta.hu/otlet.html";
   var ANIM_KESLELTETES = 260;
   var SEBESSEGEK = [
@@ -4053,7 +7030,7 @@
     const kisKepernyo = elem5("p", "hsz-kiskepernyo", "Tipp: nagyobb képernyőn kényelmesebb a gyakorlás.");
     const tartalom = elem5("div", "hsz-tartalom");
     gyoker.append(kisKepernyo);
-    const lista = feladatLista();
+    const lista2 = feladatLista();
     let aktualis = null;
     let fut = null;
     let mag = null;
@@ -4084,7 +7061,7 @@
       }
     };
     const mehet = (kerdes) => !fut || !fut.piszkos || window.confirm(kerdes);
-    const valaszto = lista.length ? feladatValaszto(lista, {
+    const valaszto = lista2.length ? feladatValaszto(lista2, {
       feladat: (f) => {
         if (!mehet("Másik feladatra váltasz? Az eddigi beállítások elvesznek.")) return false;
         betolt(f);
@@ -4151,7 +7128,7 @@
       valaszt: (e, fokusz) => fut.valaszt(e, fokusz)
     };
   }
-  function feladatValaszto(lista, h) {
+  function feladatValaszto(lista2, h) {
     const doboz = elem5("div", "hsz-valaszto");
     doboz.setAttribute("role", "group");
     doboz.setAttribute("aria-label", "Feladat és mód választása");
@@ -4171,12 +7148,12 @@
     modGombok.setAttribute("role", "group");
     modGombok.setAttribute("aria-labelledby", modCim.id);
     const gombok = {};
-    for (const [kulcs, m] of Object.entries(MODOK2)) {
+    for (const [kulcs2, m] of Object.entries(MODOK2)) {
       const g = elem5("button", "hsz-modgomb", m.nev);
       g.type = "button";
       g.title = m.leiras;
-      g.addEventListener("click", () => h.mod(kulcs));
-      gombok[kulcs] = g;
+      g.addEventListener("click", () => h.mod(kulcs2));
+      gombok[kulcs2] = g;
       modGombok.append(g);
     }
     modMezo.append(modCim, modGombok);
@@ -4187,14 +7164,14 @@
     ujraGomb.addEventListener("click", () => h.ujra());
     const ujValtGomb = elem5("button", "hsz-gomb hsz-gomb--masodlagos", "Új változat");
     ujValtGomb.type = "button";
-    ujValtGomb.title = "Ugyanez a feladat más véletlen adatokkal (VLAN-számok, nevek, címek)";
+    ujValtGomb.title = "Ugyanez a feladat más véletlen adatokkal (számok, nevek, címek)";
     ujValtGomb.addEventListener("click", () => h.ujValtozat());
     doboz.append(ujraGomb, ujValtGomb);
-    const tipusok = [...new Set(lista.map(tipusa))];
+    const tipusok = [...new Set(lista2.map(tipusa))];
     for (const t of tipusok) tipusSel.append(new Option(t, t));
     const feladatokTolt = (tipus) => {
       feladatSel.textContent = "";
-      for (const f of lista.filter((x) => tipusa(x) === tipus)) {
+      for (const f of lista2.filter((x) => tipusa(x) === tipus)) {
         feladatSel.append(new Option(f.szint ? `${f.cim} (${f.szint})` : f.cim, f.azon));
       }
     };
@@ -4208,21 +7185,21 @@
     };
     tipusSel.addEventListener("change", () => {
       feladatokTolt(tipusSel.value);
-      if (!h.feladat(lista.find((x) => x.azon === feladatSel.value))) visszaallit();
+      if (!h.feladat(lista2.find((x) => x.azon === feladatSel.value))) visszaallit();
     });
     feladatSel.addEventListener("change", () => {
-      if (!h.feladat(lista.find((x) => x.azon === feladatSel.value))) visszaallit();
+      if (!h.feladat(lista2.find((x) => x.azon === feladatSel.value))) visszaallit();
     });
     return {
       doboz,
       /** A választó beállítása az éppen futó feladatra és módra. */
       igazit(f, mod) {
-        for (const [kulcs, g] of Object.entries(gombok)) {
-          g.setAttribute("aria-pressed", String(kulcs === mod));
-          g.classList.toggle("hsz-modgomb--aktiv", kulcs === mod);
+        for (const [kulcs2, g] of Object.entries(gombok)) {
+          g.setAttribute("aria-pressed", String(kulcs2 === mod));
+          g.classList.toggle("hsz-modgomb--aktiv", kulcs2 === mod);
         }
         ujValtGomb.hidden = mod === "oktato" || !f.valtozok;
-        if (!lista.includes(f)) return;
+        if (!lista2.includes(f)) return;
         jelenlegi = f;
         visszaallit();
       }
@@ -4249,7 +7226,7 @@
       }
     });
     let buborek = null;
-    let aktiv = false;
+    let aktiv2 = false;
     let utoljaraMutatott = null;
     let utolsoCel = null;
     let idozito = null;
@@ -4268,7 +7245,7 @@
       return n.terminal.sor.hidden ? n.terminal.doboz : n.terminal.sor;
     };
     const mutat = () => {
-      if (!aktiv) return;
+      if (!aktiv2) return;
       if (panel && panel.fut) {
         buborek.elrejt();
         utoljaraMutatott = null;
@@ -4286,7 +7263,7 @@
           cel: panel ? panel.doboz : null,
           szamlalo: "Vége",
           szoveg: "Gratulálok, végigértél a bemutatón! A feladatpanel alján, a Magyarázatban elolvashatod, mit miért csináltunk.",
-          miert: "Próbáld ki Gyakorló módban is: ott már csak a cél látszik, és más VLAN-számokat, neveket kapsz.",
+          miert: "Próbáld ki Gyakorló módban is: ott már csak a cél látszik, és más adatokat (számokat, neveket, címeket) kapsz.",
           gombok: [{ felirat: "Bezárás", fn: bezar, fo: true }],
           bezar,
           gorget: utoljaraMutatott !== "vege"
@@ -4304,9 +7281,9 @@
       }
       const masikEszkoz = (l.hol === "terminal" || l.hol === "pc") && valasztott() !== eszkoz;
       const szoveg = masikEszkoz ? `Előbb válaszd ki: ${l.eszkoz} (kattints a fülére, vagy rá a rajzon). Utána: ${l.szoveg}` : l.szoveg;
-      const kulcs = `${vezeto.index}:${masikEszkoz}`;
+      const kulcs2 = `${vezeto.index}:${masikEszkoz}`;
       const cel = celElem(l);
-      if (kulcs === utoljaraMutatott && cel === utolsoCel) {
+      if (kulcs2 === utoljaraMutatott && cel === utolsoCel) {
         buborek.helyez();
         return;
       }
@@ -4319,22 +7296,22 @@
         gombok: [
           { felirat: "Kihagyom ezt a lépést", fn: () => {
             vezeto.kihagy();
-            frissit();
+            frissit2();
           } },
           { felirat: "Bemutató bezárása", fn: bezar }
         ],
         bezar,
-        gorget: utoljaraMutatott !== kulcs
+        gorget: utoljaraMutatott !== kulcs2
       });
-      utoljaraMutatott = kulcs;
+      utoljaraMutatott = kulcs2;
     };
-    const frissit = () => {
-      if (!aktiv) return;
+    const frissit2 = () => {
+      if (!aktiv2) return;
       vezeto.frissit();
       mutat();
     };
     const leallitas = () => {
-      aktiv = false;
+      aktiv2 = false;
       clearInterval(idozito);
       if (buborek) buborek.elrejt();
     };
@@ -4342,18 +7319,18 @@
     return {
       indit() {
         if (!buborek) buborek = new Buborek(gyoker);
-        aktiv = true;
+        aktiv2 = true;
         vezeto.index = 0;
         utoljaraMutatott = null;
         utolsoCel = null;
         clearInterval(idozito);
-        idozito = setInterval(frissit, 500);
+        idozito = setInterval(frissit2, 500);
         if (!leiratkozas) leiratkozas = halozat.figyel((e) => {
-          if (e.tipus === "allapot") frissit();
+          if (e.tipus === "allapot") frissit2();
         });
-        frissit();
+        frissit2();
       },
-      frissit,
+      frissit: frissit2,
       megszuntet() {
         leallitas();
         if (buborek) buborek.megszuntet();
@@ -4373,19 +7350,19 @@
       g.title = s.szorzo === 1 ? "Valós idő" : `${s.szorzo < 1 ? "Lassítva" : "Gyorsítva"}: ${String(s.szorzo).replace(".", ",")}×`;
       g.addEventListener("click", () => {
         sebesseg.allit(s.szorzo);
-        frissit();
+        frissit2();
       });
       csoport.append(g);
       return { g, s };
     });
-    const frissit = () => {
+    const frissit2 = () => {
       for (const { g, s } of gombok) {
-        const aktiv = s.szorzo === sebesseg.kap();
-        g.classList.toggle("hsz-modgomb--aktiv", aktiv);
-        g.setAttribute("aria-pressed", String(aktiv));
+        const aktiv2 = s.szorzo === sebesseg.kap();
+        g.classList.toggle("hsz-modgomb--aktiv", aktiv2);
+        g.setAttribute("aria-pressed", String(aktiv2));
       }
     };
-    frissit();
+    frissit2();
     sor2.append(cim, csoport);
     return sor2;
   }
@@ -4393,9 +7370,9 @@
     const ora = new Ora();
     let elozo = performance.now();
     const idozito = setInterval(() => {
-      const most = performance.now();
-      ora.lep((most - elozo) * sebesseg.kap());
-      elozo = most;
+      const most3 = performance.now();
+      ora.lep((most3 - elozo) * sebesseg.kap());
+      elozo = most3;
     }, 20);
     const f = feladatBetolt(feladat, { ora, kesleltetes: ANIM_KESLELTETES });
     const { halozat } = f;
@@ -4405,7 +7382,7 @@
     munka.setAttribute("aria-label", "Az eszközök kezelése");
     gyoker.append(felso, munka);
     let valasztott = null;
-    const topologia = new Topologia(felso, { elemek: f.elemek, halozat, meret: feladat.topologia.meret }, {
+    const topologia = new Topologia(felso, { elemek: f.elemek, halozat, meret: feladat.topologia.meret, feliratok: feladat.topologia.feliratok }, {
       sebesseg: sebesseg.kap,
       valaszt: (e) => valaszt(e, true)
     });
@@ -4448,9 +7425,9 @@
       ful.addEventListener("click", () => valaszt(eszkoz, true));
       fulek.append(ful);
       let n;
-      if (tipus === "switch") {
+      if (tipus === "switch" || tipus === "router") {
         const doboz = elem5("div", "hsz-nezet");
-        const munkamenet = new Munkamenet({ szemelyiseg: ios, eszkoz, ora });
+        const munkamenet = new Munkamenet({ szemelyiseg: szemelyiseg(eszkoz), eszkoz, ora });
         const terminal = new Terminal(doboz, munkamenet, {
           parancsUtan: (sor2) => {
             utolsoParancs.set(eszkoz, sor2);
@@ -4476,6 +7453,8 @@
         const ablak = new PcAblak(nezetHely, {
           eszkoz,
           halozat,
+          ipv6: !!feladat.ipv6,
+          atjaroKell: f.elemek.some((x) => x.tipus === "router"),
           valtozott: frissitMind,
           parancsUtan: (sor2) => {
             utolsoParancs.set(eszkoz, sor2);

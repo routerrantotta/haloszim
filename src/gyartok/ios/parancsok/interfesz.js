@@ -9,14 +9,17 @@ import { portValtozott } from '../../../mag/halozat.js';
 const INTERFACE_SZO = { szo: 'interface', sugo: 'Interfész (port) kiválasztása a beállításhoz' };
 const IF_MODOK = ['konfig-if', 'konfig-if-tartomany'];
 
-export const interfeszParancsok = [
-  {
-    modok: ['konfig'],
-    szavak: [INTERFACE_SZO, { param: 'interfesz', kulcs: 'interfesz', sugo: 'Az interfész neve' }],
-    vegrehajt(ctx, { interfesz }) {
-      ctx.modValt('konfig-if', { portok: [interfesz] });
-    },
+/** Az interface parancs (a router saját változatot használ, mert ott Loopback is létrehozható). */
+export const interfeszValaszto = {
+  modok: ['konfig'],
+  szavak: [INTERFACE_SZO, { param: 'interfesz', kulcs: 'interfesz', sugo: 'Az interfész neve' }],
+  vegrehajt(ctx, { interfesz }) {
+    ctx.modValt('konfig-if', { portok: [interfesz] });
   },
+};
+
+/** interface range, shutdown, no shutdown – switchen és routeren is. */
+export const interfeszKozos = [
   {
     modok: ['konfig'],
     szavak: [
@@ -57,3 +60,5 @@ export const interfeszParancsok = [
     },
   },
 ];
+
+export const interfeszParancsok = [interfeszValaszto, ...interfeszKozos];

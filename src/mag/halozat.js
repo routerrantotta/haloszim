@@ -17,6 +17,8 @@ import { Ora, naploIdobelyeg } from './ido.js';
 import { kapcsoloFogad, macTorolPort } from './kapcsolas.js';
 import { vegpontFogad } from './vegpont.js';
 import { vtpTrunkValtozas } from './vtp.js';
+import { routerFogad, szomszedTorol } from './router.js';
+import { ripPortValtozott } from './rip.js';
 
 /** Ennyi idő után jön a „link up” üzenet a bekapcsolt porton (ms). */
 export const LINK_FEL_IDO = 1000;
@@ -57,12 +59,14 @@ export class Halozat {
    * Kábel két port között. A kábel azonnal működik (nincs „link up” üzenet), ha mindkét
    * vég be van kapcsolva – mintha a hálózat már így indult volna.
    */
-  kabel(eszkozA, portNevA, eszkozB, portNevB) {
+  kabel(eszkozA, portNevA, eszkozB, portNevB, { soros = false } = {}) {
     const pa = eszkozA.portok.find((p) => p.nev === portNevA);
     const pb = eszkozB.portok.find((p) => p.nev === portNevB);
     if (!pa || !pb) throw new Error(`Nincs ilyen port: ${eszkozA.hostname} ${portNevA} / ${eszkozB.hostname} ${portNevB}`);
     if (this.kabelVege(eszkozA, pa) || this.kabelVege(eszkozB, pb)) throw new Error('A port már foglalt.');
-    const k = { a: { eszkoz: eszkozA, port: pa }, b: { eszkoz: eszkozB, port: pb }, fuggo: [] };
+    // Soros (pl. 64 kbit/s-os) vonal: a csomag lassabban ér át rajta. A „keses” a valódi késleltetés
+    // (ms, ebből számol a ping és a traceroute), a „lassu” az animáció lassítása.
+    const k = { a: { eszkoz: eszkozA, port: pa }, b: { eszkoz: eszkozB, port: pb }, fuggo: [], soros, keses: soros ? 10 : 0, lassu: soros ? 2 : 1 };
     this.kabelek.push(k);
     const fent = !pa.leallitva && !pb.leallitva;
     pa.fent = fent;
@@ -97,7 +101,7 @@ export class Halozat {
 
   /** Időbélyeges konzolüzenet egy eszközön (a nézet a konzoljára írja). */
   naplo(eszkoz, uzenet) {
-    if (eszkoz.tipus !== 'switch') return;
+    if (eszkoz.tipus === 'pc') return;
     this.esemeny({ tipus: 'naplo', eszkoz, sor: `${naploIdobelyeg(this.ora.ido)}: ${uzenet}` });
   }
 
@@ -109,16 +113,22 @@ export class Halozat {
    */
   kuld(eszkoz, port, keret) {
     if (!port.fent) return;
-    const tul = this.szomszed(eszkoz, port);
-    if (!tul) return;
-    this.esemeny({ tipus: 'keret', honnan: { eszkoz, port }, hova: tul, keret, idotartam: this.kesleltetes });
-    this.ora.utemez(this.kesleltetes, () => this.fogad(tul.eszkoz, tul.port, keret));
+    const k = this.kabelVege(eszkoz, port);
+    if (!k) return;
+    const tul = k.a.eszkoz === eszkoz && k.a.port === port ? k.b : k.a;
+    if (k.keses && keret.adat && (keret.tipus === 'ipv4' || keret.tipus === 'ipv6')) {
+      keret = { ...keret, adat: { ...keret.adat, keses: (keret.adat.keses || 0) + k.keses } };
+    }
+    const ido = this.kesleltetes * k.lassu;
+    this.esemeny({ tipus: 'keret', honnan: { eszkoz, port }, hova: tul, keret, idotartam: ido });
+    this.ora.utemez(ido, () => this.fogad(tul.eszkoz, tul.port, keret));
   }
 
   /** @private – egy keret megérkezett egy portra */
   fogad(eszkoz, port, keret) {
     if (!port.fent) return;
     if (eszkoz.tipus === 'switch') kapcsoloFogad(this, eszkoz, port, keret);
+    else if (eszkoz.tipus === 'router') routerFogad(this, eszkoz, port, keret);
     else vegpontFogad(this, eszkoz, port, keret);
   }
 
@@ -134,6 +144,19 @@ export class Halozat {
   portValtozott(eszkoz, port) {
     const k = this.kabelVege(eszkoz, port);
     if (!k) {
+      if (eszkoz.tipus === 'router') {
+        if (port.tipus === 'Loopback') {
+          const fent = !port.leallitva;
+          if (fent !== port.fent) {
+            port.fent = fent;
+            if (fent) this.naplo(eszkoz, `%LINK-3-UPDOWN: Interface ${port.nev}, changed state to up`);
+            this.naplo(eszkoz, `%LINEPROTO-5-UPDOWN: Line protocol on Interface ${port.nev}, changed state to ${fent ? 'up' : 'down'}`);
+          }
+        } else if (!port.leallitva) {
+          this.naplo(eszkoz, `%LINK-3-UPDOWN: Interface ${port.nev}, changed state to down`);
+        }
+        ripPortValtozott(this, eszkoz, port);
+      }
       this.esemeny({ tipus: 'allapot' });
       return;
     }
@@ -147,6 +170,10 @@ export class Halozat {
         for (const v of vegek) {
           v.port.fent = false;
           if (v.eszkoz.tipus === 'switch') macTorolPort(v.eszkoz, v.port.nev);
+          if (v.eszkoz.tipus === 'router') {
+            szomszedTorol(v.eszkoz, v.port.nev);
+            ripPortValtozott(this, v.eszkoz, v.port);
+          }
           // A túloldalon (ahol nem kapcsolták le) a fizikai link is leesik.
           if (!v.port.leallitva) this.naplo(v.eszkoz, `%LINK-3-UPDOWN: Interface ${v.port.nev}, changed state to down`);
         }
@@ -171,6 +198,7 @@ export class Halozat {
         }
         if (k.a.eszkoz.tipus === 'switch') vtpTrunkValtozas(k.a.eszkoz, k.a.port);
         else if (k.b.eszkoz.tipus === 'switch') vtpTrunkValtozas(k.b.eszkoz, k.b.port);
+        for (const v of vegek) if (v.eszkoz.tipus === 'router') ripPortValtozott(this, v.eszkoz, v.port);
         this.esemeny({ tipus: 'allapot' });
       }));
     }

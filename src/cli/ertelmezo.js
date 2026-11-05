@@ -16,6 +16,8 @@
  */
 
 import { interfeszElemez, tartomanyElemez, tipusIllesztes } from './interfesznev.js';
+import { ipSzam, ipSzoveg } from '../mag/ip.js';
+import { ipv6Elemez, ipv6Szoveg } from '../mag/ipv6.js';
 
 // ---------------------------------------------------------------------------
 // Szavakra bontás
@@ -83,6 +85,51 @@ const PARAM_TIPUSOK = {
     kiegeszit: () => null,
   },
 
+  /** IPv4-cím vagy -maszk pontozott alakban, pl. 10.1.12.0 (az érték egységes szöveg) */
+  ipv4: {
+    nev: (e) => e.nev || 'A.B.C.D',
+    illeszt(e, tokenek, i) {
+      const t = tokenek[i];
+      const n = ipSzam(t.szoveg);
+      if (n === null) return { ok: false, hiba: 'ervenytelen', oszlop: t.kezdet + ipv4HibaHely(t.szoveg) };
+      return { ok: true, ertek: ipSzoveg(n), kovetkezo: i + 1 };
+    },
+    sugoElemek: (e) => [{ nev: PARAM_TIPUSOK.ipv4.nev(e), sugo: e.sugo }],
+    reszleges: (e, r) => (/^[\d.]+$/.test(r) ? [PARAM_TIPUSOK.ipv4.nev(e)] : []),
+    kiegeszit: () => null,
+  },
+
+  /** IPv6-cím előtaghossz nélkül, pl. FE80::1 (az érték egységes, nagybetűs rövid alak) */
+  ipv6: {
+    nev: (e) => e.nev || 'X:X:X:X::X',
+    illeszt(e, tokenek, i) {
+      const t = tokenek[i];
+      const c = t.szoveg.includes('/') ? null : ipv6Elemez(t.szoveg);
+      if (!c) return { ok: false, hiba: 'ervenytelen', oszlop: t.kezdet };
+      return { ok: true, ertek: ipv6Szoveg(c), kovetkezo: i + 1 };
+    },
+    sugoElemek: (e) => [{ nev: PARAM_TIPUSOK.ipv6.nev(e), sugo: e.sugo }],
+    reszleges: (e, r) => (/^[0-9a-fA-F:]+$/.test(r) ? [PARAM_TIPUSOK.ipv6.nev(e)] : []),
+    kiegeszit: () => null,
+  },
+
+  /** IPv6-cím előtaghosszal, pl. 2001:DB8:ACAD:1::1/64 → { cim, hossz } */
+  'ipv6-prefix': {
+    nev: (e) => e.nev || 'X:X:X:X::X/<0-128>',
+    illeszt(e, tokenek, i) {
+      const t = tokenek[i];
+      const m = /^([^/]+)\/(\d{1,3})$/.exec(t.szoveg);
+      const c = m && ipv6Elemez(m[1]);
+      if (!c) return { ok: false, hiba: 'ervenytelen', oszlop: t.kezdet };
+      const hossz = Number(m[2]);
+      if (hossz > 128) return { ok: false, hiba: 'ervenytelen', oszlop: t.kezdet + m[1].length + 1 };
+      return { ok: true, ertek: { cim: ipv6Szoveg(c), hossz }, kovetkezo: i + 1 };
+    },
+    sugoElemek: (e) => [{ nev: PARAM_TIPUSOK['ipv6-prefix'].nev(e), sugo: e.sugo }],
+    reszleges: (e, r) => (/^[0-9a-fA-F:/]+$/.test(r) ? [PARAM_TIPUSOK['ipv6-prefix'].nev(e)] : []),
+    kiegeszit: () => null,
+  },
+
   /** Egy interfész, pl. fa0/1 vagy „FastEthernet 0/1” (egy vagy két szó) */
   interfesz: {
     illeszt(e, tokenek, i, sor, kornyezet) {
@@ -109,6 +156,21 @@ const PARAM_TIPUSOK = {
     kiegeszit: (e, r, kornyezet) => interfeszKiegeszit(r, kornyezet),
   },
 };
+
+/** Egy hibás IPv4-címben hol kezdődik a hiba (a ^ jelhez): az első nem odaillő karakter. */
+function ipv4HibaHely(szoveg) {
+  const reszek = szoveg.split('.');
+  let hely = 0;
+  for (let i = 0; i < reszek.length; i++) {
+    const r = reszek[i];
+    if (i > 3 || !/^\d{1,3}$/.test(r) || Number(r) > 255) {
+      const m = /^\d*/.exec(r)[0];
+      return hely + (Number(m) > 255 || m.length > 3 ? 0 : m.length);
+    }
+    hely += r.length + 1;
+  }
+  return szoveg.length;
+}
 
 /** A porttípusok listája a súgóhoz (pl. „FastEthernet  FastEthernet (100 Mbit/s) port”). */
 function tipusSugo(e, kornyezet) {

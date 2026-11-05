@@ -9,7 +9,7 @@ import { Vezeto, parancsIllik } from '../src/feladat/vezetett.js';
 import { ellenoriz } from '../src/feladat/ellenorzo.js';
 import { Munkamenet } from '../src/cli/terminal-munkamenet.js';
 import { PcMunkamenet } from '../src/cli/pc-munkamenet.js';
-import { ios } from '../src/gyartok/ios/index.js';
+import { ios, szemelyiseg } from '../src/gyartok/ios/index.js';
 import { ipBeallit } from '../src/mag/vegpont.js';
 
 test('parancsIllik: rövidítés és do', () => {
@@ -32,7 +32,7 @@ function vegigjatszik(azon, mag) {
       const e = f.eszkoz(nev);
       mmek.set(nev, e.tipus === 'pc'
         ? new PcMunkamenet({ eszkoz: e, halozat: f.halozat })
-        : new Munkamenet({ szemelyiseg: ios, eszkoz: e, ora: f.halozat.ora }));
+        : new Munkamenet({ szemelyiseg: szemelyiseg(e), eszkoz: e, ora: f.halozat.ora }));
     }
     return mmek.get(nev);
   };
@@ -43,6 +43,7 @@ function vegigjatszik(azon, mag) {
     utolsoParancs: (nev) => utolso.get(nev) || '',
     ellenorzesKesz: () => ellenorzesOk,
   });
+  const vanRouter = f.elemek.some((x) => x.tipus === 'router');
   v.frissit();
   assert.equal(v.index, 0, 'az elején semmi nem teljesül');
   let lepesSzam = 0;
@@ -56,13 +57,17 @@ function vegigjatszik(azon, mag) {
         for (const e of r.kimenet) if (e && e.folyamat) e.folyamat(() => {}, () => {});
         utolso.set(l.eszkoz, sor);
       }
-      f.lep(10000);
+      // Routereknél a RIP 30 másodperces frissítését is ki kell várni.
+      f.lep(vanRouter ? 40000 : 10000);
     } else if (l.hol === 'eszkoz') {
       valasztott = l.eszkoz;
     } else if (l.hol === 'ellenorzes') {
-      ellenoriz(f, { kesz: (e) => { ellenorzesOk = e.every((x) => x.ok); } });
-      f.lep(120000);
-      assert.ok(ellenorzesOk, `${azon} #${mag}: az ellenőrzés hibátlan`);
+      let eredmeny = null;
+      ellenoriz(f, { kesz: (e) => { eredmeny = e; } });
+      f.lep(300000);
+      const hibak = (eredmeny || []).map((e, i) => (e && !e.ok ? `${f.feladat.celok[i].szoveg}: ${e.megjegyzes}` : null)).filter(Boolean);
+      assert.deepEqual(hibak, [], `${azon} #${mag}: az ellenőrzés hibátlan`);
+      ellenorzesOk = true;
     } else {
       // PC-űrlap: az IP-címek a lépés feltételeiből
       const kesz = Array.isArray(l.kesz) ? l.kesz : [l.kesz];
@@ -75,7 +80,7 @@ function vegigjatszik(azon, mag) {
   return lepesSzam;
 }
 
-for (const azon of ['vlan-1', 'vtp-1']) {
+for (const azon of ['vlan-1', 'vtp-1', 'rip-1']) {
   test(`${azon}: a bemutató végigjátszható (alapadatok és véletlen változatok)`, () => {
     for (const mag of [null, 5, 777, 31337]) assert.ok(vegigjatszik(azon, mag) > 10);
   });

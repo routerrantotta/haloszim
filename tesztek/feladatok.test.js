@@ -7,8 +7,10 @@ import assert from 'node:assert/strict';
 import './segito.js';
 import { feladatLista, feladatBetolt } from '../src/feladat/betolto.js';
 import { lepesAlak, idoSzoveg, MODOK } from '../src/nezet/panel.js';
+import { feladatValtozat } from '../src/feladat/veletlen.js';
 
-const CELTIPUSOK = ['vlan', 'vlan-nincs', 'access-port', 'trunk', 'pc-ip', 'vtp', 'vtp-szinkron', 'ping', 'szoras'];
+const CELTIPUSOK = ['vlan', 'vlan-nincs', 'access-port', 'trunk', 'pc-ip', 'vtp', 'vtp-szinkron', 'ping', 'szoras',
+  'rip', 'ripng', 'ipv6-routing', 'utvonal'];
 
 for (const fd of feladatLista()) {
   test(`${fd.azon}: a teendők céljai és a leírás parancs nélküliek (vizsga mód)`, () => {
@@ -28,7 +30,7 @@ for (const fd of feladatLista()) {
       assert.ok(CELTIPUSOK.includes(c.tipus), c.tipus);
       assert.ok(c.szoveg, 'minden célnak van szövege');
     }
-    const f = feladatBetolt(fd);
+    const f = feladatBetolt(feladatValtozat(fd, null));
     for (const e of fd.topologia.eszkozok) assert.ok(f.eszkoz(e.nev));
   });
 }

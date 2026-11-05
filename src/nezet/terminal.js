@@ -190,7 +190,23 @@ export class Terminal {
     } else {
       for (const e of elemek) {
         if (typeof e === 'string') this.kiirSor(e);
-        else if (e.folyamat) await new Promise((kesz) => e.folyamat((sor) => this.kiirSor(sor), kesz));
+        else if (e.folyamat) {
+          // A harmadik visszahívás egy sor folytatása (pl. a router pingjének „!!!!!” jelei egyenként).
+          let folytatott = null;
+          const kiir = (sor) => {
+            folytatott = null;
+            this.kiirSor(sor);
+          };
+          const hozzafuz = (t) => {
+            if (!folytatott) {
+              folytatott = elem('div', 'hsz-terminal__kisor');
+              this.kimenet.append(folytatott);
+            }
+            folytatott.textContent += t;
+            this.vagas();
+          };
+          await new Promise((kesz) => e.folyamat(kiir, kesz, hozzafuz));
+        }
         else if (e.torles) this.kimenet.textContent = '';
         else await new Promise((r) => setTimeout(r, e.varj));
       }
