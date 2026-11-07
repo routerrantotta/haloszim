@@ -17,6 +17,7 @@
 import { SZO } from './alap.js';
 import { routerPort, loopbackLetrehoz, ujRip } from '../../../modell/router.js';
 import { ripValtozott } from '../../../mag/rip.js';
+import { ospfValtozott } from '../../../mag/ospf.js';
 import {
   ipSzam, ipSzoveg, ervenyesMaszk, prefixHossz, halozatSzam, osztalyos, maszkSzam,
 } from '../../../mag/ip.js';
@@ -36,9 +37,10 @@ function portjai(ctx) {
   return ctx.kontextus.portok.map((n) => routerPort(ctx.eszkoz, n)).filter(Boolean);
 }
 
-/** Változás után: a RIP kihirdeti, a rajz frissül. */
+/** Változás után: a RIP kihirdeti, az OSPF igazodik (cím, interfész, statikus útvonal), a rajz frissül. */
 function valtozott(ctx, b) {
   ripValtozott(ctx.eszkoz, b);
+  ospfValtozott(ctx.eszkoz);
   if (ctx.eszkoz.halozat) ctx.eszkoz.halozat.esemeny({ tipus: 'allapot' });
 }
 

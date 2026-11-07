@@ -6,7 +6,7 @@
  * A router portjai gyárilag LE vannak kapcsolva (shutdown) – ellentétben a switchével.
  *
  * Itt CSAK az állapot van, adatként. A működés: mag/router.js (továbbítás), mag/rip.js (RIP, RIPng),
- * mag/utvonal.js (a routing tábla összeállítása).
+ * mag/ospf.js (OSPFv2, OSPFv3), mag/utvonal.js (a routing tábla összeállítása).
  */
 
 import { macNevbol } from '../mag/ethernet.js';
@@ -34,7 +34,30 @@ export const LOOPBACK_MAX = 99;
  * @property {''|'originate'|'only'} ripngAlap – alapértelmezett útvonal hirdetése RIPng-ben
  * @property {number} [savszel]    – bandwidth (kbit/s), ha kézzel állították
  * @property {number} [orajel]     – clock rate (soros porton)
+ * @property {OspfPort} ospf       – az interfész OSPFv2-beállításai (ip ospf …)
+ * @property {OspfPort} ospf6      – az interfész OSPFv3-beállításai (ipv6 ospf …)
+ * @property {number|null} mtu     – ip mtu (null = alapérték)
+ * @property {number|null} mtu6    – ipv6 mtu (null = alapérték)
+ * @property {string} leiras       – description
  */
+
+/**
+ * Az interfész OSPF-beállításai (null = alapérték).
+ * @typedef {Object} OspfPort
+ * @property {number|null} folyamat, terulet – ip ospf <folyamat> area <terület> (közvetlen bekapcsolás)
+ * @property {number|null} koltseg           – ip ospf cost
+ * @property {number} prioritas              – ip ospf priority (alapból 1)
+ * @property {''|'point-to-point'|'broadcast'} halozatTipus – ip ospf network
+ * @property {number|null} hello, dead       – ip ospf hello-interval / dead-interval
+ * @property {''|'null'|'egyszeru'|'md5'} hitelesites – ip ospf authentication [message-digest|null]
+ * @property {Object<number, string>} kulcsok – ip ospf message-digest-key <n> md5 <jelszó>
+ * @property {string} jelszo                 – ip ospf authentication-key (egyszerű jelszó)
+ */
+
+/** Új, gyári OSPF-interfészbeállítás. */
+export function ujOspfPort() {
+  return { folyamat: null, terulet: null, koltseg: null, prioritas: 1, halozatTipus: '', hello: null, dead: null, hitelesites: '', kulcsok: {}, jelszo: '' };
+}
 
 function ujPort(hostname, tipus, szam) {
   return {
@@ -52,6 +75,11 @@ function ujPort(hostname, tipus, szam) {
     ipv6Be: false,
     ripng: '',
     ripngAlap: '',
+    ospf: ujOspfPort(),
+    ospf6: ujOspfPort(),
+    mtu: null,
+    mtu6: null,
+    leiras: '',
   };
 }
 
@@ -75,6 +103,24 @@ export function ujRip() {
     alapUtvonal: false,
     idozitok: { frissites: 30, ervenytelen: 180, visszatartas: 180, torles: 240 },
   };
+}
+
+/**
+ * @typedef {Object} OspfBeallitas – egy OSPF-folyamat (router ospf N / ipv6 router ospf N)
+ * @property {number} folyamat       – a folyamat azonosítója (csak helyileg érvényes)
+ * @property {string} routerId       – kézzel megadott router ID ('' = automatikus)
+ * @property {{cim: string, wildcard: string, terulet: number}[]} halozatok – network … area … (csak OSPFv2)
+ * @property {string[]} passziv      – passzív interfészek
+ * @property {boolean} passzivAlap   – passive-interface default
+ * @property {string[]} nemPassziv   – no passive-interface … (passive-interface default mellett)
+ * @property {number} referencia     – auto-cost reference-bandwidth (Mbit/s, alapból 100)
+ * @property {''|'originate'|'always'} alapUtvonal – default-information originate [always]
+ * @property {number} maxUtak        – maximum-paths (alapból 4)
+ */
+
+/** Új OSPF-folyamat a gyári értékekkel. */
+export function ujOspf(folyamat) {
+  return { folyamat, routerId: '', halozatok: [], passziv: [], passzivAlap: false, nemPassziv: [], referencia: 100, alapUtvonal: '', maxUtak: 4 };
 }
 
 /**
@@ -104,8 +150,12 @@ export function ujRouter4331(b = {}) {
     rip: null,
     /** RIPng-folyamatok: név → {} (a beállítások az interfészeken vannak) */
     ripng: {},
-    /** debug ip rip, debug ipv6 rip */
-    debug: { rip: false, ripng: false },
+    /** @type {OspfBeallitas|null} router ospf N */
+    ospf: null,
+    /** @type {OspfBeallitas|null} ipv6 router ospf N */
+    ospf6: null,
+    /** debug ip rip, debug ipv6 rip, debug ip ospf hello/adj, debug ipv6 ospf hello/adj */
+    debug: { rip: false, ripng: false, ospfHello: false, ospfAdj: false, ospf6Hello: false, ospf6Adj: false },
   };
 }
 

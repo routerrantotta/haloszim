@@ -15,6 +15,7 @@ import {
 import {
   ripAdatbazis, ripForrasok, ripKovetkezo, ripPortok, ripSzamlalok, RIPNG_IDOZITOK,
 } from '../../../mag/rip.js';
+import { ipProtocolsOspf, ipv6ProtocolsOspf } from './ospf.js';
 
 /** Eltelt idő hh:mm:ss alakban (a routing táblában a RIP-útvonal kora). */
 export function kor(ms) {
@@ -68,6 +69,7 @@ export function showIpv6IntBrief(r) {
 
 const KODOK4 = [
   'Codes: L - local, C - connected, S - static, R - RIP, O - OSPF, D - EIGRP',
+  '       E1 - OSPF external type 1, E2 - OSPF external type 2',
   '       * - candidate default',
 ];
 
@@ -84,7 +86,7 @@ function utSorok(r, e, eleje) {
     if (e.kod === 'S' && u.kovetkezo === null) resz = `is directly connected, ${u.port}`;
     else {
       resz = `[${e.ad}/${e.metrika}] via ${ipSzoveg(u.kovetkezo)}`;
-      if (e.kod === 'R') resz += `, ${kor(most(r) - u.ido)}`;
+      if (e.kod === 'R' || e.kod === 'O') resz += `, ${kor(most(r) - u.ido)}`;
       if (u.port) resz += `, ${u.port}`;
     }
     if (i === 0) sorok.push(`${eleje} ${resz}`);
@@ -113,7 +115,7 @@ export function showIpRoute(r, szuro = null) {
   s.push('');
   const teljes = tabla4(r);
   const kell = (e) => !szuro || (szuro === 'rip' && e.kod === 'R') || (szuro === 'static' && e.kod === 'S')
-    || (szuro === 'connected' && (e.kod === 'C' || e.kod === 'L'));
+    || (szuro === 'ospf' && e.kod === 'O') || (szuro === 'connected' && (e.kod === 'C' || e.kod === 'L'));
   // Csoportok osztályos hálózat szerint (a 0.0.0.0/0 külön, legelöl).
   const csoportok = new Map();
   for (const e of teljes) {
@@ -122,7 +124,7 @@ export function showIpRoute(r, szuro = null) {
     if (!csoportok.has(k)) csoportok.set(k, { o, elemek: [] });
     csoportok.get(k).elemek.push(e);
   }
-  const kod = (e) => `${e.kod}${e.alap ? '*' : ''}`;
+  const kod = (e) => `${e.kod}${e.alap ? '*' : ''}${e.alKod || ''}`;
   for (const { o, elemek } of [...csoportok.values()].sort((a, b) => a.o.halozat - b.o.halozat)) {
     const latszik = elemek.filter(kell);
     if (!latszik.length) continue;
@@ -150,11 +152,12 @@ export function showIpRoute(r, szuro = null) {
 export function showIpv6Route(r, szuro = null) {
   const t = tabla6(r);
   const kell = (e) => !szuro || (szuro === 'rip' && e.kod === 'R') || (szuro === 'static' && e.kod === 'S')
-    || (szuro === 'connected' && (e.kod === 'C' || e.kod === 'L'));
+    || (szuro === 'ospf' && e.kod === 'O') || (szuro === 'connected' && (e.kod === 'C' || e.kod === 'L'));
   const latszik = t.filter(kell);
   const null0 = !szuro || szuro === 'connected';
   const s = [`IPv6 Routing Table - default - ${t.length + 1} entries`,
     'Codes: C - Connected, L - Local, S - Static, R - RIP, O - OSPF Intra, D - EIGRP',
+    '       OE1 - OSPF ext 1, OE2 - OSPF ext 2',
     ''];
   for (const e of latszik) {
     const cim = `${ipv6Szoveg(e.halozat)}/${e.hossz}`;
@@ -162,7 +165,7 @@ export function showIpv6Route(r, szuro = null) {
       s.push(`${e.kod.padEnd(4)}${cim} [${e.ad}/16]`, `     via ${ipv6Szoveg(e.utak[0].kovetkezo)}, ${e.utak[0].port}`);
       continue;
     }
-    s.push(`${e.kod.padEnd(4)}${cim} [${e.ad}/${e.metrika}]`);
+    s.push(`${(e.kod + (e.alKod || '')).padEnd(4)}${cim} [${e.ad}/${e.metrika}]${e.alKod ? ', tag 1' : ''}`);
     for (const u of e.utak) {
       if (e.kod === 'C') s.push(`     via ${u.port}, directly connected`);
       else if (e.kod === 'L') s.push(`     via ${u.port}, receive`);
@@ -180,6 +183,7 @@ export function showIpv6Route(r, szuro = null) {
 
 export function showIpProtocols(r) {
   const s = ['*** IP Routing is NSF aware ***', ''];
+  s.push(...ipProtocolsOspf(r));
   const rip = r.rip;
   if (!rip) return s;
   const t = rip.idozitok;
@@ -217,6 +221,7 @@ export function showIpProtocols(r) {
 export function showIpv6Protocols(r) {
   const s = ['IPv6 Routing Protocol is "connected"', 'IPv6 Routing Protocol is "application"', 'IPv6 Routing Protocol is "ND"'];
   if (r.statikus6.length) s.push('IPv6 Routing Protocol is "static"');
+  s.push(...ipv6ProtocolsOspf(r));
   for (const nev of Object.keys(r.ripng)) {
     s.push(`IPv6 Routing Protocol is "rip ${nev}"`, '  Interfaces:');
     for (const p of r.portok) if (p.ripng === nev) s.push(`    ${p.nev}`);
@@ -340,20 +345,26 @@ export function routerKonfiguracio(r) {
   s.push('!', '!', '!', '!');
   for (const p of r.portok) {
     s.push(`interface ${p.nev}`);
+    if (p.leiras) s.push(` description ${p.leiras}`);
     if (p.savszel) s.push(` bandwidth ${p.savszel}`);
     s.push(p.ip ? ` ip address ${p.ip} ${p.maszk}` : ' no ip address');
+    if (p.mtu) s.push(` ip mtu ${p.mtu}`);
+    s.push(...ospfInterfeszSorok(p.ospf, 'ip'));
     if (p.leallitva) s.push(' shutdown');
     if (p.tipus === 'GigabitEthernet') s.push(' negotiation auto');
     if (p.tipus === 'Serial' && p.orajel) s.push(` clock rate ${p.orajel}`);
     if (p.linkLocal) s.push(` ipv6 address ${p.linkLocal} link-local`);
     for (const c of p.ipv6) s.push(` ipv6 address ${c.cim}/${c.hossz}`);
     if (p.ipv6Be) s.push(' ipv6 enable');
+    if (p.mtu6) s.push(` ipv6 mtu ${p.mtu6}`);
+    s.push(...ospfInterfeszSorok(p.ospf6, 'ipv6'));
     if (p.ripng) {
       s.push(` ipv6 rip ${p.ripng} enable`);
       if (p.ripngAlap) s.push(` ipv6 rip ${p.ripng} default-information ${p.ripngAlap}`);
     }
     s.push('!');
   }
+  if (r.ospf) s.push(...ospfFolyamatSorok(r.ospf, 'router ospf'));
   if (r.rip) {
     const rip = r.rip;
     s.push('router rip');
@@ -377,8 +388,46 @@ export function routerKonfiguracio(r) {
     s.push(`ipv6 route ${st.prefix}${st.interfesz ? ` ${st.interfesz}` : ''}${st.kovetkezo ? ` ${st.kovetkezo}` : ''}`);
   }
   for (const nev of Object.keys(r.ripng)) s.push(`ipv6 router rip ${nev}`);
+  if (r.ospf6) s.push(...ospfFolyamatSorok(r.ospf6, 'ipv6 router ospf'));
   s.push('!', '!', '!', 'control-plane', '!', '!', 'line con 0', ' transport input none', ' stopbits 1',
     'line aux 0', ' stopbits 1', 'line vty 0 4', ' login', '!', '!', 'end');
+  return s;
+}
+
+/** Az interfész OSPF-sorai a futó konfigurációban (ip ospf … / ipv6 ospf …). */
+function ospfInterfeszSorok(o, elo) {
+  const s = [];
+  if (elo === 'ip') {
+    if (o.hitelesites === 'md5') s.push(' ip ospf authentication message-digest');
+    else if (o.hitelesites === 'egyszeru') s.push(' ip ospf authentication');
+    else if (o.hitelesites === 'null') s.push(' ip ospf authentication null');
+    if (o.jelszo) s.push(` ip ospf authentication-key ${o.jelszo}`);
+    for (const k of Object.keys(o.kulcsok).map(Number).sort((a, b) => a - b)) s.push(` ip ospf message-digest-key ${k} md5 ${o.kulcsok[k]}`);
+  }
+  if (o.halozatTipus) s.push(` ${elo} ospf network ${o.halozatTipus}`);
+  if (o.hello) s.push(` ${elo} ospf hello-interval ${o.hello}`);
+  if (o.dead) s.push(` ${elo} ospf dead-interval ${o.dead}`);
+  if (o.prioritas !== 1) s.push(` ${elo} ospf priority ${o.prioritas}`);
+  if (o.folyamat !== null) s.push(` ${elo} ospf ${o.folyamat} area ${o.terulet}`);
+  if (o.koltseg) s.push(` ${elo} ospf cost ${o.koltseg}`);
+  return s;
+}
+
+/** A router ospf / ipv6 router ospf blokk. */
+function ospfFolyamatSorok(o, fej) {
+  const s = [`${fej} ${o.folyamat}`];
+  if (o.routerId) s.push(` router-id ${o.routerId}`);
+  if (o.referencia !== 100) s.push(` auto-cost reference-bandwidth ${o.referencia}`);
+  if (o.passzivAlap) {
+    s.push(' passive-interface default');
+    for (const p of o.nemPassziv) s.push(` no passive-interface ${p}`);
+  } else {
+    for (const p of o.passziv) s.push(` passive-interface ${p}`);
+  }
+  for (const n of o.halozatok || []) s.push(` network ${n.cim} ${n.wildcard} area ${n.terulet}`);
+  if (o.alapUtvonal) s.push(` default-information originate${o.alapUtvonal === 'always' ? ' always' : ''}`);
+  if (o.maxUtak !== 4) s.push(` maximum-paths ${o.maxUtak}`);
+  s.push('!');
   return s;
 }
 

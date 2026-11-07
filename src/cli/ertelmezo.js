@@ -130,6 +130,37 @@ const PARAM_TIPUSOK = {
     kiegeszit: () => null,
   },
 
+  /** OSPF-terület: szám (0–4294967295) vagy IPv4-alakú azonosító (0.0.0.0) → szám */
+  terulet: {
+    nev: () => '<0-4294967295>',
+    illeszt(e, tokenek, i) {
+      const t = tokenek[i];
+      if (/^\d+$/.test(t.szoveg)) {
+        const n = Number(t.szoveg);
+        if (n > 4294967295) return { ok: false, hiba: 'ervenytelen', oszlop: t.kezdet };
+        return { ok: true, ertek: n, kovetkezo: i + 1 };
+      }
+      const n = ipSzam(t.szoveg);
+      if (n === null) return { ok: false, hiba: 'ervenytelen', oszlop: t.kezdet + (/^[\d.]+$/.test(t.szoveg) ? ipv4HibaHely(t.szoveg) : 0) };
+      return { ok: true, ertek: n >>> 0, kovetkezo: i + 1 };
+    },
+    sugoElemek: (e) => [{ nev: '<0-4294967295>', sugo: e.sugo }, { nev: 'A.B.C.D', sugo: `${e.sugo} (IP-cím alakban)` }],
+    reszleges: (e, r) => (/^[\d.]+$/.test(r) ? ['<0-4294967295>', 'A.B.C.D'] : []),
+    kiegeszit: () => null,
+  },
+
+  /** A sor teljes maradéka szövegként (pl. description) */
+  sor: {
+    maradekot: true,
+    nev: (e) => e.nev || 'LINE',
+    illeszt(e, tokenek, i, sor) {
+      return { ok: true, ertek: sor.slice(tokenek[i].kezdet).trimEnd(), kovetkezo: tokenek.length };
+    },
+    sugoElemek: (e) => [{ nev: e.nev || 'LINE', sugo: e.sugo }],
+    reszleges: (e) => [e.nev || 'LINE'],
+    kiegeszit: () => null,
+  },
+
   /** Egy interfész, pl. fa0/1 vagy „FastEthernet 0/1” (egy vagy két szó) */
   interfesz: {
     illeszt(e, tokenek, i, sor, kornyezet) {
@@ -472,6 +503,11 @@ function tartomanySugo(b, tokenek, reszleges, sor, kornyezet) {
     const szavak = tipus.reszleges(p.elem, reszleges, kornyezet);
     if (szavak.length) return { ok: true, fajta: 'szavak', szavak };
     return { ok: false, hiba: 'ismeretlen', tokenIndex: tokenek.length, gyokerKezdet: b.gyokerKezdet, tokenek };
+  }
+  if (p.elem.param === 'sor') {
+    // Szabad szöveg (pl. description): bármi jöhet, és bármikor befejezhető.
+    if (reszleges !== '') return { ok: true, fajta: 'szavak', szavak: tipus.reszleges(p.elem, reszleges, kornyezet) };
+    return { ok: true, fajta: 'lista', elemek: tipus.sugoElemek(p.elem, kornyezet), cr: true, gyoker: false };
   }
   const kezdet = eddigiTokenek[0].kezdet;
   const vizsgalt = reszleges === '' ? sor : sor.slice(0, sor.length - reszleges.length);

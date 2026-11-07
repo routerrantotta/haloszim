@@ -6,8 +6,10 @@
  *   L – a router saját címe (/32, IPv6-ban /128)
  *   S – statikus útvonal (ip route / ipv6 route), ha a következő ugrás elérhető
  *   R – RIP-ből (RIPng-ből) tanult útvonal (mag/rip.js adatbázisából)
+ *   O – OSPF-ből tanult útvonal (mag/ospf.js SPF-számításából); a külső (pl. alapértelmezett)
+ *       útvonal alkódja E2 (O*E2 0.0.0.0/0, IPv6-ban OE2 ::/0)
  * Ugyanarra a hálózatra a kisebb adminisztratív távolságú (AD) forrás nyer:
- * kapcsolt 0, statikus 1, RIP 120.
+ * kapcsolt 0, statikus 1, OSPF 110, RIP 120.
  *
  * Továbbításkor a leghosszabb egyező előtag dönt; egyenlő költségű utaknál (ECMP) a router
  * csomagonként felváltva használja őket (a szimulátor egyszerűsítése – lásd a feladat magyarázatát).
@@ -18,9 +20,10 @@ import {
   ipv6Elemez, ipv6Halozat, ipv6EgyHalozat, ipv6Szoveg, ipv6PrefixElemez, eui64LinkLocal, linkLocalE,
 } from './ipv6.js';
 import { ripUtvonalak } from './rip.js';
+import { ospfUtvonalak } from './ospf.js';
 
 /** Adminisztratív távolságok. */
-export const AD = { C: 0, L: 0, S: 1, R: 120 };
+export const AD = { C: 0, L: 0, S: 1, O: 110, R: 120 };
 
 /** Működik-e a port 3. rétegben (be van kapcsolva és él a link; a Loopback mindig, ha nincs leállítva). */
 export function portFent(p) {
@@ -52,7 +55,8 @@ export function portIpv6Cimek(p) {
 
 /**
  * @typedef {Object} Utvonal4
- * @property {'C'|'L'|'S'|'R'} kod
+ * @property {'C'|'L'|'S'|'R'|'O'} kod
+ * @property {''|'E2'} [alKod]   – OSPF külső útvonal (E2)
  * @property {number} halozat
  * @property {number} hossz
  * @property {number} ad
@@ -124,15 +128,18 @@ function legjobb4(tabla, ip) {
  * A teljes IPv4 routing tábla (rendezve: cím, majd előtaghossz szerint).
  * @returns {Utvonal4[]}
  */
-export function tabla4(r) {
+export function tabla4(r, { ospfNelkul = false } = {}) {
   const kapcsolt = kapcsolt4(r);
   const rip = ripUtvonalak(r, 4).map((e) => ({
     kod: 'R', halozat: e.halozat, hossz: e.hossz, ad: AD.R, metrika: e.metrika, utak: e.utak, lehetLe: e.le,
   }));
-  const statikus = statikus4(r, [...kapcsolt, ...rip]);
+  const ospf = ospfNelkul ? [] : ospfUtvonalak(r, 4).map((e) => ({
+    kod: 'O', alKod: e.alKod, halozat: e.halozat, hossz: e.hossz, ad: AD.O, metrika: e.metrika, utak: e.utak,
+  }));
+  const statikus = statikus4(r, [...kapcsolt, ...ospf, ...rip]);
   // Előtagonként a legkisebb AD nyer.
   const nyertes = new Map();
-  for (const e of [...kapcsolt, ...statikus, ...rip]) {
+  for (const e of [...kapcsolt, ...statikus, ...ospf, ...rip]) {
     const kulcs = `${e.halozat}/${e.hossz}/${e.kod === 'L' ? 'L' : ''}`;
     const regi = nyertes.get(kulcs);
     if (!regi || e.ad < regi.ad || (regi.lehetLe && !e.lehetLe)) nyertes.set(kulcs, e);
@@ -242,14 +249,17 @@ function statikus6(r, alap) {
 }
 
 /** A teljes IPv6 routing tábla. */
-export function tabla6(r) {
+export function tabla6(r, { ospfNelkul = false } = {}) {
   const kapcsolt = kapcsolt6(r);
   const rip = ripUtvonalak(r, 6).map((e) => ({
     kod: 'R', halozat: e.halozat, hossz: e.hossz, ad: AD.R, metrika: e.metrika, utak: e.utak, lehetLe: e.le,
   }));
-  const statikus = statikus6(r, [...kapcsolt, ...rip]);
+  const ospf = ospfNelkul ? [] : ospfUtvonalak(r, 6).map((e) => ({
+    kod: 'O', alKod: e.alKod, halozat: e.halozat, hossz: e.hossz, ad: AD.O, metrika: e.metrika, utak: e.utak,
+  }));
+  const statikus = statikus6(r, [...kapcsolt, ...ospf, ...rip]);
   const nyertes = new Map();
-  for (const e of [...kapcsolt, ...statikus, ...rip]) {
+  for (const e of [...kapcsolt, ...statikus, ...ospf, ...rip]) {
     const kulcs = `${ipv6Szoveg(e.halozat)}/${e.hossz}`;
     const regi = nyertes.get(kulcs);
     if (!regi || e.ad < regi.ad) nyertes.set(kulcs, e);
@@ -280,6 +290,15 @@ export function keres6(r, cim) {
   }
   if (!port) return null;
   return { port, kovetkezo: kov || cim, bejegyzes: e };
+}
+
+/**
+ * Van-e a routernek (nem OSPF-ből származó) alapértelmezett útvonala – a „default-information
+ * originate” csak ekkor hirdeti a 0.0.0.0/0-t (::/0-t).
+ */
+export function alapNemOspf(r, csalad) {
+  if (csalad === 4) return tabla4(r, { ospfNelkul: true }).some((e) => e.hossz === 0 && !e.lehetLe);
+  return tabla6(r, { ospfNelkul: true }).some((e) => e.hossz === 0 && !e.lehetLe);
 }
 
 /** Egy szöveges „hálózat/hossz” keresése a táblában (az ellenőrzőnek és a bemutatónak). */

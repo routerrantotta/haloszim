@@ -20,6 +20,10 @@ import { routerPing } from '../mag/router.js';
 import { bejegyzes } from '../mag/utvonal.js';
 import { ipSzam, ipSzoveg, osztalyos } from '../mag/ip.js';
 import { ipv6Szoveg } from '../mag/ipv6.js';
+import {
+  ospfBeall, ospfAllapot, ospfTerulet, passzivE, szomszedSzerep, halozatTipus as ospfHalozatTipus, koltseg as ospfKoltseg,
+  idokozok as ospfIdokozok,
+} from '../mag/ospf.js';
 import { portKeres } from '../modell/switch.js';
 import { esRag, nevelo } from '../magyar.js';
 
@@ -159,6 +163,102 @@ const ALLAPOT_CELOK = {
     if (hibak.length) return { ok: false, megjegyzes: hibak.join('; ') + '.' };
     const be = r.portok.filter((p) => p.ripng).map((p) => rovid(p.nev));
     return { ok: true, megjegyzes: `RIPng fut itt: ${be.join(', ') || '–'}.` };
+  },
+
+  /**
+   * OSPF-folyamat egy routeren: { eszkoz, csalad?: 4|6, routerId, interfeszek, nemInterfeszek, terulet,
+   * passziv, referencia, alapUtvonal }. A router ID a ténylegesen használt (nem csak a beírt) érték.
+   */
+  ospf(f, c) {
+    const r = f.eszkoz(c.eszkoz);
+    const cs = c.csalad || 4;
+    const o = ospfBeall(r, cs);
+    const nev = cs === 4 ? 'OSPF' : 'OSPFv3';
+    if (!o) {
+      if (c.nemInterfeszek && !c.interfeszek && !c.routerId) return { ok: true, megjegyzes: `${c.eszkoz}-en nem fut ${nev} – ahogy kell.` };
+      return { ok: false, megjegyzes: `${c.eszkoz}-en nem fut ${nev}.` };
+    }
+    const a = ospfAllapot(r, cs);
+    const hibak = [];
+    if (c.routerId) {
+      if (!a.fut) hibak.push(`a folyamat nem fut (nincs router ID)`);
+      else if (a.rid !== c.routerId) {
+        hibak.push(o.routerId === c.routerId
+          ? `a router ID be van írva (${c.routerId}), de még a régi (${a.rid}) érvényes – újra kell indítani a folyamatot`
+          : `a router ID most ${a.rid} (${c.routerId} kellene)`);
+      }
+    }
+    for (const n of c.interfeszek || []) {
+      const t = ospfTerulet(r, r.portok.find((p) => p.nev === n), cs);
+      if (!t) hibak.push(`${rovid(n)}: nincs az ${nev}-ben`);
+      else if (c.terulet !== undefined && t.terulet !== c.terulet) hibak.push(`${rovid(n)}: a ${t.terulet}-s területben van (${c.terulet} kellene)`);
+    }
+    for (const n of c.nemInterfeszek || []) {
+      if (ospfTerulet(r, r.portok.find((p) => p.nev === n), cs)) hibak.push(`${rovid(n)}: fut rajta az ${nev}, pedig nem kellene`);
+    }
+    for (const n of c.passziv || []) if (!passzivE(r, r.portok.find((p) => p.nev === n), cs)) hibak.push(`${rovid(n)} nem passzív`);
+    if (c.referencia !== undefined && o.referencia !== c.referencia) hibak.push(`a referencia-sávszélesség most ${o.referencia} (${c.referencia} kellene)`);
+    if (c.alapUtvonal !== undefined && !!o.alapUtvonal !== c.alapUtvonal) {
+      hibak.push(c.alapUtvonal ? 'nem hirdeti az alapértelmezett útvonalat' : 'hirdeti az alapértelmezett útvonalat, pedig nem kellene');
+    }
+    if (hibak.length) return { ok: false, megjegyzes: hibak.join('; ') + '.' };
+    const be = r.portok.filter((p) => ospfTerulet(r, p, cs)).map((p) => rovid(p.nev));
+    return { ok: true, megjegyzes: `${nev}, router ID ${a.rid || '–'}, interfészek: ${be.join(', ') || '–'}.` };
+  },
+
+  /** Egy szomszédság: { eszkoz, szomszed (router ID), port?, allapot: 'FULL', szerep?: 'DR'|'BDR'|'DROTHER'|'-', csalad? } */
+  'ospf-szomszed'(f, c) {
+    const r = f.eszkoz(c.eszkoz);
+    const cs = c.csalad || 4;
+    const a = ospfAllapot(r, cs);
+    if (!a.fut) return { ok: false, megjegyzes: `${c.eszkoz}-en nem fut ${cs === 4 ? 'OSPF' : 'OSPFv3'}.` };
+    let talalt = null;
+    for (const I of a.ifek) {
+      if (c.port && I.port !== c.port) continue;
+      const n = I.szomszedok.find((x) => x.rid === c.szomszed);
+      if (n) talalt = { I, n };
+    }
+    if (!talalt) return { ok: false, megjegyzes: `${c.eszkoz} nem látja szomszédként a(z) ${c.szomszed} routert${c.port ? ` a(z) ${rovid(c.port)} interfészen` : ''}.` };
+    const { I, n } = talalt;
+    const szerep = szomszedSzerep(I, n);
+    const leiras = `${n.allapot}/${szerep}`;
+    if (c.allapot && n.allapot !== c.allapot) return { ok: false, megjegyzes: `${c.eszkoz} – ${c.szomszed}: most ${leiras} (${c.allapot} kellene).` };
+    if (c.szerep && szerep !== c.szerep) return { ok: false, megjegyzes: `${c.eszkoz} – ${c.szomszed}: most ${leiras} (${c.szerep === '-' ? 'pont-pont link kellene' : `${c.szerep} kellene`}).` };
+    return { ok: true, megjegyzes: `${c.eszkoz} – ${c.szomszed} (${rovid(I.port)}): ${leiras}.` };
+  },
+
+  /**
+   * Egy OSPF-interfész: { eszkoz, port, csalad?, halozatTipus: 'POINT_TO_POINT'|'BROADCAST', allapot: 'DR'|'BDR'|…,
+   * koltseg, prioritas, hello, dead, hitelesites: 'md5', kulcs: { 1: 'jelszó' } }
+   */
+  'ospf-interfesz'(f, c) {
+    const r = f.eszkoz(c.eszkoz);
+    const cs = c.csalad || 4;
+    const p = r.portok.find((x) => x.nev === c.port);
+    const pb = cs === 4 ? p.ospf : p.ospf6;
+    const a = ospfAllapot(r, cs);
+    const I = a.ifek.find((x) => x.port === c.port);
+    const hibak = [];
+    if (c.halozatTipus && ospfHalozatTipus(p, cs) !== c.halozatTipus) hibak.push(`a hálózattípus most ${ospfHalozatTipus(p, cs)} (${c.halozatTipus} kellene)`);
+    if (c.koltseg !== undefined && ospfKoltseg(r, p, cs) !== c.koltseg) hibak.push(`a költség most ${ospfKoltseg(r, p, cs)} (${c.koltseg} kellene)`);
+    if (c.prioritas !== undefined && pb.prioritas !== c.prioritas) hibak.push(`a prioritás most ${pb.prioritas} (${c.prioritas} kellene)`);
+    const idok = ospfIdokozok(p, cs);
+    if (c.hello !== undefined && idok.hello !== c.hello) hibak.push(`a Hello-idő most ${idok.hello} mp (${c.hello} kellene)`);
+    if (c.dead !== undefined && idok.dead !== c.dead) hibak.push(`a Dead-idő most ${idok.dead} mp (${c.dead} kellene)`);
+    if (c.hitelesites && pb.hitelesites !== c.hitelesites) hibak.push(c.hitelesites === 'md5' ? 'nincs bekapcsolva az MD5-hitelesítés' : `a hitelesítés most: ${pb.hitelesites || 'nincs'}`);
+    for (const [k, v] of Object.entries(c.kulcs || {})) {
+      if (pb.kulcsok[k] === undefined) hibak.push(`nincs ${k}-es MD5-kulcs`);
+      else if (pb.kulcsok[k] !== v) hibak.push(`a(z) ${k}-es kulcs jelszava nem egyezik`);
+    }
+    if (c.allapot) {
+      if (!I) hibak.push('az interfészen nem fut az OSPF (vagy le van kapcsolva)');
+      else if (I.allapot !== c.allapot) hibak.push(`az interfész szerepe most ${I.allapot === 'P2P' ? 'pont-pont' : I.allapot} (${c.allapot} kellene)`);
+    }
+    if (hibak.length) return { ok: false, megjegyzes: `${c.eszkoz} ${rovid(c.port)}: ${hibak.join('; ')}.` };
+    const reszek = [ospfHalozatTipus(p, cs), `költség ${ospfKoltseg(r, p, cs)}`];
+    if (I && I.tipus === 'BROADCAST') reszek.push(`szerep ${I.allapot}`);
+    if (pb.hitelesites === 'md5') reszek.push('MD5');
+    return { ok: true, megjegyzes: `${c.eszkoz} ${rovid(c.port)}: ${reszek.join(', ')}.` };
   },
 
   /** IPv6-továbbítás be van-e kapcsolva. */

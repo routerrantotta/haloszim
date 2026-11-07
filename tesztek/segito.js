@@ -43,6 +43,8 @@ export function konfigbol(...sorok) {
 import '../feladatok/vlan-1.js';
 import '../feladatok/vtp-1.js';
 import '../feladatok/rip-1.js';
+import '../feladatok/ospf-1.js';
+import '../feladatok/ospf-2.js';
 import { feladatKeres, feladatBetolt } from '../src/feladat/betolto.js';
 import { feladatValtozat } from '../src/feladat/veletlen.js';
 import { ipBeallit } from '../src/mag/vegpont.js';

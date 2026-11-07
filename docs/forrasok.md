@@ -35,6 +35,9 @@ ezeket érdemes elsőként összevetni egy valódi eszközzel vagy újabb forrá
 | F21 | [Cisco NetAcad tananyag (Tartui Egyetem tükre), 7.3.1.5](https://courses.cs.ut.ee/all/MTAT.08.003/mat/2mrs/course/module7/7.3.1.5/7.3.1.5.html) | show ip protocols RIP-pel |
 | F22 | [Cisco Community – ISR4331](https://community.cisco.com/t5/routing/isr4331-can-t-even-ping-itself/m-p/4735505) | ISR 4331 portnevei (GigabitEthernet0/0/0 …), show ip interface brief IOS XE-n |
 | F23 | [basicitnetworking – Troubleshooting RIP v2](https://basicitnetworking.blogspot.com/2012/11/troubleshooting-rip-v2.html?m=1), [NetworkLessons fórum – RIP](https://forum.networklessons.com/t/rip-distance-vector-routing-protocol/876/4) | debug ip rip valódi kimenete (sending/received, build update entries, `in N hops`) |
+| F24 | A Routerrántotta saját tananyaga: „OSPF – egyterületű” 1–4. lecke (weboldal, teszt/v0.17/tananyag/ospf-*.html) | show ip ospf neighbor, show ip ospf interface [brief], show ip ospf database, show ip route ospf (O, O*E2), show ip protocols (OSPF), debug ip ospf hello (Mismatched hello parameters, Dead R/C …), %OSPF-5-ADJCHG, `% OSPF: Reload or use …`, `% OSPF: Reference bandwidth is changed.` |
+| F25 | [ITExamAnswers – Lab 79: Configuring Single-Area OSPFv3](https://itexamanswers.net/lab-79-configuring-single-area-ospfv3.html) | %OSPFv3-4-NORTRID és %OSPFv3-5-ADJCHG alakja, show ipv6 ospf neighbor fejléce (Interface ID oszlop) |
+| F26 | [Cisco Community – OSPFv3 Packet Tracer 7.3-ban](https://community.cisco.com/t5/ipv6/ospfv3/td-p/4089888), [ipSpace – OSPFv3 Router ID](https://blog.ipspace.net/2008/04/ipv4-forever/) | IPv4-cím nélkül az OSPFv3 nem tud router ID-t választani; a PT nem ismeri a `router ospfv3` formát |
 | E | Saját emlékezet (CCNA-oktatás, Packet Tracer-gyakorlat) | csak kiegészítésként; egyedül nem elég |
 
 ## Parancsok és üzenetek
@@ -105,6 +108,39 @@ Utánzott eszköz: **ISR 4331 jellegű router, IOS XE 16 jellegű kimenetek**.
 | PC `tracert` | `Tracing route to X over a maximum of 30 hops`, `  1    <1 ms    <1 ms    <1 ms  cím`, `Request timed out.`, `Trace complete.` | F17, E | rendben |
 | Hibaüzenetek | `% IPv6 routing not enabled`; `%Inconsistent address and mask`; `% X overlaps with IF`; `Bad mask /N for address X`; `% Use the link-local keyword …`; `%No matching route to delete` | F17 (az első), E | a többi ellenőrizendő |
 | `show running-config` (router) | IOS XE 16.9 jellegű váz: interfészenként `ip address`/`no ip address`, `shutdown`, `negotiation auto`, IPv6-címek, `ipv6 rip NÉV enable`; `router rip` blokk (version, passive-interface, network, default-information originate, no auto-summary); `ip route`, `ipv6 route`, `ipv6 router rip NÉV` | E | ellenőrizendő |
+
+### OSPF (v0.9)
+
+| Mit | Forma a szimulátorban | Források | Állapot |
+|-----|------------------------|----------|---------|
+| `show ip ospf neighbor` | üres sor, `Neighbor ID     Pri   State           Dead Time   Address         Interface`, sorok: RID (15), Pri (jobbra, 4), `FULL/DR` (16), `00:00:33` (12), cím (16), interfész; pont-pont linken `FULL/  -` | F24, E | rendben |
+| `show ipv6 ospf neighbor` | fejléc: `OSPFv3 Router with ID (…) (Process ID 1)`, oszlopok: … `Dead Time   Interface ID    Interface` | F25, E | rendben |
+| `show ip ospf interface brief` | `Interface    PID   Area            IP Address/Mask    Cost  State Nbrs F/C`; állapotok: DR, BDR, DROTH, P2P, LOOP, WAIT, DOWN; OSPFv3-ban `Intf ID` oszlop | F24, E | az IPv6-os változat ellenőrizendő |
+| `show ip ospf interface <if>` | a lecke sorai (Internet Address, Process ID / Router ID / Network Type / Cost, Transmit Delay / State / Priority, DR, BDR, Timer intervals, Hello due in, Neighbor Count, Adjacent with) + `Attached via Network Statement / Interface Enable`, `No Hellos (Passive interface)`, MD5-sorok | F24, E | a kiegészítő sorok ellenőrizendők |
+| `show ip ospf database` | `Router Link States (Area 0)` (Link ID, ADV Router, Age, Seq#, Checksum, Link count), `Net Link States`, `Type-5 AS External Link States` (Tag) | F24, E | rendben (az ellenőrzőösszeg ál-érték) |
+| `show ipv6 ospf database` | Router, Net, Link (Type-8), Intra Area Prefix, Type-5 AS External szakaszok | E | ellenőrizendő |
+| `show ip route` OSPF-sorai | `O        10.0.23.0/30 [110/20] via …, 00:04:51, Gi…` (ECMP: második sor behúzva), `O*E2  0.0.0.0/0 [110/1] via …`; IPv6: `O   pfx [110/20]`, `OE2 ::/0 [110/1], tag 1` | F24, E | az IPv6-os sorok ellenőrizendők |
+| `show ip protocols` (OSPF) | `Routing Protocol is "ospf 1"`, Router ID, ASBR-sor, `Number of areas …`, `Maximum path: 4`, `Routing for Networks:`, `Routing on Interfaces Configured Explicitly (Area 0):`, `Passive Interface(s):`, `Routing Information Sources:`, `Distance: (default is 110)` | F24, E | rendben |
+| `show ipv6 protocols` (OSPF) | `IPv6 Routing Protocol is "ospf 1"`, Router ID, `Number of areas: …`, `Interfaces (Area 0):`, `Redistribution:` | E | ellenőrizendő |
+| `show ip ospf` / `show ipv6 ospf` | rövidített összefoglaló (Routing Process, Start time, ASBR, Reference bandwidth unit, Area BACKBONE(0), SPF executed …) | E | ellenőrizendő |
+| Naplóüzenetek | `%OSPF-5-ADJCHG: Process 1, Nbr 2.2.2.2 on Gi… from LOADING to FULL, Loading Done` (`EXCHANGE to FULL, Exchange Done`; `FULL to DOWN, Neighbor Down: Dead timer expired / Interface down or detached`); `%OSPFv3-5-ADJCHG: …` ugyanígy; `%OSPFv3-4-NORTRID: OSPFv3 process 1 could not pick a router-id, please configure manually`; `%OSPF-4-DUP_RTRID_NBR …` | F24, F25, E | az IOS XE 16-os OSPFv3-forma („Process 1, IPv6, …”) eltérhet – ellenőrizendő |
+| `debug ip ospf hello` | `OSPF-1 HELLO Gi0/0/0: Send hello to 224.0.0.5 area 0 from …`, `Rcv hello from …`, `Mismatched hello parameters from …`, `Dead R 40 C 20, Hello R 10 C 5 Mask R … C …` (IOS XE-forma; a lecke a régi `OSPF: …` formát mutatja) | F24, E | ellenőrizendő |
+| `debug ip ospf adj` | `2 Way Communication to …`, `DR/BDR election`, `Elect BDR/DR …`, `Send/Rcv DBD …`, `NBR Negotiation Done. We are the MASTER/SLAVE`, `Nbr … has larger interface MTU`, `Exchange Done with …`, `Synchronized with …, state FULL`, `Mismatched Authentication type/Key …` | E | ellenőrizendő |
+| Válaszüzenetek | `% OSPF: Reload or use "clear ip ospf process" command, for this to take effect`; `% OSPF: Reference bandwidth is changed.` + `Please ensure …`; `Reset ALL OSPF processes? [no]:`; `OSPF: Key 1 already exists`; OSPFv3-ban ugyanez `% OSPFv3:` kezdettel, `Reset ALL OSPFv3 processes? [no]:` | F24 (az első kettő), E | a többi ellenőrizendő |
+
+## Szándékos egyszerűsítések (v0.9-től, OSPF)
+
+- Egy routeren címcsaládonként egy OSPF-folyamat lehet (`router ospf 1` és `ipv6 router ospf 1`); másik számnál a
+  szimulátor szól. Több terület beállítható, de területek közötti összegzés (ABR, 3-as LSA) nincs.
+- A Hello pontosan 10 másodpercenként megy (a valódi eszköz kis eltérést ad hozzá); a DR/BDR-választás a Wait-idő
+  (= Dead-idő, 40 s) után vagy egy DR-t/BDR-t valló szomszéd Hellójára (BackupSeen) történik, ahogy a szabvány leírja.
+- Az adatbázis-csere egyszerűsített: egy DBD a kezdéshez, egy a fejlécekkel; újraküldés 5 másodpercenként. MTU-eltérésnél
+  a szomszédság nem bomlik le magától (a valódi eszköz egy idő után „Too many DBD retransmissions” miatt újrakezdi).
+- Az LSA-k nem öregszenek (nincs 30 perces frissítés és 60 perces lejárat); a kor a keletkezés óta eltelt idő.
+- Az SPF egy változás után 50 ms-mal fut (a valódi eszközön 5 s-os kezdő késleltetés van, „SPF throttling”).
+- Egyenlő költségű utaknál a router csomagonként váltogat (lásd a RIP-nél).
+- OSPFv3-ban nincs IPsec-hitelesítés, és a címcsaládos forma (`router ospfv3`, `address-family`) sincs meg.
+- A loopback OSPFv2-ben /32-es, OSPFv3-ban /128-as stub; a soros vonal alapból pont-pont.
 
 ## Szándékos egyszerűsítések (v0.8-tól, router és RIP)
 

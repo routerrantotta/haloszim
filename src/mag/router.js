@@ -5,7 +5,7 @@
  *     leghosszabb egyező előtag, következő ugrás,
  *   - ICMP-hibaüzenetek: „Time exceeded” (lejárt a TTL – ebből dolgozik a traceroute) és
  *     „Destination unreachable” (nincs útvonal),
- *   - a routernek szóló csomagok: ping-válasz, RIP / RIPng (mag/rip.js).
+ *   - a routernek szóló csomagok: ping-válasz, RIP / RIPng (mag/rip.js), OSPF (mag/ospf.js).
  *
  * Valódi viselkedés, amit érdemes tudni: ha a router még nem ismeri a következő ugrás MAC-címét,
  * elküldi az ARP-kérdést, de az éppen továbbítandó csomagot eldobja. Ezért vész el gyakran az első
@@ -26,6 +26,10 @@ import {
 } from './ipv6.js';
 import { keres4, keres6, portFent, portLinkLocal, ipv6Engedelyezve } from './utvonal.js';
 import { ripFogad4, ripFogad6 } from './rip.js';
+import { ospfFogad } from './ospf.js';
+
+/** A routernek szóló IPv4-csoportcímek: RIPv2, OSPF (minden router, DR-ek). */
+const CSOPORT4 = ['224.0.0.9', '224.0.0.5', '224.0.0.6'];
 
 /** A router által indított csomagok TTL-je (IOS: 255). */
 export const ROUTER_TTL = 255;
@@ -222,7 +226,7 @@ export function routerFogad(h, r, p, keret) {
   h.esemeny({ tipus: 'fogadva', eszkoz: r, port: p, keret });
 
   if (keret.tipus === 'arp') return arpFogad(h, r, p, keret.adat);
-  if (keret.tipus === 'ipv4') return ipv4Fogad(h, r, p, keret.adat);
+  if (keret.tipus === 'ipv4') return ipv4Fogad(h, r, p, keret.adat, keret);
   if (keret.tipus === 'ipv6') return ipv6Fogad(h, r, p, keret);
   return undefined;
 }
@@ -235,9 +239,10 @@ function arpFogad(h, r, p, arp) {
   }
 }
 
-function ipv4Fogad(h, r, p, cs) {
+function ipv4Fogad(h, r, p, cs, keret) {
   if (!p.ip) return; // IP-cím nélküli porton a router nem dolgoz fel IPv4-et
-  if (cs.celIp === '255.255.255.255' || cs.celIp === '224.0.0.9' || sajat4(r, cs.celIp)) return helyi4(h, r, p, cs);
+  if (cs.celIp === '255.255.255.255' || CSOPORT4.includes(cs.celIp) || sajat4(r, cs.celIp)) return helyi4(h, r, p, cs, keret);
+  if (cs.protokoll === 'ospf') return; // az OSPF-csomagok nem mennek tovább (TTL 1)
   // Továbbítás
   const ttl = cs.ttl - 1;
   if (ttl <= 0) return icmpHiba4(h, r, p, cs, 'ido-lejart');
@@ -253,7 +258,7 @@ function ipv4Fogad(h, r, p, cs) {
   }
 }
 
-function helyi4(h, r, p, cs) {
+function helyi4(h, r, p, cs, keret) {
   if (cs.protokoll === 'icmp') {
     const t = cs.icmp.tipus;
     if (t === 'echo-keres') {
@@ -267,6 +272,7 @@ function helyi4(h, r, p, cs) {
     return;
   }
   if (cs.protokoll === 'udp' && cs.udp.port === 520) ripFogad4(h, r, p, cs);
+  if (cs.protokoll === 'ospf') ospfFogad(h, r, p, cs, 4, keret.forrasMac);
 }
 
 function ipv6Fogad(h, r, p, keret) {
@@ -318,6 +324,7 @@ function helyi6(h, r, p, cs, keret) {
     return;
   }
   if (cs.protokoll === 'udp' && cs.udp.port === 521) ripFogad6(h, r, p, cs);
+  if (cs.protokoll === 'ospf') ospfFogad(h, r, p, cs, 6, keret.forrasMac);
 }
 
 // ---------------------------------------------------------------------------
@@ -329,9 +336,9 @@ function helyi6(h, r, p, cs, keret) {
  *   { fajta: 'valasz', kitol, keses } | { fajta: 'ido-lejart', kitol, keses } | { fajta: 'elerhetetlen', kitol }
  *   | { fajta: 'idotullepes' }
  * @param {string} cel – IPv4 vagy IPv6 cím (szövegesen)
- * @param {{ttl?: number, varakozas?: number}} [b]
+ * @param {{ttl?: number, varakozas?: number, forras?: string}} [b] – forras: a ping forráscíme (ping … source)
  */
-export function routerPing(h, r, cel, cb, { ttl, varakozas = ROUTER_PING_VARAKOZAS } = {}) {
+export function routerPing(h, r, cel, cb, { ttl, varakozas = ROUTER_PING_VARAKOZAS, forras = null } = {}) {
   const a = allapot(r);
   const v6 = cel.includes(':');
   const celNormal = v6 ? ipv6Normal(cel) : cel;
@@ -354,9 +361,9 @@ export function routerPing(h, r, cel, cb, { ttl, varakozas = ROUTER_PING_VARAKOZ
     else vege({ fajta: 'elerhetetlen', kitol: v.kitol, keses: v.keses });
   });
   if (v6) {
-    routerKuld6(h, r, celNormal, { protokoll: 'icmpv6', icmp: { tipus: 'echo-keres', sorszam } }, { hop: ttl || 64 });
+    routerKuld6(h, r, celNormal, { protokoll: 'icmpv6', icmp: { tipus: 'echo-keres', sorszam } }, { hop: ttl || 64, forras: forras || undefined });
   } else {
-    routerKuld4(h, r, celNormal, { protokoll: 'icmp', icmp: { tipus: 'echo-keres', sorszam } }, { ttl: ttl || ROUTER_TTL });
+    routerKuld4(h, r, celNormal, { protokoll: 'icmp', icmp: { tipus: 'echo-keres', sorszam } }, { ttl: ttl || ROUTER_TTL, forrasIp: forras || undefined });
   }
   return idozito;
 }

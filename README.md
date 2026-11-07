@@ -4,9 +4,10 @@ Böngészőben futó, feladat-alapú hálózati szimulátor a [routerrantotta.hu
 
 **Kipróbálás:** https://routerrantotta.github.io/haloszim/ (fejlesztői kipróbáló oldal)
 
-Jelenleg (v0.8) három feladat van, legördülő listából választhatók: **VLAN-ok két switchen, trunkkel**
+Jelenleg (v0.9) öt feladat van, legördülő listából választhatók: **VLAN-ok két switchen, trunkkel**
 (2 switch, 4 PC), **VTP: server, transparent, client** (3 switch, 4 PC) és a **Dinamikus routing** csoportban
-**RIPv2 és RIPng** (3 router + ISP, 3 PC, IPv4 és IPv6). Minden feladat három módban
+**RIPv2 és RIPng** (3 router + ISP, 3 PC, IPv4 és IPv6), **OSPF (IPv4, OSPFv2)** és **OSPFv3 (IPv6)**
+(a routerrantotta.hu OSPF-leckéinek háromszög-topológiája, ISP-vel, beépített hibakeresési feladattal). Minden feladat három módban
 játszható: **Oktató** (parancsokkal és lépésről lépésre vezető buborékokkal), **Gyakorló** (csak a cél, tippekkel), **Vizsga** (önellenőrzés, időméréssel,
 Beadás gombbal); gyakorló és vizsga módban minden indításkor más adatokkal, megosztható változatlinkkel.
 Minden feladat végén magyarázat van. A switchek (2960 jellegű) és a routerek (ISR 4331 jellegű)
@@ -42,13 +43,14 @@ npm test         # automatikus tesztek (node --test)
 ```
 src/mag/          gyártófüggetlen motor: szimulált óra, hálózat és kábelek, switch-továbbítás
                   (VLAN, 802.1Q, MAC-tábla, DTP), VTP, végpontok (ARP, ND, IPv4, IPv6, ping, tracert),
-                  router (router.js: továbbítás, ICMP; utvonal.js: routing tábla; rip.js: RIPv2 és RIPng)
+                  router (router.js: továbbítás, ICMP; utvonal.js: routing tábla; rip.js: RIPv2 és RIPng;
+                  ospf.js: OSPFv2 és OSPFv3 – Hello, szomszédság, DR/BDR, LSDB, SPF)
 src/modell/       az eszközök állapota adatként (switch.js, router.js, pc.js)
 src/cli/          parancssor-értelmező, interfésznevek, switch- és PC-munkamenet
 src/gyartok/ios/  az IOS-szerű parancssor: módok, parancsok (adatként), hibaüzenetek, kimenetek
 src/feladat/      feladat betöltése, eredményalapú ellenőrzés, véletlen adatok, bemutató (vezetett.js)
 src/nezet/        terminál, SVG-topológia animációval, PC-ablak, feladatpanel, bemutató-buborék
-feladatok/        egy feladat = egy fájl (vlan-1.js, vtp-1.js, rip-1.js); az index.html-ben a betöltés sorrendje
+feladatok/        egy feladat = egy fájl (vlan-1.js, vtp-1.js, rip-1.js, ospf-1.js, ospf-2.js); az index.html-ben a betöltés sorrendje
                   a választó sorrendje
 css/              a szimulátor stílusa (csak .hsz- osztályok)
 dist/             a kész, beépíthető fájlok
@@ -67,6 +69,8 @@ A `dist/szimulator.js`, a `dist/szimulator.css` és a `feladatok/*.js` kell hozz
 <script src="haloszim/feladatok/vlan-1.js"></script>
 <script src="haloszim/feladatok/vtp-1.js"></script>
 <script src="haloszim/feladatok/rip-1.js"></script>
+<script src="haloszim/feladatok/ospf-1.js"></script>
+<script src="haloszim/feladatok/ospf-2.js"></script>
 <script>Haloszim.indit(document.getElementById('haloszim'), { feladat: 'vlan-1', hibajelento: '../otlet.html' });</script>
 ```
 

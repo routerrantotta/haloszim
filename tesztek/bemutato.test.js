@@ -57,8 +57,8 @@ function vegigjatszik(azon, mag) {
         for (const e of r.kimenet) if (e && e.folyamat) e.folyamat(() => {}, () => {});
         utolso.set(l.eszkoz, sor);
       }
-      // Routereknél a RIP 30 másodperces frissítését is ki kell várni.
-      f.lep(vanRouter ? 40000 : 10000);
+      // Routereknél a RIP 30 másodperces frissítését, OSPF-nél a 40 másodperces Wait- és Dead-időt is ki kell várni.
+      f.lep(!vanRouter ? 10000 : azon.startsWith('ospf') ? 60000 : 40000);
     } else if (l.hol === 'eszkoz') {
       valasztott = l.eszkoz;
     } else if (l.hol === 'ellenorzes') {
@@ -80,7 +80,7 @@ function vegigjatszik(azon, mag) {
   return lepesSzam;
 }
 
-for (const azon of ['vlan-1', 'vtp-1', 'rip-1']) {
+for (const azon of ['vlan-1', 'vtp-1', 'rip-1', 'ospf-1', 'ospf-2']) {
   test(`${azon}: a bemutató végigjátszható (alapadatok és véletlen változatok)`, () => {
     for (const mag of [null, 5, 777, 31337]) assert.ok(vegigjatszik(azon, mag) > 10);
   });

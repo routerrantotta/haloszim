@@ -9,6 +9,8 @@
  *   konfig-vlan        Switch(config-vlan)#     (egy VLAN beállítása)
  *   konfig-router      Router(config-router)#   (router rip – a RIP beállításai)
  *   konfig-rtr         Router(config-rtr)#      (ipv6 router rip NÉV – a RIPng-folyamat beállításai)
+ *   konfig-ospf        Router(config-router)#   (router ospf N – ugyanaz a prompt, mint a RIP-nél, de más parancsok)
+ *   konfig-ospf6       Router(config-rtr)#      (ipv6 router ospf N – az OSPFv3-folyamat beállításai)
  *
  * Mezők:
  *   prompt(hostname)  – a prompt szövege
@@ -64,6 +66,20 @@ export const MODOK = {
     visszaesik: 'konfig',
     tortenet: 'konfig',
     sugoFejlec: 'IPv6 RIP router configuration commands:',
+  },
+  'konfig-ospf': {
+    prompt: (h) => `${h}(config-router)#`,
+    konfig: true,
+    visszaesik: 'konfig',
+    tortenet: 'konfig',
+    sugoFejlec: 'Router configuration commands:',
+  },
+  'konfig-ospf6': {
+    prompt: (h) => `${h}(config-rtr)#`,
+    konfig: true,
+    visszaesik: 'konfig',
+    tortenet: 'konfig',
+    sugoFejlec: 'Router configuration commands:',
   },
   'konfig-vlan': {
     prompt: (h) => `${h}(config-vlan)#`,

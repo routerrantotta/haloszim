@@ -2,6 +2,43 @@
 
 A legújabb van felül.
 
+## v0.9 – 2026-11-07 – OSPF (IPv4 és IPv6): két új feladat a Dinamikus routing csoportban
+
+- **Új feladat: OSPF (IPv4, OSPFv2).** A routerrantotta.hu „OSPF – egyterületű” leckéinek háromszög-topológiája
+  (R1, R2, R3, három LAN, Area 0), R1 mögött internetszolgáltató; a portnevek ISR 4331 jellegűek (G0/0/0 …). Nyolc rész:
+  kiinduló állapot; `router ospf`, router ID, `network` + wildcard; **hibakeresés** (R3-on egy beépített, eltérő
+  Hello-idő – `debug ip ospf hello`); passzív LAN és referencia-sávszélesség; alapértelmezett útvonal hirdetése
+  (O*E2); pont-pont hálózattípus és DR-választás prioritással (a választás nem preemptív, `clear ip ospf process`);
+  költség és útvonalváltás (`tracert`); MD5-hitelesítés. Oktató módban 29 lépéses bemutató; véletlen LAN-címek és
+  MD5-jelszó. 25 cél, köztük ellenpróbák (az ISP felé nem fut OSPF, az ISP-link nem szivárog be), valódi pingek.
+- **Új feladat: OSPFv3 (IPv6).** Ugyanaz a háromszög csak IPv6-tal: `ipv6 unicast-routing`, `ipv6 router ospf 1`
+  (IPv4-cím híján NORTRID-üzenet: kézi router ID kell), `ipv6 ospf 1 area 0` interfészenként; **hibakeresés**
+  (beépített MTU-eltérés: a szomszédság EXSTART / EXCHANGE állapotban ragad – `debug ipv6 ospf adj`); passzív LAN,
+  referencia-sávszélesség, ::/0 hirdetése (OE2), pont-pont link, DR-választás, költség. 25 lépéses bemutató, 22 cél.
+- **OSPF-motor a magban (src/mag/ospf.js), OSPFv2-re és OSPFv3-ra:** Hello és Dead időzítő, a Hello-adatok
+  ellenőrzése (terület, időzítők, maszk, hitelesítés, azonos router ID); szomszédsági állapotok DOWN-tól FULL-ig valódi
+  DBD-, LSR-, LSU- és LSAck-csomagokkal; DR/BDR-választás (Wait-időzítő, nem preemptív, 0-s prioritás), pont-pont és
+  loopback hálózattípus; Router, Network, AS External LSA (OSPFv3-ban Link és Intra-Area-Prefix is), elárasztás
+  (DROTHER → 224.0.0.6, DR → 224.0.0.5), SPF (Dijkstra) egyenlő költségű utakkal; költség a referencia-sávszélességből
+  vagy kézzel; passzív interfész; default-information originate [always]; MD5- és egyszerű jelszavas hitelesítés;
+  MTU-ellenőrzés az adatbázis-cserénél. A routing táblában O és O*E2 (IPv6-ban O és OE2) sorok, AD 110.
+- **Új parancsok (router):** `router ospf`, `ipv6 router ospf` és almódjuk (`router-id`, `network … area …`,
+  `passive-interface [default]`, `auto-cost reference-bandwidth`, `default-information originate [always]`,
+  `maximum-paths`); interfészen `ip ospf <N> area <A>`, `ip ospf cost / priority / network / hello-interval /
+  dead-interval / authentication [message-digest|null] / message-digest-key / authentication-key`, `ipv6 ospf …`
+  ugyanezekkel, `ip mtu`, `ipv6 mtu`, `description`; exec: `show ip ospf [neighbor | interface [brief | <if>] | database]`,
+  ugyanez `ipv6`-tal, `show ip route ospf`, `show ipv6 route ospf`, `clear ip|ipv6 ospf process` (megerősítéssel),
+  `debug ip|ipv6 ospf hello|adj`, `ping … source <if|cím>`, `write [memory]`. A `show ip protocols`,
+  `show ipv6 protocols` és `show running-config` az OSPF-et is mutatja.
+- **Ellenőrzés:** új céltípusok – `ospf` (folyamat: router ID, interfészek és terület, passzív, referencia, default
+  route), `ospf-szomszed` (állapot és szerep), `ospf-interfesz` (hálózattípus, DR, költség, prioritás, időzítők, MD5).
+- **Rajz:** az OSPF-csomagok kékek, buborékuk megmondja a típusukat (Hello, DBD, LSR, LSU, LSAck); a jelmagyarázatban
+  csak az a protokoll látszik, amelyik forgalmaz. Csak IPv6-os PC alatt az IPv6-cím látszik.
+- Az értelmező új paramétertípusai: terület (szám vagy A.B.C.D) és „a sor maradéka” (description).
+- Tesztek: mindkét OSPF-bemutató alap- és 3 véletlen változattal végigjátszva (lépésátugrás nélkül), teljes megoldások
+  ellenőrzése, kimenetek formája a lecke szerint, Hello- és MTU-hiba, DR-választás és nem preemptív viselkedés,
+  router ID-váltás, interfész-módszer, eltérő hálózattípus, MD5-eltérés, NORTRID; 151 teszt.
+
 ## v0.8 – 2026-11-05 – Routerek, RIPv2 és RIPng (új feladatcsoport: Dinamikus routing)
 
 - **Új feladat: RIPv2 és RIPng** a **Dinamikus routing** csoportban (a csoport később bővül). Három router háromszögben

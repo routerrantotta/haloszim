@@ -3,7 +3,7 @@
  * debug / undebug, clear ip route *.
  */
 
-import { routerPing } from '../../../mag/router.js';
+import { routerPing, portForras6 } from '../../../mag/router.js';
 import { ripTorol } from '../../../mag/rip.js';
 import { ipv6Normal } from '../../../mag/ipv6.js';
 import {
@@ -32,6 +32,7 @@ const szurok = [
   ['rip', RIP],
   ['connected', { szo: 'connected', sugo: 'Csak a közvetlenül kapcsolt hálózatok' }],
   ['static', { szo: 'static', sugo: 'Csak a statikus útvonalak' }],
+  ['ospf', { szo: 'ospf', sugo: 'Csak az OSPF-ből tanult útvonalak' }],
 ];
 
 const showParancsok = [
@@ -53,7 +54,7 @@ const showParancsok = [
 // ---------------------------------------------------------------------------
 
 /** A ping „folyamata”: 5 echo egymás után, a jelek (! . U) fokozatosan jelennek meg. */
-function pingFolyamat(r, cel) {
+function pingFolyamat(r, cel, forras) {
   return {
     folyamat: (kiir, kesz, hozzafuz) => {
       let jelek = '';
@@ -74,7 +75,7 @@ function pingFolyamat(r, cel) {
           else if (e.fajta === 'ido-lejart') fuz('&');
           else fuz('.');
           r.halozat.ora.utemez(e.fajta === 'elerhetetlen' ? 300 : 1, egy);
-        });
+        }, { forras });
       };
       const vege = () => {
         if (!hozzafuz) kiir(jelek.padEnd(5, '.'));
@@ -94,9 +95,29 @@ function pingFolyamat(r, cel) {
   };
 }
 
-function ping(ctx, { cim }) {
-  const cel = cim.includes(':') ? ipv6Normal(cim) : cim;
-  ctx.kiir('Type escape sequence to abort.', `Sending 5, 100-byte ICMP Echos to ${cel}, timeout is 2 seconds:`, pingFolyamat(ctx.eszkoz, cel));
+function ping(ctx, { cim, forrasIf, forrasCim }) {
+  const r = ctx.eszkoz;
+  const v6 = cim.includes(':');
+  const cel = v6 ? ipv6Normal(cim) : cim;
+  let forras = null;
+  if (forrasIf) {
+    const p = r.portok.find((x) => x.nev === forrasIf);
+    forras = p && (v6 ? portForras6(p) : p.ip);
+    if (!forras) {
+      ctx.kiir(`% Invalid source interface - ${v6 ? 'IPv6' : 'IP'} not enabled`);
+      return;
+    }
+  } else if (forrasCim) {
+    forras = forrasCim.includes(':') ? ipv6Normal(forrasCim) : forrasCim;
+    const sajat = v6 ? r.portok.some((p) => p.ipv6.some((x) => x.cim === forras)) : r.portok.some((p) => p.ip === forras);
+    if (!sajat) {
+      ctx.kiir(`% Invalid source address- ${forras} is not a local address`);
+      return;
+    }
+  }
+  const sorok = ['Type escape sequence to abort.', `Sending 5, 100-byte ICMP Echos to ${cel}, timeout is 2 seconds:`];
+  if (forras) sorok.push(`Packet sent with a source address of ${forras}`);
+  ctx.kiir(...sorok, pingFolyamat(r, cel, forras));
 }
 
 // ---------------------------------------------------------------------------
@@ -169,6 +190,7 @@ function traceroute(ctx, { cim }) {
 const CIM4 = { param: 'ipv4', kulcs: 'cim', sugo: 'A cél IPv4-címe' };
 const CIM6 = { param: 'ipv6', kulcs: 'cim', sugo: 'A cél IPv6-címe' };
 const PING = { szo: 'ping', sugo: 'Elérhető-e egy cím (ICMP echo)' };
+const FORRAS = { szo: 'source', sugo: 'A ping forráscíme (pl. a LAN-interfészé – így a visszautat is próbálja)' };
 const TRACE = { szo: 'traceroute', sugo: 'Merre jutnak el a csomagok a célig (ugrásonként)' };
 
 // ---------------------------------------------------------------------------
@@ -186,14 +208,17 @@ function debugAll(ctx, mit, be) {
 }
 
 function mindKi(ctx) {
-  ctx.eszkoz.debug.rip = false;
-  ctx.eszkoz.debug.ripng = false;
+  for (const k of Object.keys(ctx.eszkoz.debug)) ctx.eszkoz.debug[k] = false;
   ctx.kiir('All possible debugging has been turned off');
 }
 
 const egyebParancsok = [
   { modok: EXEC, szavak: [PING, CIM4], vegrehajt: ping },
   { modok: EXEC, szavak: [PING, CIM6], vegrehajt: ping },
+  ...[CIM4, CIM6].flatMap((cim) => [
+    { modok: EXEC, szavak: [PING, cim, FORRAS, { param: 'interfesz', kulcs: 'forrasIf', sugo: 'Erről az interfészről (annak címével) induljon' }], vegrehajt: ping },
+    { modok: EXEC, szavak: [PING, cim, FORRAS, { param: cim === CIM4 ? 'ipv4' : 'ipv6', kulcs: 'forrasCim', sugo: 'Ezzel a (saját) forráscímmel induljon' }], vegrehajt: ping },
+  ]),
   { modok: EXEC, szavak: [TRACE, CIM4], vegrehajt: traceroute },
   { modok: EXEC, szavak: [TRACE, CIM6], vegrehajt: traceroute },
   { modok: ['priv'], szavak: [DEBUG, { szo: 'ip', sugo: 'IPv4-es hibakeresés' }, RIP_D], vegrehajt: (ctx) => debugAll(ctx, 'rip', true) },

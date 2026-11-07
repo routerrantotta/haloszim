@@ -90,6 +90,7 @@
 .hsz-csomag--arp circle { fill: var(--hsz-yolk); stroke: var(--hsz-fekete); stroke-width: 2; }
 .hsz-csomag--icmp circle { fill: var(--hsz-fekete); stroke: var(--hsz-sarga); stroke-width: 2.5; }
 .hsz-csomag--rip circle { fill: #2f9e44; stroke: var(--hsz-fekete); stroke-width: 2; }
+.hsz-csomag--ospf circle { fill: #1c7ed6; stroke: var(--hsz-fekete); stroke-width: 2; }
 .hsz-csomag--vtp circle { fill: var(--hsz-feher); stroke: var(--hsz-fekete); stroke-width: 2.5; stroke-dasharray: 3 2; }
 .hsz-csomag__cimke rect { fill: var(--hsz-feher); stroke: var(--hsz-fekete); stroke-width: 1.5; }
 .hsz-csomag__cimke text { fill: var(--hsz-fekete); font: 700 11px var(--hsz-betu); }
@@ -101,10 +102,12 @@
 /* jelmagyarázat */
 .hsz-jelmagyarazat { display: flex; flex-wrap: wrap; gap: .3rem 1rem; margin: .3rem .4rem 0; font-size: .85rem; color: var(--hsz-tinta); }
 .hsz-jelmagyarazat span { display: inline-flex; align-items: center; gap: .35rem; }
+.hsz-jelmagyarazat span[hidden] { display: none; }
 .hsz-potty { display: inline-block; width: .8rem; height: .8rem; border-radius: 50%; }
 .hsz-potty--arp { background: var(--hsz-yolk); border: 2px solid var(--hsz-fekete); }
 .hsz-potty--vtp { background: var(--hsz-feher); border: 2px dashed var(--hsz-fekete); }
 .hsz-potty--rip { background: #2f9e44; border: 2px solid var(--hsz-fekete); }
+.hsz-potty--ospf { background: #1c7ed6; border: 2px solid var(--hsz-fekete); }
 .hsz-potty--icmp { background: var(--hsz-fekete); border: 2px solid var(--hsz-sarga); }
 .hsz-cimke-minta { font-size: .75rem; border: 1.5px solid var(--hsz-fekete); border-radius: .3rem; padding: 0 .25rem; background: var(--hsz-feher); }
 .hsz-x-minta { display: inline-grid; place-items: center; width: 1rem; height: 1rem; border-radius: 50%; background: #b3261e; color: #fff; font-size: .65rem; }

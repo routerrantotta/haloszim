@@ -10,7 +10,7 @@ import { lepesAlak, idoSzoveg, MODOK } from '../src/nezet/panel.js';
 import { feladatValtozat } from '../src/feladat/veletlen.js';
 
 const CELTIPUSOK = ['vlan', 'vlan-nincs', 'access-port', 'trunk', 'pc-ip', 'vtp', 'vtp-szinkron', 'ping', 'szoras',
-  'rip', 'ripng', 'ipv6-routing', 'utvonal'];
+  'rip', 'ripng', 'ipv6-routing', 'utvonal', 'ospf', 'ospf-szomszed', 'ospf-interfesz'];
 
 for (const fd of feladatLista()) {
   test(`${fd.azon}: a teendők céljai és a leírás parancs nélküliek (vizsga mód)`, () => {

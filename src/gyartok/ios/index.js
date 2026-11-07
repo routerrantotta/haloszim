@@ -15,6 +15,7 @@ import { vtpParancsok } from './parancsok/vtp.js';
 import { megNincsParancsok, routerMegNincsParancsok } from './parancsok/meg-nincs.js';
 import { routerKonfigParancsok } from './parancsok/router.js';
 import { routerExecParancsok } from './parancsok/router-exec.js';
+import { ospfParancsok } from './parancsok/ospf.js';
 import { portTipusok } from '../../modell/switch.js';
 import { routerPortTipusok } from '../../modell/router.js';
 
@@ -59,11 +60,11 @@ export const ios = {
 
 /**
  * A router (ISR 4331 jellegű) parancssora: ugyanaz a „személyiség”, más parancskészlettel
- * (nincs VLAN, switchport, VTP; van IP-cím, routing, RIP, ping, traceroute, debug).
+ * (nincs VLAN, switchport, VTP; van IP-cím, routing, RIP, OSPF, ping, traceroute, debug).
  */
 export const iosRouter = {
   ...ios,
-  parancsok: [...alapParancsok, ...interfeszKozos, ...routerKonfigParancsok, ...routerExecParancsok, ...routerMegNincsParancsok],
+  parancsok: [...alapParancsok, ...interfeszKozos, ...routerKonfigParancsok, ...routerExecParancsok, ...ospfParancsok, ...routerMegNincsParancsok],
   kornyezet(eszkoz) {
     return { portTipusok: routerPortTipusok(eszkoz), tipusLeirasok: TIPUS_LEIRASOK };
   },

@@ -114,7 +114,8 @@ export class Topologia {
     j.className = 'hsz-jelmagyarazat';
     j.innerHTML = `<span><i class="hsz-potty hsz-potty--arp"></i>${this.vanRouter ? 'ARP / ND' : 'ARP'}</span>`
       + '<span><i class="hsz-potty hsz-potty--icmp"></i>ping (ICMP)</span>'
-      + (this.vanRouter ? '<span><i class="hsz-potty hsz-potty--rip"></i>RIP / RIPng</span>' : '')
+      + (this.vanRouter ? '<span data-fajta="rip" hidden><i class="hsz-potty hsz-potty--rip"></i>RIP / RIPng</span>' : '')
+      + (this.vanRouter ? '<span data-fajta="ospf" hidden><i class="hsz-potty hsz-potty--ospf"></i>OSPF</span>' : '')
       + (this.vanVtp ? '<span><i class="hsz-potty hsz-potty--vtp"></i>VTP-hirdetés</span>' : '')
       + (this.vanSwitch ? '<span><b class="hsz-cimke-minta">10</b>802.1Q-címke (VLAN)</span>' : '')
       + '<span><b class="hsz-x-minta">✕</b>eldobott keret</span>'
@@ -317,11 +318,13 @@ export class Topologia {
     for (const [eszkoz, r] of this.rajzok) {
       r.felirat.textContent = eszkoz.hostname;
       if (r.tipus === 'pc') {
-        r.ipFelirat.textContent = eszkoz.ip ? `${eszkoz.ip}` : 'nincs IP-cím';
-        r.ipFelirat.classList.toggle('hsz-eszkoz__ip--nincs', !eszkoz.ip);
+        // Csak IPv6-os gépnél (pl. ospf-2) az IPv6-cím látszik a gép alatt.
+        const cim = eszkoz.ip || (eszkoz.ipv6 ? eszkoz.ipv6 : '');
+        r.ipFelirat.textContent = cim || 'nincs IP-cím';
+        r.ipFelirat.classList.toggle('hsz-eszkoz__ip--nincs', !cim);
         const p = r.portok.get(eszkoz.portok[0].nev);
         p.led.classList.toggle('hsz-led--be', eszkoz.portok[0].fent);
-        p.cim.textContent = `${eszkoz.hostname} – ${eszkoz.ip || 'nincs IP-cím'}${eszkoz.maszk ? ' / ' + eszkoz.maszk : ''}`
+        p.cim.textContent = `${eszkoz.hostname} – ${eszkoz.ip || (eszkoz.ipv6 ? 'nincs IPv4-cím' : 'nincs IP-cím')}${eszkoz.maszk ? ' / ' + eszkoz.maszk : ''}`
           + (eszkoz.ipv6 ? `, ${eszkoz.ipv6.toLowerCase()}/${eszkoz.ipv6Hossz || 64}` : '');
         continue;
       }
@@ -370,6 +373,11 @@ export class Topologia {
     if (!kr || typeof kr.ut.getTotalLength !== 'function') return;
     const elore = kr.k.a.eszkoz === e.honnan.eszkoz && kr.k.a.port === e.honnan.port;
     const fajta = csomagFajta(e.keret);
+    // A protokoll jelmagyarázata az első csomagjánál jelenik meg (RIP-es feladatban nem kell az OSPF, és fordítva).
+    if (fajta === 'rip' || fajta === 'ospf') {
+      const jel = this.doboz.querySelector(`.hsz-jelmagyarazat [data-fajta="${fajta}"]`);
+      if (jel && jel.hidden) jel.hidden = false;
+    }
     const g = svg('g', { class: `hsz-csomag hsz-csomag--${fajta}` });
     g.append(svg('circle', { r: 7 }));
     if (e.keret.vlan !== undefined) {
@@ -431,11 +439,12 @@ export class Topologia {
   }
 }
 
-/** A csomag színe a rajzon: arp (ARP és IPv6 ND), rip (RIP, RIPng), vtp, icmp (minden más). */
+/** A csomag színe a rajzon: arp (ARP és IPv6 ND), rip (RIP, RIPng), ospf, vtp, icmp (minden más). */
 function csomagFajta(k) {
   if (k.tipus === 'arp' || k.tipus === 'vtp') return k.tipus;
   const a = k.adat || {};
   if (a.protokoll === 'udp') return 'rip';
+  if (a.protokoll === 'ospf') return 'ospf';
   if (a.protokoll === 'icmpv6' && (a.icmp.tipus === 'ns' || a.icmp.tipus === 'na')) return 'arp';
   return 'icmp';
 }
@@ -447,9 +456,28 @@ const ICMP_NEV = {
   elerhetetlen: 'ICMP „Destination unreachable” – nincs útvonal',
 };
 
+const OSPF_NEV = {
+  hello: 'Hello', dbd: 'DBD (adatbázis-leírás)', lsr: 'LSR (LSA-kérés)', lsu: 'LSU (LSA-k küldése)', ack: 'LSAck (nyugtázás)',
+};
+
+/** Egy OSPF-csomag leírása. */
+function ospfLeiras(a) {
+  const o = a.ospf;
+  const v = a.forrasIp ? 'OSPF' : 'OSPFv3';
+  const ut = `${a.forrasIp || a.forras} → ${a.celIp || a.cel}`;
+  if (o.tipus === 'hello') {
+    return `${v} Hello (${o.rid}, area ${o.terulet}): ${ut}, Hello ${o.hello} / Dead ${o.dead} mp, látott szomszédok: ${o.szomszedok.join(', ') || 'még senki'}`;
+  }
+  if (o.tipus === 'dbd') return `${v} ${OSPF_NEV.dbd} (${o.rid}): ${ut}, ${o.init ? 'kezdés (ki a master?)' : `${o.fejlecek.length} LSA fejléce`}, MTU ${o.mtu}`;
+  if (o.tipus === 'lsr') return `${v} ${OSPF_NEV.lsr} (${o.rid}): ${ut}, ${o.kulcsok.length} LSA-t kér`;
+  if (o.tipus === 'lsu') return `${v} ${OSPF_NEV.lsu} (${o.rid}): ${ut}, ${o.lsak.length} LSA`;
+  return `${v} ${OSPF_NEV[o.tipus] || o.tipus} (${o.rid}): ${ut}`;
+}
+
 /** A csomag rövid leírása (a pötty buboréka). */
 function csomagLeiras(k) {
   const a = k.adat || {};
+  if (a.protokoll === 'ospf') return ospfLeiras(a);
   if (k.tipus === 'ipv4' && a.protokoll === 'udp') {
     const r = a.udp.adat;
     if (r.parancs === 'keres') return `RIP-kérés: ${a.forrasIp} → ${a.celIp} (küldjétek el a táblátokat!)`;
