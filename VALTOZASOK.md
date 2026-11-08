@@ -2,6 +2,42 @@
 
 A legújabb van felül.
 
+## v0.10 – 2026-11-08 – MikroTik: RouterOS-szerű parancssor, gyártóváltó, menedzsment-VLAN és Safe Mode
+
+- **Új gyártó: MikroTik.** CRS326-24G-2S+ jellegű switch (ether1–ether24, sfp-sfpplus1–2, saját rajz), RouterOS 7
+  jellegű parancssorral, gyári (defconf) állapotból: minden port a `bridge`-ben, a bridge-en 192.168.88.1/24.
+- **Gyártóváltó:** a feladatválasztóban új „Gyártó” lista (csak ha a feladatnak több változata van). A **VLAN-ok két
+  switchen, trunkkel** feladat MikroTik eszközökkel is megoldható: saját teendők, 18 lépéses bemutató (VLAN-tábla,
+  PVID és frame-types, tagged = trunk, `vlan-filtering`, rövidítések), MikroTik-magyarázat (Cisco–MikroTik
+  összevetéssel); a célok ugyanazok. Az URL-ben: `?gyarto=mikrotik`.
+- **Új feladat: Menedzsment-VLAN és Safe Mode (MikroTik).** A switchet az ADMIN gépről, hálózaton át (SSH-val) kezeled.
+  Ha a VLAN-beállítás elvágja az utat, a kapcsolat megszakad (a terminál az ADMIN gép parancssorára vált: `ssh admin@…`
+  vagy `konzol`). A bemutatóban előbb szándékosan kizárod magad – a **Safe Mode (Ctrl+X)** visszavonja a változtatásokat –,
+  aztán helyes sorrendben átállítod a kezelést a saját VLAN-jába (VLAN-interfész, `tagged=bridge`, felhasználói
+  VLAN-ok, szűrés, átállás, új cím). 16 lépéses bemutató, 12 cél, köztük ellenpróbák (a felhasználói portokról a
+  kezelő cím és a régi cím sem érhető el). Véletlen VLAN-számok.
+- **RouterOS-szerű parancssor (src/gyartok/routeros):** menük (`/interface`, `/interface bridge`, `… bridge port`,
+  `… bridge vlan`, `… bridge host`, `/interface vlan`, `/ip address`, `/system identity`), parancsok `add`, `set`,
+  `remove`, `print` (és `print detail`), `enable`, `disable`, `export`, `/ping`; menüváltás (útvonal, `..`, `/`,
+  perjeles alak), rövidítés (menü, parancs, paraméter), `név=érték`, `[find …]`, sorszám és név szerinti
+  hivatkozás, kérdések (`numbers:`, a hiányzó kötelező paraméter), `?` és F1 súgó (magyarul), Tab, előzmények;
+  hibaüzenetek a valódi eszköz formájában (`bad command name …`, `expected end of command …`, `input does not match
+  any value of …`, `failure: …`). Kimenetek a v7-es formában (`Flags:`/`Columns:` fejléc, `;;;` megjegyzés,
+  dinamikus sorok), export (csak a gyáritól eltérő értékek). Safe Mode: Ctrl+X (és gomb a terminál alatt),
+  `<SAFE>` a promptban.
+- **Bridge a magban (src/mag/hid.js):** VLAN-szűrés (vlan-filtering) be/ki, PVID, frame-types, ingress-filtering,
+  VLAN-tábla tagged/untagged tagokkal és a PVID szerinti dinamikus untagged tagsággal; MAC-tanulás VLAN-onként; a
+  switch saját IP-címei (bridge vagy VLAN-interfész) válaszolnak az ARP-ra és a pingre; elérhetőség-vizsgálat a hálózati
+  kezeléshez. A MikroTik nem beszél DTP-t és VTP-t.
+- **Ellenőrzés:** a `vlan`, `access-port` és `trunk` cél MikroTiken a bridge-beállításokat nézi (a feladat céljai
+  gyártófüggetlenek maradnak); új cél: `kezelo-ip`; a bemutatóhoz `hid-port`, `hid-vlan`, `vlan-szures`, `safe-mode`,
+  `kapcsolat` feltétel.
+- **Javítás (rip-1):** a bemutató két „nézd meg” lépése (`show ip route` R2-n és R3-on) a RIP-frissítés után
+  észrevétlenül átugródott; most a parancs beírását is megvárja. A bemutató-tesztek mostantól minden feladatnál
+  ellenőrzik, hogy egyetlen lépés sem ugrik át.
+- Forrásjegyzék: új MikroTik-szakasz (F27–F36), az „ellenőrizendő” formákkal. Tesztek: 179 (új: routeros.test.js,
+  hid.test.js; a bemutató-teszt a vlan-1 MikroTik-változatát és az mgmt-1-et is végigjátssza 4 változattal).
+
 ## v0.9 – 2026-11-07 – OSPF (IPv4 és IPv6): két új feladat a Dinamikus routing csoportban
 
 - **Új feladat: OSPF (IPv4, OSPFv2).** A routerrantotta.hu „OSPF – egyterületű” leckéinek háromszög-topológiája

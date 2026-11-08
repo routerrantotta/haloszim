@@ -4,7 +4,9 @@ Itt van összegyűjtve, hogy a szimulátor egy-egy parancsának kimenete és hib
 ezt a formát milyen nyilvános forrásokból állítottuk össze. Szöveget nem másolunk: csak a formát jegyezzük fel
 (oszlopok, sorrend, szóközök, hibaüzenetek), a súgószövegek és a magyarázatok saját megfogalmazások.
 
-Utánzott eszköz: **2960-24 jellegű switch, IOS 15.0 jellegű kimenetek** (homelab még nincs).
+Utánzott eszközök: **2960-24 jellegű switch, IOS 15.0 jellegű kimenetek**; **ISR 4331 jellegű router** (IOS XE 16);
+v0.10-től **CRS326-24G-2S+ jellegű MikroTik switch, RouterOS 7 jellegű kimenetek** (lásd a MikroTik-szakaszt lent).
+Homelab még nincs.
 Szabály: parancsonként legalább 2 forrás. Ahol ez még nincs meg, ott **„ellenőrizendő”** a jelölés –
 ezeket érdemes elsőként összevetni egy valódi eszközzel vagy újabb forrásokkal.
 
@@ -127,6 +129,73 @@ Utánzott eszköz: **ISR 4331 jellegű router, IOS XE 16 jellegű kimenetek**.
 | `debug ip ospf hello` | `OSPF-1 HELLO Gi0/0/0: Send hello to 224.0.0.5 area 0 from …`, `Rcv hello from …`, `Mismatched hello parameters from …`, `Dead R 40 C 20, Hello R 10 C 5 Mask R … C …` (IOS XE-forma; a lecke a régi `OSPF: …` formát mutatja) | F24, E | ellenőrizendő |
 | `debug ip ospf adj` | `2 Way Communication to …`, `DR/BDR election`, `Elect BDR/DR …`, `Send/Rcv DBD …`, `NBR Negotiation Done. We are the MASTER/SLAVE`, `Nbr … has larger interface MTU`, `Exchange Done with …`, `Synchronized with …, state FULL`, `Mismatched Authentication type/Key …` | E | ellenőrizendő |
 | Válaszüzenetek | `% OSPF: Reload or use "clear ip ospf process" command, for this to take effect`; `% OSPF: Reference bandwidth is changed.` + `Please ensure …`; `Reset ALL OSPF processes? [no]:`; `OSPF: Key 1 already exists`; OSPFv3-ban ugyanez `% OSPFv3:` kezdettel, `Reset ALL OSPFv3 processes? [no]:` | F24 (az első kettő), E | a többi ellenőrizendő |
+
+## MikroTik – RouterOS 7 jellegű parancssor (v0.10)
+
+Utánzott eszköz: **CRS326-24G-2S+ jellegű switch** (ether1–ether24, sfp-sfpplus1–2), RouterOS 7, gyári (defconf)
+állapotból: minden port a `bridge`-ben, a bridge-en `192.168.88.1/24`. A gyártó neve csak szövegként szerepel;
+a gyári bejelentkezési „logó” (ASCII-rajz) szándékosan NINCS a szimulátorban.
+
+### Források
+
+| # | Forrás | Mire jó |
+|---|--------|---------|
+| F27 | [MikroTik RouterOS dokumentáció – Configuration Management (Safe Mode)](https://help.mikrotik.com/docs/spaces/ROS/pages/328155/Configuration+Management), [7.24-es változat](https://manual.mikrotik.com/docs/7.24/getting-started/configuration-management/) | Ctrl+X / F4, `[Safe Mode taken]`, a prompt `<SAFE>` végződése, visszavonás a TCP időtúllépése (kb. 9 perc) után, 100 művelet korlát |
+| F28 | [MikroTik RouterOS dokumentáció – Console](https://help.mikrotik.com/docs/display/ROS/Console) | promptok (`[admin@MikroTik] > `), a parancs- ÉS paraméternevek rövidítése, Tab (egy / kétszer), F1 súgó, `/` és `..`, a sorszámok print nélkül is működnek, `set [ find default-name=ether5 ]` |
+| F29 | [MikroTik fórum – Bridge VLANS hEX S v7.2rc4: /interface bridge vlan print](https://forum.mikrotik.com/t/bridge-vlans-hex-s-v7-2rc4-interface-bridge-vlan-print/156544) | a v7-es print felépítése: `Flags:` és `Columns:` sor, `#` oszlop, jelzőbetűk, `;;;` megjegyzés; bridge vlan és bridge port oszlopai; CURRENT-… csak a működő portok |
+| F30 | [MikroTik fórum – a bridge dinamikusan untagged tag lesz](https://forum.mikrotik.com/t/bridge1-dynamically-being-added-as-an-untagged-port/133893) | dinamikus (D) VLAN-sor: a PVID szerinti untagged tagság; admit-only-vlan-tagged esetén nincs; a bridge maga az 1-es VLAN tagja |
+| F31 | [MikroTik fórum – a MAC-tábla megtekintése (v7.19)](https://forum.mikrotik.com/t/how-can-you-view-the-mac-address-table-of-a-hw-offloaded-bridge-for-example-on-rb760igs-with-v7-19-6/266024) | /interface bridge host print: `Flags: D - DYNAMIC; L - LOCAL`, oszlopok MAC-ADDRESS, VID, ON-INTERFACE, BRIDGE |
+| F32 | [MikroTik fórum – Using RouterOS to VLAN your network](https://forum.mikrotik.com/t/using-routeros-to-vlan-your-network/126489?page=12) | RouterOS 7-ben a bridge-port ingress-filtering alapból be van kapcsolva |
+| F33 | [mikrotikdocs.fyi – VLAN trunk és access portok](https://mikrotikdocs.fyi/bridging-and-switching/vlan-trunk-access-configuration/) | frame-types alapértéke admit-all; a vlan-filtering bekapcsolása az utolsó lépés; a kezelő VLAN-ban a bridge tagged tag legyen |
+| F34 | MikroTik fórum: [bad command name … (line 1 column 1)](https://forum.mikrotik.com/t/bad-command-name-dude-line-1-column-1/100423), [expected end of command (line 1 column 49)](https://forum.mikrotik.com/t/expected-end-of-command/46290), [input does not match any value of interface](https://forum.mikrotik.com/t/basic-bridge-commands-failing/56461) | a hibaüzenetek alakja |
+| F35 | MikroTik fórum (találati címek): [device already added as bridge port](https://forum.mikrotik.com/t/loop-for-in-interface-bridge-port/183662), [already have interface with such name](https://forum.mikrotik.com/t/when-import-script-dies-if-interface-name-is-the-same/33468) | a `failure: …` üzenetek szövege |
+| F36 | [MikroTik fórum – váratlan „numbers:” kérdés](https://forum.mikrotik.com/t/unexpected-cli-prompt-when-modifying-settings-on-bridge-port/268435) | ha a `set` után nincs elem megnevezve, a switch `numbers: ` kérdéssel kéri |
+
+### Parancsok és üzenetek
+
+| Mit | Forma a szimulátorban | Források | Állapot |
+|-----|------------------------|----------|---------|
+| Prompt | `[admin@SW1] > `; menüben `[admin@SW1] /interface/bridge> `; Safe Mode-ban `…<SAFE> ` | F27, F28 | rendben |
+| Menüváltás, útvonal | csak útvonal → abba a menübe lép; `/…` a főmenüből indul, a menü nem változik; `..`, `/`; perjeles alak (`/interface/bridge/port/print`) | F28, E | rendben |
+| Rövidítés | menü-, parancs- és paraméternév egyértelmű előtaggal (`/int br vl add br=bridge vl=10`) | F28 | rendben (a „részszó-illesztés” – nem előtag – nincs meg) |
+| Tab | egyértelmű → teljes szó + szóköz (paraméternévnél `=`), több lehetőségnél a közös részig | F28 | rendben (a második Tab listája még nincs meg) |
+| Súgó | `?` és F1; saját, magyar leírás „név -- leírás” sorokban | F28 (F1), E (?) | a `?` billentyű: ellenőrizendő; a szöveg szándékosan saját |
+| Elem megnevezése | sorszám (print szerint, print nélkül is), név, `[find kulcs=érték]`, `[find where …]` | F28, E | a bridge-port megnevezése az interfész nevével (`set ether2 …`): ellenőrizendő |
+| `set` elem nélkül | `numbers: ` kérdés | F36, E | rendben |
+| `add` kötelező paraméter nélkül | `interface: ` (a hiányzó paraméter neve) kérdés | E | ellenőrizendő |
+| Ismeretlen menü/parancs | `bad command name X (line 1 column N)` | F34, E | az oszlopszám számolása: ellenőrizendő |
+| Kétértelmű rövidítés | `ambiguous command name X (line 1 column N)` | E | ellenőrizendő |
+| Ismeretlen paraméter, fölösleges szó | `expected end of command (line 1 column N)` | F34, E | rendben |
+| Rossz érték | `input does not match any value of NÉV` | F34, E | rendben |
+| Számtartomány, formátum | `value of pvid out of range (1..4094)`, `invalid value for argument address` | E | ellenőrizendő |
+| Nem létező elem | `no such item` | E | ellenőrizendő |
+| Dinamikus elem módosítása | `failure: can not modify dynamic entry` | E | ellenőrizendő |
+| Már bridge-port / foglalt név | `failure: device already added as bridge port`, `failure: already have interface with such name` | F35 | ellenőrizendő (egy forrás) |
+| `/interface bridge vlan print` | `Flags: D - DYNAMIC`, `Columns: BRIDGE, VLAN-IDS, CURRENT-TAGGED, CURRENT-UNTAGGED`; a listák soronként egy elemmel; a CURRENT-oszlopokban csak a működő portok | F29, F30 | a soronkénti lista: ellenőrizendő |
+| `/interface bridge port print` | `Flags: I - INACTIVE; H - HW-OFFLOAD` (csak a ténylegesen előforduló jelzők), `Columns: INTERFACE, BRIDGE, HW, PVID, PRIORITY, PATH-COST, INTERNAL-PATH-COST, HORIZON`, `;;; defconf` | F29, E | az oszlopszélességek: ellenőrizendő |
+| Dinamikus untagged tagság | a PVID szerinti VLAN-ban minden port (és a bridge) untagged tag, kivéve admit-only-vlan-tagged esetén | F30, F29 | rendben |
+| `/interface bridge host print` | `Flags: D - DYNAMIC; L - LOCAL`, `Columns: MAC-ADDRESS, VID, ON-INTERFACE, BRIDGE` | F31 | ellenőrizendő (egy forrás; a helyi sorok listája egyszerűsítve) |
+| `/interface bridge print` | részletes (név=érték) forma, `name="bridge"`, `vlan-filtering=…`, szűréssel `pvid`, `frame-types`, `ingress-filtering` is | E | ellenőrizendő |
+| `/interface print`, `/interface vlan print`, `/ip address print` | Flags/Columns-táblázat (R, S, X, I jelzők) | F29 (forma), E | az oszlopok: ellenőrizendő |
+| Alapértékek | frame-types=admit-all, ingress-filtering=yes (v7), pvid=1 | F33, F32 | az ingress-filtering: ellenőrizendő |
+| `export` | `# ÉÉÉÉ-HH-NN óó:pp:mm by RouterOS 7.24`, `# software id = …`, `# model = …`, `# serial number = …`; szakaszonként (`/interface bridge` …), csak a gyáritól eltérő értékek, betűrendben; letiltott port: `set [ find default-name=etherN ] disabled=yes` | F28 (find default-name), E | a fejléc és a sorrend: ellenőrizendő; a software id és a sorozatszám kitalált |
+| `/system identity print` | `  name: SW1` | E | ellenőrizendő |
+| `/ping` | `SEQ HOST SIZE TTL TIME STATUS` fejléc, soronként egy válasz / `timeout`, a végén `sent= received= packet-loss=` (+ rtt) | E | ellenőrizendő; a valódi ping Ctrl+C-ig fut, itt count (alapból 4) után megáll |
+| Safe Mode | Ctrl+X: `[Safe Mode taken]`; újra Ctrl+X: `[Safe Mode released]`, a változtatások maradnak | F27, F28 | a `[Safe Mode released]` szövege: ellenőrizendő |
+| Megszakadás Safe Mode-ban | a Safe Mode óta tett változtatások visszavonása | F27, F28 | rendben; az idő a szimulátorban 10 s (valódi: kb. 9 perc) |
+| SSH a PC-ről | `ssh: connect to host X port 22: Connection timed out` | E | ellenőrizendő (asztali OpenSSH-forma) |
+
+### Szándékos egyszerűsítések (MikroTik)
+
+- Csak a VLAN-feladatokhoz szükséges menük vannak meg: /interface, /interface bridge (port, vlan, host), /interface vlan,
+  /ip address, /system identity, valamint a főmenüben export és ping. Nincs: /interface ethernet menü, /log, /tool,
+  Winbox-szerű ablak, STP-beállítások, `print where`, `:` szkriptek, Ctrl+D, `/quit`.
+- A hálózati kezelés (SSH) nem valódi TCP-kapcsolat: a szimulátor folyamatosan nézi, eléri-e a kezelő PC a switch
+  címét a VLAN-szabályok szerint (mindkét irányban); 2 s elérhetetlenség után a kapcsolat megszakad.
+- A Safe Mode a szimulátorban csak a megszakadáskor von vissza; a 100 műveletes korlát és a többi felhasználóval
+  való „átvétel” (hijack) nincs meg.
+- A bridge-port INACTIVE jelzője csak a link hiányát (vagy a hiányzó bridge-et) mutatja.
+- A VLAN-táblában a tagged/untagged listába bármely interfész beírható (a valódi eszköz ellenőrzi, hogy bridge-port-e).
 
 ## Szándékos egyszerűsítések (v0.9-től, OSPF)
 

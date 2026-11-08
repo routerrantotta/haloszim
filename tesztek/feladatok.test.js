@@ -5,14 +5,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import './segito.js';
-import { feladatLista, feladatBetolt } from '../src/feladat/betolto.js';
+import { feladatLista, feladatBetolt, feladatGyartok, gyartoValtozat } from '../src/feladat/betolto.js';
 import { lepesAlak, idoSzoveg, MODOK } from '../src/nezet/panel.js';
 import { feladatValtozat } from '../src/feladat/veletlen.js';
 
 const CELTIPUSOK = ['vlan', 'vlan-nincs', 'access-port', 'trunk', 'pc-ip', 'vtp', 'vtp-szinkron', 'ping', 'szoras',
-  'rip', 'ripng', 'ipv6-routing', 'utvonal', 'ospf', 'ospf-szomszed', 'ospf-interfesz'];
+  'rip', 'ripng', 'ipv6-routing', 'utvonal', 'ospf', 'ospf-szomszed', 'ospf-interfesz', 'kezelo-ip'];
 
-for (const fd of feladatLista()) {
+// Minden feladat minden gyártói változata (pl. a vlan-1 Cisco és MikroTik változata is).
+const valtozatok = feladatLista().flatMap((f) => feladatGyartok(f).map((g) => ({ ...gyartoValtozat(f, g), azon: `${f.azon} (${g})` })));
+
+for (const fd of valtozatok) {
   test(`${fd.azon}: a teendők céljai és a leírás parancs nélküliek (vizsga mód)`, () => {
     for (const b of fd.leiras) assert.ok(!b.includes('`'), `leírás: ${b}`);
     for (const l of fd.lepesek.map(lepesAlak)) {

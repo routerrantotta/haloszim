@@ -347,6 +347,8 @@
           { tipus: 'utvonal', eszkoz: 'R2', halozat: '172.16.{L1}.0/24', kod: 'R' },
           { tipus: 'utvonal', eszkoz: 'R2', halozat: '172.16.{L3}.0/24', kod: 'R' },
           { tipus: 'utvonal', eszkoz: 'R2', halozat: '172.16.0.0/16', nincs: true },
+          // A „nézd meg” lépés: a RIP magától is frissít, ezért a parancs nélkül ez a lépés észrevétlenül átugródna.
+          { tipus: 'parancs', eszkoz: 'R2', szavak: ['show', 'ip', 'route'] },
         ],
       },
       {
@@ -366,7 +368,10 @@
         miert: 'R* 0.0.0.0/0 [120/1] a soros vonalon (Serial0/1/0): R3 internetforgalma a lassú vonalon megy, mert az csak 1 ugrás. '
           + 'Fent: „Gateway of last resort is 10.1.13.1”.',
         be: ['do show ip route'],
-        kesz: { tipus: 'utvonal', eszkoz: 'R3', halozat: '0.0.0.0/0', kod: 'R' },
+        kesz: [
+          { tipus: 'utvonal', eszkoz: 'R3', halozat: '0.0.0.0/0', kod: 'R' },
+          { tipus: 'parancs', eszkoz: 'R3', szavak: ['show', 'ip', 'route'] },
+        ],
       },
       {
         hol: 'terminal', eszkoz: 'R1',

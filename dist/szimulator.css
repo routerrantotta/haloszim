@@ -55,6 +55,8 @@
 .hsz-eszkoz:hover .hsz-eszkoz__haz { stroke: var(--hsz-yolk); }
 .hsz-eszkoz__haz { fill: var(--hsz-tinta); stroke: var(--hsz-fekete); stroke-width: 2; }
 .hsz-eszkoz__elolap { fill: #2c2918; }
+/* A MikroTik-switch (saját rajz) kissé hidegebb előlappal, hogy a kettő a rajzon is megkülönböztethető legyen. */
+.hsz-switch--mt .hsz-eszkoz__elolap { fill: #1f2a30; }
 .hsz-eszkoz__apro { fill: #cfc8ae; font: 9px var(--hsz-betu); }
 .hsz-eszkoz__nev { fill: var(--hsz-fekete); font: 900 17px var(--hsz-cimbetu); }
 .hsz-eszkoz__tipus { fill: var(--hsz-tinta); font: 400 12px var(--hsz-betu); }

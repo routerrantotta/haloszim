@@ -25,6 +25,7 @@ import {
   idokozok as ospfIdokozok,
 } from '../mag/ospf.js';
 import { portKeres } from '../modell/switch.js';
+import { MT_CELOK } from './ellenorzo-mikrotik.js';
 import { esRag, nevelo } from '../magyar.js';
 
 /** „a 10-es” / „az 5-ös” */
@@ -49,8 +50,15 @@ function kovSzoveg(k) {
 
 /** A próba nélküli (azonnal eldönthető) célok. */
 const ALLAPOT_CELOK = {
+  /** A MikroTik-switch kezelő IP-címe egy VLAN-interfészen (lásd ellenorzo-mikrotik.js). */
+  'kezelo-ip': (f, c) => MT_CELOK['kezelo-ip'](f, c),
+  'hid-port': (f, c) => MT_CELOK['hid-port'](f, c),
+  'hid-vlan': (f, c) => MT_CELOK['hid-vlan'](f, c),
+  'vlan-szures': (f, c) => MT_CELOK['vlan-szures'](f, c),
+
   vlan(f, c) {
     const sw = f.eszkoz(c.eszkoz);
+    if (sw.gyarto === 'mikrotik') return MT_CELOK.vlan(f, c);
     const v = sw.vlanok[c.vlan];
     if (!v) return { ok: false, megjegyzes: `${AVlan(c.vlan)} VLAN nincs létrehozva (${c.eszkoz}).` };
     if (c.nev && v.nev !== c.nev) return { ok: false, megjegyzes: `A VLAN neve most: ${v.nev} (${c.nev} kellene).` };
@@ -59,6 +67,7 @@ const ALLAPOT_CELOK = {
 
   'access-port'(f, c) {
     const sw = f.eszkoz(c.eszkoz);
+    if (sw.gyarto === 'mikrotik') return MT_CELOK['access-port'](f, c);
     const p = portKeres(sw, c.port);
     const hibak = [];
     if (p.mod !== 'access') hibak.push(`a port üzemmódja most ${MOD_SZOVEG[p.mod]} (access kellene)`);
@@ -71,6 +80,7 @@ const ALLAPOT_CELOK = {
 
   trunk(f, c) {
     const sw = f.eszkoz(c.eszkoz);
+    if (sw.gyarto === 'mikrotik') return MT_CELOK.trunk(f, c);
     const p = portKeres(sw, c.port);
     if (!p.fent) return { ok: false, megjegyzes: `Nincs link a(z) ${rovid(p.nev)} porton (le van kapcsolva?).` };
     const tul = sw.halozat.szomszed(sw, p);

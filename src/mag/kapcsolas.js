@@ -14,6 +14,7 @@
 import { SZORAS } from './ethernet.js';
 import { vtpFogad } from './vtp.js';
 import { esRag, nevelo } from '../magyar.js';
+import { hidUzemmod } from './hid.js';
 
 /** A MAC-bejegyzések élettartama (az IOS alapértéke 300 másodperc). */
 export const MAC_ELETKOR = 300000;
@@ -25,11 +26,13 @@ export const MAC_ELETKOR = 300000;
  * @returns {'trunk'|'access'}
  */
 export function uzemmod(sw, port) {
+  if (sw.gyarto === 'mikrotik') return hidUzemmod(sw, port);
   if (port.mod === 'trunk') return 'trunk';
   if (port.mod === 'access') return 'access';
   if (!port.fent || !sw.halozat) return 'access';
   const tul = sw.halozat.szomszed(sw, port);
-  if (!tul || tul.eszkoz.tipus !== 'switch') return 'access';
+  // DTP-t csak a Cisco-switch beszél (a MikroTik nem): más eszköz felé nincs egyeztetett trunk.
+  if (!tul || tul.eszkoz.tipus !== 'switch' || tul.eszkoz.gyarto === 'mikrotik') return 'access';
   const m = tul.port.mod;
   // A DTP a VTP-tartománynevet is elküldi: eltérő nevek esetén nincs egyeztetett trunk.
   const t1 = sw.vtpTartomany;

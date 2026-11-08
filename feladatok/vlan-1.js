@@ -17,6 +17,7 @@
  *   valtozok – véletlen adatok szabályai (gyakorló és vizsga mód); helyőrzők: {VLAN1}, {VLAN1|es} → „10-es”,
  *               {VLAN1|aes} → „a 10-es” (src/feladat/veletlen.js)
  *   bemutato  – az oktató mód buborékjai lépésenként (src/feladat/vezetett.js)
+ *   gyartok   – más gyártók változatai (itt: mikrotik); a mezőik felülírják az alapokat (src/feladat/betolto.js)
  *   magyarazat – a feladat végén lenyitható magyarázat: [{ cim, szoveg: [bekezdés | [listaelemek]] }]
  */
 (function (g) {
@@ -347,5 +348,367 @@
         ]],
       },
     ],
+    // ---------------------------------------------------------------------------------------------
+    // MikroTik-változat (a feladatpanel „Gyártó” választójával): ugyanaz a hálózat és ugyanazok a célok,
+    // CRS326 jellegű switchekkel és RouterOS-szerű parancssorral. Ezek a mezők felülírják a fentieket.
+    // ---------------------------------------------------------------------------------------------
+    gyartok: {
+      mikrotik: {
+        leiras: [
+          'Egy kis cég két szintjén egy-egy MikroTik switch van (SW1, SW2). Két csoport gépei vannak mindkét szinten: '
+            + 'PC1 és PC3 {VLAN1|aes} VLAN-ba ({NEV1}), PC2 és PC4 {VLAN2|aes} VLAN-ba ({NEV2}) kerüljön.',
+          'Az azonos VLAN-ban lévő gépek a két switchen át is érjék el egymást, a különböző VLAN-ban lévők ne. '
+            + 'A két switch közötti kábelen (ether24) mindkét VLAN forgalmának át kell mennie, 802.1Q-címkével megjelölve.',
+          'A switchek gyári állapotúak: minden port egy „bridge” nevű bridge-ben van, és még nincs VLAN-szűrés.',
+        ],
+        lepesek: [
+          {
+            cel: 'Mindkét switch bridge-ének VLAN-táblájában legyen {VLAN1|es} VLAN ({NEV1} megjegyzéssel) és {VLAN2|es} VLAN '
+              + '({NEV2} megjegyzéssel).',
+            parancsok: '`/interface bridge vlan add bridge=bridge vlan-ids={VLAN1} comment={NEV1}`, '
+              + '`/interface bridge vlan add bridge=bridge vlan-ids={VLAN2} comment={NEV2}`',
+            tippek: [
+              'A MikroTiken a VLAN-ok a bridge VLAN-táblájában vannak; ennek a menüje az interfészek, azon belül a bridge alatt van.',
+              'Új sort az `add` paranccsal veszel fel; a VLAN száma a `vlan-ids`, a név helyett megjegyzést (`comment`) adhatsz.',
+            ],
+          },
+          {
+            cel: 'Mindkét switchen: az ether1 port (PC1/PC3) tartozzon {VLAN1|aes} VLAN-hoz, az ether2 (PC2/PC4) {VLAN2|aes} '
+              + 'VLAN-hoz, és mindkét port csak címke nélküli keretet fogadjon (access port).',
+            parancsok: '`/interface bridge port set [find interface=ether1] pvid={VLAN1} frame-types=admit-only-untagged-and-priority-tagged`; '
+              + 'ugyanígy az ether2 a {VLAN2} PVID-del',
+            tippek: [
+              'A port saját VLAN-ja a PVID: a címke nélkül érkező keretek ebbe a VLAN-ba kerülnek. A bridge-portok menüjében állítod.',
+              'A meglévő bejegyzést a `set` módosítja; a portot így választod ki: `[find interface=ether1]`. '
+                + 'Hogy csak címke nélküli keretet fogadjon, arról a `frame-types` gondoskodik.',
+            ],
+          },
+          {
+            cel: 'A két switch közötti port (ether24) vigye át mindkét VLAN forgalmát, címkével.',
+            parancsok: 'Mindkét switchen: `/interface bridge vlan set [find vlan-ids={VLAN1}] tagged=ether24`, '
+              + '`/interface bridge vlan set [find vlan-ids={VLAN2}] tagged=ether24`',
+            tippek: [
+              'MikroTiken nincs „trunk üzemmód”: a VLAN-táblában adod meg, melyik VLAN melyik porton menjen címkével (tagged).',
+              'A VLAN-tábla sorát is a `set` módosítja; a sort így választod ki: `[find vlan-ids={VLAN1}]`.',
+            ],
+          },
+          {
+            cel: 'Kapcsold be mindkét switchen a VLAN-szűrést – enélkül a bridge nem foglalkozik a VLAN-okkal.',
+            parancsok: 'Mindkét switchen: `/interface bridge set bridge vlan-filtering=yes`',
+            tippek: [
+              'Ez a bridge saját beállítása (nem a portoké).',
+              'A neve: `vlan-filtering`.',
+            ],
+          },
+          {
+            cel: 'Minden PC kapja meg a címterv szerinti IP-címet és maszkot.',
+            parancsok: 'Kattints a PC-re, írd be az IP-címet és a maszkot (pl. 255.255.255.0 vagy /24), majd Mentés.',
+            tippek: ['A PC-k beállítása nem parancssorból megy: kattints a rajzon a gépre.'],
+          },
+          {
+            cel: 'Győződj meg róla, hogy az azonos VLAN-ú gépek elérik egymást a két switchen át, a különbözők nem.',
+            parancsok: 'PC1-en: `ping 192.168.{VLAN1}.{H3}`; PC2-n: `ping 192.168.{VLAN2}.{H4}`; switchen: '
+              + '`/interface bridge vlan print`, `/interface bridge port print`. Végül: Ellenőrzés.',
+            tippek: ['A PC parancssorában a `ping` paranccsal próbálhatod ki; a switchen a `print` mutatja az állapotot.'],
+          },
+        ],
+        bemutato: [
+          {
+            hol: 'eszkoz', eszkoz: 'SW1',
+            szoveg: 'Kezdjük SW1-gyel: kattints rá a rajzon (vagy fent az SW1 fülre).',
+            miert: 'Ez most egy MikroTik switch (CRS326 jellegű): a parancssora RouterOS-szerű – egészen más, mint a Cisco IOS. '
+              + 'Bárhol kérhetsz súgót a ? vagy az F1 billentyűvel.',
+            kesz: { tipus: 'kivalasztva', eszkoz: 'SW1' },
+          },
+          {
+            hol: 'terminal', eszkoz: 'SW1',
+            szoveg: 'Lépj be a bridge VLAN-táblájának menüjébe: `/interface bridge vlan`.',
+            miert: 'A RouterOS-ben nincs enable és configure terminal: belépés után rögtön lehet beállítani. A parancsok menükbe '
+              + 'vannak rendezve; ha csak a menü útvonalát írod be, oda lépsz – a prompt mutatja, hol vagy (`/interface/bridge/vlan>`).',
+            be: ['/interface bridge vlan'],
+            kesz: { tipus: 'parancs', eszkoz: 'SW1', szavak: ['/interface', 'bridge', 'vlan'] },
+          },
+          {
+            hol: 'terminal', eszkoz: 'SW1',
+            szoveg: 'Vedd fel az első VLAN-t: `add bridge=bridge vlan-ids={VLAN1} comment={NEV1}`.',
+            miert: 'Gyárilag minden port a „bridge” nevű bridge-ben van – ez a switch „szíve”, a portok között ez kapcsol. '
+              + 'A VLAN-okat a VLAN-táblájába kell felvenni. VLAN-nevet a MikroTik nem tárol: a megjegyzés (comment) játssza ezt a szerepet.',
+            be: ['add bridge=bridge vlan-ids={VLAN1} comment={NEV1}'],
+            kesz: { tipus: 'vlan', eszkoz: 'SW1', vlan: '{VLAN1}', nev: '{NEV1}' },
+          },
+          {
+            hol: 'terminal', eszkoz: 'SW1',
+            szoveg: 'A második: `add bridge=bridge vlan-ids={VLAN2} comment={NEV2}`, majd nézd meg a táblát: `print`.',
+            miert: 'A listában egy „D” jelű (dinamikus) sor is van: az 1-es VLAN-é. Ebbe minden port magától bekerül, amelynek '
+              + 'a PVID-je 1 – ezért működik gyárilag minden port együtt.',
+            be: ['add bridge=bridge vlan-ids={VLAN2} comment={NEV2}', 'print'],
+            kesz: [
+              { tipus: 'vlan', eszkoz: 'SW1', vlan: '{VLAN2}', nev: '{NEV2}' },
+              { tipus: 'parancs', eszkoz: 'SW1', szavak: ['/interface', 'bridge', 'vlan', 'print'] },
+            ],
+          },
+          {
+            hol: 'terminal', eszkoz: 'SW1',
+            szoveg: 'Most a portok jönnek. Lépj a bridge-portok menüjébe (`/interface bridge port`), és állítsd be a PC1 felé '
+              + 'néző portot: `set [find interface=ether1] pvid={VLAN1} frame-types=admit-only-untagged-and-priority-tagged`.',
+            miert: 'A PVID a port saját VLAN-ja: a PC címke nélkül küld, ezért a keretei ebbe a VLAN-ba kerülnek. A frame-types miatt '
+              + 'a port csak címke nélküli keretet fogad – így biztosan access port (mint Ciscón a switchport mode access). '
+              + 'A [find interface=ether1] választja ki a port bejegyzését. A hosszú szavakhoz használd a Tabot!',
+            be: ['/interface bridge port', 'set [find interface=ether1] pvid={VLAN1} frame-types=admit-only-untagged-and-priority-tagged'],
+            kesz: { tipus: 'hid-port', eszkoz: 'SW1', port: 'ether1', pvid: '{VLAN1}', kerettipus: 'admit-only-untagged-and-priority-tagged' },
+          },
+          {
+            hol: 'terminal', eszkoz: 'SW1',
+            szoveg: 'Ugyanez a PC2 felé néző porttal: `set [find interface=ether2] pvid={VLAN2} frame-types=admit-only-untagged-and-priority-tagged`.',
+            miert: 'Most már a bridge-portok menüjében vagy (lásd a promptot), ezért elég a parancs, nem kell az útvonal. '
+              + 'A fel nyíllal az előző parancsot is előhívhatod, és csak a számokat írod át.',
+            be: ['set [find interface=ether2] pvid={VLAN2} frame-types=admit-only-untagged-and-priority-tagged'],
+            kesz: { tipus: 'hid-port', eszkoz: 'SW1', port: 'ether2', pvid: '{VLAN2}', kerettipus: 'admit-only-untagged-and-priority-tagged' },
+          },
+          {
+            hol: 'terminal', eszkoz: 'SW1',
+            szoveg: 'A trunk: az ether24 legyen mindkét VLAN címkézett (tagged) tagja. '
+              + '`/interface bridge vlan set [find vlan-ids={VLAN1}] tagged=ether24`, majd ugyanez a {VLAN2}-re.',
+            miert: 'MikroTiken nincs „trunk üzemmód”: a VLAN-táblában adod meg, melyik VLAN melyik porton menjen 802.1Q-címkével. '
+              + 'A „/” elején azt jelenti: a főmenüből induló útvonal – így bármelyik menüből kiadhatod. Vigyázz: a set lecseréli '
+              + 'a tagged listát (nem hozzáad); több portot vesszővel sorolj fel, pl. tagged=ether23,ether24.',
+            be: ['/interface bridge vlan set [find vlan-ids={VLAN1}] tagged=ether24', '/interface bridge vlan set [find vlan-ids={VLAN2}] tagged=ether24'],
+            kesz: [
+              { tipus: 'hid-vlan', eszkoz: 'SW1', vlan: '{VLAN1}', tagged: ['ether24'] },
+              { tipus: 'hid-vlan', eszkoz: 'SW1', vlan: '{VLAN2}', tagged: ['ether24'] },
+            ],
+          },
+          {
+            hol: 'terminal', eszkoz: 'SW1',
+            szoveg: 'Végül kapcsold be a VLAN-szűrést: `/interface bridge set bridge vlan-filtering=yes`.',
+            miert: 'Amíg ez ki van kapcsolva, a bridge „átlátszó”: minden keretet továbbít, a PVID és a VLAN-tábla nem számít. '
+              + 'Ezért kapcsoljuk be a VÉGÉN: ha hálózaton át kezelnéd a switchet, egy félkész beállítás kizárhatna – erről szól '
+              + 'a „Menedzsment-VLAN és Safe Mode” feladat.',
+            be: ['/interface bridge set bridge vlan-filtering=yes'],
+            kesz: { tipus: 'vlan-szures', eszkoz: 'SW1', be: true },
+          },
+          {
+            hol: 'terminal', eszkoz: 'SW1',
+            szoveg: 'Nézd meg az eredményt: `/interface bridge vlan print`.',
+            miert: 'A CURRENT-TAGGED és CURRENT-UNTAGGED oszlop a ténylegesen működő tagokat mutatja (csak a bekábelezett portokat). '
+              + 'Az ether1 magától lett {VLAN1|aes} VLAN címkézetlen tagja – a PVID-je miatt.',
+            be: ['/interface bridge vlan print'],
+            kesz: { tipus: 'parancs', eszkoz: 'SW1', szavak: ['/interface', 'bridge', 'vlan', 'print'] },
+          },
+          {
+            hol: 'eszkoz', eszkoz: 'SW2',
+            szoveg: 'Most SW2 következik: kattints rá.',
+            miert: 'A VLAN-ok switchenként külön léteznek (a VTP-hez hasonló szétosztás a MikroTiken nincs): SW2-n is mindent be kell állítani.',
+            kesz: { tipus: 'kivalasztva', eszkoz: 'SW2' },
+          },
+          {
+            hol: 'terminal', eszkoz: 'SW2',
+            szoveg: 'A VLAN-tábla – most rövidítve, és a trunkot rögtön megadva: `/int br vl add br=bridge vl={VLAN1} tag=ether24 com={NEV1}`, '
+              + 'majd ugyanez a {VLAN2}-vel és a {NEV2} megjegyzéssel.',
+            miert: 'A menük, a parancsok és a paraméterek nevei is rövidíthetők, amíg egyértelműek (vl = vlan-ids, tag = tagged, '
+              + 'com = comment). A tagged a VLAN felvételekor is megadható.',
+            be: ['/int br vl add br=bridge vl={VLAN1} tag=ether24 com={NEV1}', '/int br vl add br=bridge vl={VLAN2} tag=ether24 com={NEV2}'],
+            kesz: [
+              { tipus: 'vlan', eszkoz: 'SW2', vlan: '{VLAN1}', nev: '{NEV1}' },
+              { tipus: 'vlan', eszkoz: 'SW2', vlan: '{VLAN2}', nev: '{NEV2}' },
+              { tipus: 'hid-vlan', eszkoz: 'SW2', vlan: '{VLAN1}', tagged: ['ether24'] },
+              { tipus: 'hid-vlan', eszkoz: 'SW2', vlan: '{VLAN2}', tagged: ['ether24'] },
+            ],
+          },
+          {
+            hol: 'terminal', eszkoz: 'SW2',
+            szoveg: 'A portok: `/int br po set [find interface=ether1] pvid={VLAN1} frame-types=admit-only-untagged-and-priority-tagged`, '
+              + 'és ugyanígy az ether2 a {VLAN2} PVID-del.',
+            miert: 'PC3 {VLAN1|aes}, PC4 {VLAN2|aes} VLAN-ba kerül – ugyanúgy, mint a párjuk SW1-en.',
+            be: [
+              '/int br po set [find interface=ether1] pvid={VLAN1} frame-types=admit-only-untagged-and-priority-tagged',
+              '/int br po set [find interface=ether2] pvid={VLAN2} frame-types=admit-only-untagged-and-priority-tagged',
+            ],
+            kesz: [
+              { tipus: 'hid-port', eszkoz: 'SW2', port: 'ether1', pvid: '{VLAN1}', kerettipus: 'admit-only-untagged-and-priority-tagged' },
+              { tipus: 'hid-port', eszkoz: 'SW2', port: 'ether2', pvid: '{VLAN2}', kerettipus: 'admit-only-untagged-and-priority-tagged' },
+            ],
+          },
+          {
+            hol: 'terminal', eszkoz: 'SW2',
+            szoveg: 'Kapcsold be itt is a VLAN-szűrést: `/int br set bridge vlan-filtering=yes`, majd nézd meg a portokat: `/int br po pr`.',
+            miert: 'A PVID oszlopban látszik a portok VLAN-ja. Az „H” jelző azt mutatja, hogy a kapcsolást a switch-chip végzi '
+              + '(hardveresen), nem a processzor – a CRS3xx switchek így a VLAN-szűréssel is teljes sebességgel kapcsolnak.',
+            be: ['/int br set bridge vlan-filtering=yes', '/int br po pr'],
+            kesz: [
+              { tipus: 'vlan-szures', eszkoz: 'SW2', be: true },
+              { tipus: 'parancs', eszkoz: 'SW2', szavak: ['/interface', 'bridge', 'port', 'print'] },
+            ],
+          },
+          {
+            hol: 'eszkoz', eszkoz: 'PC1',
+            szoveg: 'Jöhetnek a PC-k: kattints PC1-re.',
+            miert: 'A PC-ken egy űrlapon adod meg az IP-címet, alatta pedig a gép parancssora van.',
+            kesz: { tipus: 'kivalasztva', eszkoz: 'PC1' },
+          },
+          {
+            hol: 'pc', eszkoz: 'PC1',
+            szoveg: 'IP-cím: 192.168.{VLAN1}.{H1}, maszk: 255.255.255.0 (vagy /24), majd Mentés.',
+            miert: 'A maszk mondja meg, mekkora a gép hálózata: /24 esetén az első három szám a hálózat. '
+              + 'Átjáró most nem kell – a két VLAN között nem lesz forgalom.',
+            kesz: { tipus: 'pc-ip', eszkoz: 'PC1', ip: '192.168.{VLAN1}.{H1}', maszk: '255.255.255.0' },
+          },
+          {
+            hol: 'panel',
+            szoveg: 'A többi PC-t (PC2, PC3, PC4) is állítsd be a címterv szerint – a táblázat a feladatpanelen van.',
+            miert: 'Az azonos VLAN-ú gépek (PC1–PC3, PC2–PC4) egy IP-hálózatban vannak, a két VLAN két külön hálózat.',
+            kesz: [
+              { tipus: 'pc-ip', eszkoz: 'PC2', ip: '192.168.{VLAN2}.{H2}', maszk: '255.255.255.0' },
+              { tipus: 'pc-ip', eszkoz: 'PC3', ip: '192.168.{VLAN1}.{H3}', maszk: '255.255.255.0' },
+              { tipus: 'pc-ip', eszkoz: 'PC4', ip: '192.168.{VLAN2}.{H4}', maszk: '255.255.255.0' },
+            ],
+          },
+          {
+            hol: 'terminal', eszkoz: 'PC1',
+            szoveg: 'Próbáld ki PC1 parancssorában: `ping 192.168.{VLAN1}.{H3}` (ez PC3), és figyeld a rajzot!',
+            miert: 'Előbb egy ARP-kérdés megy szórással (narancs pötty); a két switch között (ether24) a {VLAN1|es} címkével – SW2 '
+              + 'ebből tudja, melyik VLAN-ba tegye. Utána jönnek a pingek. Ha túl gyors, lassítsd le a rajz alatt!',
+            be: ['ping 192.168.{VLAN1}.{H3}'],
+            kesz: { tipus: 'parancs', eszkoz: 'PC1', szavak: ['ping'] },
+          },
+          {
+            hol: 'ellenorzes',
+            szoveg: 'Kész a hálózat! Nyomd meg az Ellenőrzés gombot.',
+            miert: 'Az ellenőrzés valódi pingekkel és szórásos próbával nézi meg a hálózatot – az ellenpróbák azt is, hogy '
+              + 'a két VLAN valóban el van-e választva.',
+            kesz: { tipus: 'ellenorzes' },
+          },
+        ],
+        cimterv: [
+          { eszkoz: 'PC1', ip: '192.168.{VLAN1}.{H1}', maszk: '255.255.255.0', vlan: '{VLAN1}', hova: 'SW1 ether1' },
+          { eszkoz: 'PC2', ip: '192.168.{VLAN2}.{H2}', maszk: '255.255.255.0', vlan: '{VLAN2}', hova: 'SW1 ether2' },
+          { eszkoz: 'PC3', ip: '192.168.{VLAN1}.{H3}', maszk: '255.255.255.0', vlan: '{VLAN1}', hova: 'SW2 ether1' },
+          { eszkoz: 'PC4', ip: '192.168.{VLAN2}.{H4}', maszk: '255.255.255.0', vlan: '{VLAN2}', hova: 'SW2 ether2' },
+        ],
+        topologia: {
+          meret: { szel: 800, mag: 400 },
+          eszkozok: [
+            { nev: 'SW1', tipus: 'switch', x: 40, y: 70 },
+            { nev: 'SW2', tipus: 'switch', x: 448, y: 70 },
+            { nev: 'PC1', tipus: 'pc', x: 40, y: 270 },
+            { nev: 'PC2', tipus: 'pc', x: 210, y: 270 },
+            { nev: 'PC3', tipus: 'pc', x: 448, y: 270 },
+            { nev: 'PC4', tipus: 'pc', x: 618, y: 270 },
+          ],
+          kabelek: [
+            ['SW1', 'ether1', 'PC1', 'FastEthernet0'],
+            ['SW1', 'ether2', 'PC2', 'FastEthernet0'],
+            ['SW2', 'ether1', 'PC3', 'FastEthernet0'],
+            ['SW2', 'ether2', 'PC4', 'FastEthernet0'],
+            ['SW1', 'ether24', 'SW2', 'ether24'],
+          ],
+        },
+        celok: [
+          { tipus: 'vlan', eszkoz: 'SW1', vlan: '{VLAN1}', nev: '{NEV1}', szoveg: 'SW1: van {VLAN1|es} VLAN, a megjegyzése {NEV1}' },
+          { tipus: 'vlan', eszkoz: 'SW1', vlan: '{VLAN2}', nev: '{NEV2}', szoveg: 'SW1: van {VLAN2|es} VLAN, a megjegyzése {NEV2}' },
+          { tipus: 'vlan', eszkoz: 'SW2', vlan: '{VLAN1}', nev: '{NEV1}', szoveg: 'SW2: van {VLAN1|es} VLAN, a megjegyzése {NEV1}' },
+          { tipus: 'vlan', eszkoz: 'SW2', vlan: '{VLAN2}', nev: '{NEV2}', szoveg: 'SW2: van {VLAN2|es} VLAN, a megjegyzése {NEV2}' },
+          { tipus: 'access-port', eszkoz: 'SW1', port: 'ether1', vlan: '{VLAN1}', szoveg: 'SW1 ether1 (PC1): access port, VLAN {VLAN1}' },
+          { tipus: 'access-port', eszkoz: 'SW1', port: 'ether2', vlan: '{VLAN2}', szoveg: 'SW1 ether2 (PC2): access port, VLAN {VLAN2}' },
+          { tipus: 'access-port', eszkoz: 'SW2', port: 'ether1', vlan: '{VLAN1}', szoveg: 'SW2 ether1 (PC3): access port, VLAN {VLAN1}' },
+          { tipus: 'access-port', eszkoz: 'SW2', port: 'ether2', vlan: '{VLAN2}', szoveg: 'SW2 ether2 (PC4): access port, VLAN {VLAN2}' },
+          {
+            tipus: 'trunk', eszkoz: 'SW1', port: 'ether24', vlanok: ['{VLAN1}', '{VLAN2}'],
+            szoveg: 'SW1 ether24 – SW2 ether24: mindkét VLAN címkével megy át (trunk)',
+          },
+          { tipus: 'pc-ip', eszkoz: 'PC1', ip: '192.168.{VLAN1}.{H1}', maszk: '255.255.255.0', szoveg: 'PC1 IP-címe: 192.168.{VLAN1}.{H1} /24' },
+          { tipus: 'pc-ip', eszkoz: 'PC2', ip: '192.168.{VLAN2}.{H2}', maszk: '255.255.255.0', szoveg: 'PC2 IP-címe: 192.168.{VLAN2}.{H2} /24' },
+          { tipus: 'pc-ip', eszkoz: 'PC3', ip: '192.168.{VLAN1}.{H3}', maszk: '255.255.255.0', szoveg: 'PC3 IP-címe: 192.168.{VLAN1}.{H3} /24' },
+          { tipus: 'pc-ip', eszkoz: 'PC4', ip: '192.168.{VLAN2}.{H4}', maszk: '255.255.255.0', szoveg: 'PC4 IP-címe: 192.168.{VLAN2}.{H4} /24' },
+          { tipus: 'ping', honnan: 'PC1', cel: 'PC3', vart: true, szoveg: 'Ping PC1 → PC3 megy (VLAN {VLAN1}, a két switchen át)' },
+          { tipus: 'ping', honnan: 'PC2', cel: 'PC4', vart: true, szoveg: 'Ping PC2 → PC4 megy (VLAN {VLAN2}, a két switchen át)' },
+          {
+            tipus: 'szoras', honnan: 'PC1', elerje: ['PC3'], neErje: ['PC2', 'PC4'], ellenproba: true,
+            szoveg: 'Ellenpróba: PC1 szórása (broadcast) csak PC3-hoz jut el, PC2-höz és PC4-hez nem',
+          },
+          {
+            tipus: 'szoras', honnan: 'PC2', elerje: ['PC4'], neErje: ['PC1', 'PC3'], ellenproba: true,
+            szoveg: 'Ellenpróba: PC2 szórása csak PC4-hez jut el, PC1-hez és PC3-hoz nem',
+          },
+          { tipus: 'ping', honnan: 'PC1', cel: 'PC2', vart: false, ellenproba: true, szoveg: 'Ellenpróba: ping PC1 → PC2 NEM megy (különböző VLAN)' },
+        ],
+        magyarazat: [
+          {
+            cim: 'Mi a VLAN, és miért kell?',
+            szoveg: [
+              'A VLAN egy switchen belüli „virtuális switch”: {VLAN1|aes} VLAN portjai csak egymással beszélgetnek, {VLAN2|aes} '
+                + 'VLAN portjai csak egymással – mintha két külön switch lenne. A szórások (broadcast) sem jutnak át a másik '
+                + 'csoporthoz. Ez a fogalom gyártótól független: Ciscón és MikroTiken ugyanazt jelenti.',
+            ],
+          },
+          {
+            cim: 'Bridge, PVID, VLAN-tábla – így gondolkodik a MikroTik',
+            szoveg: [
+              'A Cisco-switchen minden portnál megmondod, mi legyen (access vagy trunk, melyik VLAN). A MikroTiken a portok egy '
+                + 'bridge-ben vannak, és a bridge-nek van egy VLAN-táblája: VLAN-onként felsorolja, melyik port viszi címkével '
+                + '(tagged) és melyik címke nélkül (untagged). A portnak ezen felül van egy PVID-je: a címke nélkül érkező '
+                + 'keretek ebbe a VLAN-ba kerülnek.',
+              'A RouterOS 7 a PVID alapján magától is beírja a portot a VLAN címkézetlen tagjai közé (a print ezt a „D” – '
+                + 'dinamikus – sorokban és a CURRENT-UNTAGGED oszlopban mutatja). Ezért az access portokat elég a PVID-del beállítani.',
+            ],
+          },
+          {
+            cim: 'Miért kell a frame-types?',
+            szoveg: [
+              'A port gyárilag címkés és címke nélküli keretet is fogad (admit-all). Egy PC-nek szánt portnál ez kockázat: egy '
+                + 'címkét küldő eszköz más VLAN-ba is „beköszönhetne”. Az admit-only-untagged-and-priority-tagged csak a címke '
+                + 'nélküli keretet engedi be – ez a Cisco switchport mode access megfelelője.',
+              'A MikroTik nem ismeri a DTP-t (a trunk-egyeztetést): nála a trunk mindig kifejezett beállítás.',
+            ],
+          },
+          {
+            cim: 'A trunk: tagged a VLAN-táblában',
+            szoveg: [
+              'A két switch között egyetlen kábel van, de mindkét VLAN forgalmának át kell rajta mennie: ezért az ether24 mindkét '
+                + 'VLAN címkézett tagja. A rajzon a pötty fölötti szám mutatja a címkét. Az ether24 PVID-je maradt 1: az 1-es '
+                + 'VLAN címke nélkül megy át – ez a Cisco „natív VLAN”-jának felel meg.',
+              'Vigyázz: a set a tagged listát lecseréli. Ha később még egy trunk portot adsz hozzá, az egész listát írd be '
+                + '(pl. tagged=ether23,ether24), különben a régi port kimarad.',
+            ],
+          },
+          {
+            cim: 'Miért a végén a vlan-filtering?',
+            szoveg: [
+              'Amíg a VLAN-szűrés ki van kapcsolva, a bridge mindent továbbít, a PVID és a VLAN-tábla nem számít. A bekapcsolás '
+                + 'pillanatában életbe lép minden szabály. Ha előtte nem állítottál be mindent, a forgalom egy része – a switch '
+                + 'kezelése is! – megszakadhat. A valóságban ezért mindig ez az utolsó lépés (és ilyenkor jól jön a Safe Mode).',
+            ],
+          },
+          {
+            cim: 'Miért nem éri el PC1 a PC2-t?',
+            szoveg: [
+              'Két okból sem: más VLAN-ban vannak (más szórási tartomány, az ARP-kérdés el sem jut), és más IP-hálózatban '
+                + '(192.168.{VLAN1}.0/24 és 192.168.{VLAN2}.0/24). Két VLAN között csak egy router tud forgalmat átvinni.',
+              'Ezért van két ellenpróba: a ping PC1 → PC2 nem mehet át, és a szórás sem juthat át a másik VLAN-ba.',
+            ],
+          },
+          {
+            cim: 'Cisco és MikroTik – ugyanaz a cél, más parancsok',
+            szoveg: [[
+              'VLAN létrehozása: Ciscón vlan 10 + name; MikroTiken sor a VLAN-táblában (/interface bridge vlan add … comment=…).',
+              'Access port: Ciscón switchport mode access + access vlan; MikroTiken pvid + frame-types a bridge-portnál.',
+              'Trunk: Ciscón switchport mode trunk a porton; MikroTiken tagged=… a VLAN-tábla soraiban.',
+              'Ciscón azonnal hat minden; MikroTiken a vlan-filtering=yes kapcsolja be a VLAN-okat.',
+              'Mentés: Ciscón write memory kell; MikroTiken minden azonnal el is mentődik.',
+            ]],
+          },
+          {
+            cim: 'Próbáld ki!',
+            szoveg: [[
+              '`/interface bridge vlan print detail` – a beállított (tagged, untagged) és a ténylegesen működő (current-…) tagok együtt.',
+              'Ping után: `/interface bridge host print` – melyik MAC-cím melyik porton és VLAN-ban van (a MAC-tábla).',
+              '`/export` – az egész beállítás parancsokként (mint Ciscón a show running-config).',
+              '`/interface disable ether24` – a trunk letiltása: próbáld a pinget, utána `/interface enable ether24`.',
+              'Bárhol: ? vagy F1 – súgó; Tab – kiegészítés (kétszer: a lehetőségek).',
+            ]],
+          },
+        ],
+      },
+    },
   });
 })(typeof window !== 'undefined' ? window : globalThis);

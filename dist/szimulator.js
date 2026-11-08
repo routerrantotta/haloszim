@@ -1,4 +1,4 @@
-/* Haloszim v0.9.0 – routerrantotta.hu – minden jog fenntartva. */
+/* Haloszim v0.10.0 – routerrantotta.hu – minden jog fenntartva. */
 (() => {
   // src/mag/ido.js
   var Ora = class {
@@ -492,9 +492,9 @@
   function azonosParam(a, b) {
     return a.param === b.param && a.kulcs === b.kulcs && a.min === b.min && a.max === b.max;
   }
-  function faEpites(parancsok) {
+  function faEpites(parancsok2) {
     const fak = {};
-    for (const parancs of parancsok) {
+    for (const parancs of parancsok2) {
       for (const mod of parancs.modok) {
         let cs = fak[mod] = fak[mod] || ujCsomopont();
         for (const elem6 of parancs.szavak) {
@@ -783,7 +783,7 @@
           return mm.kontextus;
         },
         /** Sorok kiírása. */
-        kiir: (...sorok) => kimenet.push(...sorok),
+        kiir: (...sorok2) => kimenet.push(...sorok2),
         /** Időbélyeges naplóüzenet, pl. „*Mar  1 00:01:02.345: %SYS-5-…”. */
         naplo: (uzenet) => kimenet.push(`${naploIdobelyeg(mm.ora.ido)}: ${uzenet}`),
         /** Várakozás a kiírás közben (pl. névfeloldás). */
@@ -992,19 +992,19 @@
     if (r.fajta === "szavak") {
       const szel2 = Math.max(...r.szavak.map((s) => s.length)) + 2;
       const egySorban = Math.max(1, Math.floor(80 / szel2));
-      const sorok2 = [];
+      const sorok3 = [];
       for (let i = 0; i < r.szavak.length; i += egySorban) {
-        sorok2.push(r.szavak.slice(i, i + egySorban).map((s) => s.padEnd(szel2)).join("").trimEnd());
+        sorok3.push(r.szavak.slice(i, i + egySorban).map((s) => s.padEnd(szel2)).join("").trimEnd());
       }
-      return [...sorok2, ""];
+      return [...sorok3, ""];
     }
-    const sorok = [];
-    if (r.gyoker && info.modAdat.sugoFejlec) sorok.push(info.modAdat.sugoFejlec);
+    const sorok2 = [];
+    if (r.gyoker && info.modAdat.sugoFejlec) sorok2.push(info.modAdat.sugoFejlec);
     const szel = Math.max(0, ...r.elemek.map((e) => e.nev.length));
-    for (const e of r.elemek) sorok.push(`  ${e.nev.padEnd(szel)}  ${e.sugo}`.trimEnd());
-    if (r.cr) sorok.push("  <cr>");
-    sorok.push("");
-    return sorok;
+    for (const e of r.elemek) sorok2.push(`  ${e.nev.padEnd(szel)}  ${e.sugo}`.trimEnd());
+    if (r.cr) sorok2.push("  <cr>");
+    sorok2.push("");
+    return sorok2;
   }
 
   // src/mag/ethernet.js
@@ -1230,270 +1230,6 @@
     if (s.length === 4 && s[0] === "1") return "az";
     return "a";
   }
-
-  // src/mag/kapcsolas.js
-  var MAC_ELETKOR = 3e5;
-  function uzemmod(sw, port2) {
-    if (port2.mod === "trunk") return "trunk";
-    if (port2.mod === "access") return "access";
-    if (!port2.fent || !sw.halozat) return "access";
-    const tul = sw.halozat.szomszed(sw, port2);
-    if (!tul || tul.eszkoz.tipus !== "switch") return "access";
-    const m = tul.port.mod;
-    const t1 = sw.vtpTartomany;
-    const t2 = tul.eszkoz.vtpTartomany;
-    if (t1 && t2 && t1 !== t2 && m !== "trunk") return "access";
-    if (port2.mod === "dinamikus-auto") return m === "trunk" || m === "dinamikus-kezdemenyezo" ? "trunk" : "access";
-    if (port2.mod === "dinamikus-kezdemenyezo") return m === "access" ? "access" : "trunk";
-    return "access";
-  }
-  function vlanAktiv(sw, vlan) {
-    const v = sw.vlanok[vlan];
-    return !!v && v.tamogatott !== false;
-  }
-  function portTagja(sw, port2, vlan) {
-    if (uzemmod(sw, port2) === "trunk") return vlanAktiv(sw, vlan);
-    return port2.accessVlan === vlan;
-  }
-  function macTabla(sw) {
-    const ido = sw.halozat ? sw.halozat.ora.ido : 0;
-    sw.macTabla = (sw.macTabla || []).filter((b) => ido - b.ido < MAC_ELETKOR);
-    return sw.macTabla;
-  }
-  function macTorolPort(sw, portNev) {
-    sw.macTabla = (sw.macTabla || []).filter((b) => b.port !== portNev);
-  }
-  function macTanul(sw, vlan, mac, portNev, ido) {
-    const t = macTabla(sw);
-    const b = t.find((x) => x.vlan === vlan && x.mac === mac);
-    if (b) {
-      b.port = portNev;
-      b.ido = ido;
-    } else {
-      t.push({ vlan, mac, port: portNev, ido });
-    }
-  }
-  function kapcsoloFogad(h, sw, port2, keret2) {
-    if (keret2.tipus === "vtp") return vtpFogad(h, sw, port2, keret2);
-    let vlan;
-    if (uzemmod(sw, port2) === "trunk") {
-      vlan = keret2.vlan !== void 0 ? keret2.vlan : port2.nativVlan;
-    } else {
-      if (keret2.vlan !== void 0) return h.eldob(sw, port2, keret2, "Címkés (802.1Q) keret érkezett egy access portra.");
-      vlan = port2.accessVlan;
-    }
-    if (!vlanAktiv(sw, vlan)) {
-      return h.eldob(sw, port2, keret2, `${nevelo(vlan) === "az" ? "Az" : "A"} ${esRag(vlan)} VLAN nem létezik ezen a switchen (${sw.hostname}), ezért a keretet eldobta.`);
-    }
-    if (keret2.forrasMac !== SZORAS) macTanul(sw, vlan, keret2.forrasMac, port2.nev, h.ora.ido);
-    let kimenok;
-    const ismert = keret2.celMac !== SZORAS && macTabla(sw).find((b) => b.vlan === vlan && b.mac === keret2.celMac);
-    if (ismert) {
-      if (ismert.port === port2.nev) return;
-      kimenok = sw.portok.filter((p) => p.nev === ismert.port);
-    } else {
-      kimenok = sw.portok.filter((p) => p !== port2);
-    }
-    for (const p of kimenok) {
-      if (!p.fent || !portTagja(sw, p, vlan)) continue;
-      const trunk = uzemmod(sw, p) === "trunk";
-      const cimke = trunk && vlan !== p.nativVlan ? vlan : void 0;
-      h.kuld(sw, p, { ...keret2, vlan: cimke });
-    }
-  }
-
-  // src/mag/vtp.js
-  var VTP_IDOKOZ = 3e5;
-  var VTP_MAC = "01000ccccccc";
-  function kivonat(szoveg) {
-    let h1 = 2166136261;
-    let h2 = 16777619;
-    for (let i = 0; i < szoveg.length; i++) {
-      const c = szoveg.charCodeAt(i);
-      h1 = Math.imul(h1 ^ c, 16777619) >>> 0;
-      h2 = Math.imul(h2 ^ c, 1540483477) >>> 0;
-    }
-    return [h1, h2, Math.imul(h1 ^ h2, 2246822507) >>> 0, Math.imul(h2 + 2654435769, 3266489909) >>> 0];
-  }
-  function jelszoKivonat(jelszo) {
-    return kivonat("jelszo:" + jelszo).join("-");
-  }
-  function vtpVlanok(sw) {
-    const v = {};
-    for (const [szam, adat] of Object.entries(sw.vlanok)) if (!adat.gyari) v[szam] = adat.nev;
-    return v;
-  }
-  function vtpMd5(sw) {
-    const szoveg = JSON.stringify([sw.vtpTartomany, sw.vtpJelszo, sw.vtpRevizio, vtpVlanok(sw)]);
-    const bajtok = [];
-    for (const sz of kivonat(szoveg)) for (let i = 0; i < 4; i++) bajtok.push(sz >>> 24 - 8 * i & 255);
-    return bajtok;
-  }
-  function trunkPortok(sw) {
-    return sw.portok.filter((p) => p.fent && uzemmod(sw, p) === "trunk");
-  }
-  function hirdethet(sw) {
-    return !!sw.halozat && !!sw.vtpTartomany && sw.vtpMod !== "transparent";
-  }
-  function keret(sw, keres) {
-    return {
-      forrasMac: sw.mac,
-      celMac: VTP_MAC,
-      tipus: "vtp",
-      adat: {
-        kuldo: sw.hostname,
-        tartomany: sw.vtpTartomany,
-        revizio: sw.vtpRevizio,
-        verzio: sw.vtpVerzio,
-        jelszoKivonat: jelszoKivonat(sw.vtpJelszo),
-        vlanok: vtpVlanok(sw),
-        keres
-      }
-    };
-  }
-  function vtpHirdet(sw, { keres = false, kiveve = null, csak = null } = {}) {
-    if (!hirdethet(sw)) return;
-    const portok = csak ? [csak] : trunkPortok(sw).filter((p) => p !== kiveve);
-    for (const p of portok) sw.halozat.kuld(sw, p, keret(sw, keres));
-  }
-  function vtpVlanValtozas(sw) {
-    if (sw.vtpMod === "transparent") return;
-    sw.vtpRevizio++;
-    sw.vtpModositva = sw.halozat ? sw.halozat.ora.ido : 0;
-    vtpHirdet(sw);
-    if (sw.halozat) sw.halozat.esemeny({ tipus: "allapot" });
-  }
-  function vtpBeallitasValtozas(sw) {
-    vtpHirdet(sw, { keres: true });
-  }
-  function vtpTrunkValtozas(sw, port2) {
-    if (!sw.halozat) return;
-    const tul = sw.halozat.szomszed(sw, port2);
-    for (const [e, p] of [[sw, port2], tul ? [tul.eszkoz, tul.port] : [null, null]]) {
-      if (e && e.tipus === "switch" && p.fent && uzemmod(e, p) === "trunk") vtpHirdet(e, { keres: true, csak: p });
-    }
-  }
-  function atvesz(sw, a) {
-    for (const szam of Object.keys(sw.vlanok)) {
-      if (!sw.vlanok[szam].gyari && !(szam in a.vlanok)) delete sw.vlanok[szam];
-    }
-    for (const [szam, nev] of Object.entries(a.vlanok)) {
-      const v = sw.vlanok[szam];
-      if (v && v.gyari) continue;
-      sw.vlanok[szam] = { nev: nev || alapVlanNev(szam), gyari: false, tamogatott: true };
-    }
-    sw.vtpRevizio = a.revizio;
-    if (a.verzio === 2) sw.vtpVerzio = 2;
-    sw.vtpModositva = sw.halozat.ora.ido;
-  }
-  function vtpFogad(h, sw, port2, k) {
-    if (uzemmod(sw, port2) !== "trunk") return;
-    const a = k.adat;
-    if (sw.vtpMod === "transparent") {
-      if (sw.vtpVerzio === 2 || a.tartomany === sw.vtpTartomany) {
-        for (const p of trunkPortok(sw)) if (p !== port2) h.kuld(sw, p, k);
-      }
-      return;
-    }
-    if (!sw.vtpTartomany && a.tartomany) {
-      sw.vtpTartomany = a.tartomany;
-    }
-    if (a.tartomany !== sw.vtpTartomany) return;
-    if (a.jelszoKivonat !== jelszoKivonat(sw.vtpJelszo)) {
-      sw.vtpMd5Hiba = port2.rovid;
-      return h.eldob(sw, port2, k, `A VTP-hirdetés jelszava nem egyezik (${sw.hostname}), ezért nem fogadta el.`);
-    }
-    sw.vtpMd5Hiba = null;
-    if (a.revizio > sw.vtpRevizio) {
-      atvesz(sw, a);
-      h.esemeny({ tipus: "allapot" });
-      vtpHirdet(sw, { kiveve: port2 });
-    } else if (a.revizio < sw.vtpRevizio || a.keres) {
-      vtpHirdet(sw, { csak: port2 });
-    }
-  }
-  function vtpIdozitoIndit(h) {
-    const kor2 = () => {
-      for (const e of h.eszkozok) if (e.tipus === "switch") vtpHirdet(e);
-      h.ora.utemez(VTP_IDOKOZ, kor2);
-    };
-    h.ora.utemez(VTP_IDOKOZ, kor2);
-  }
-
-  // src/gyartok/ios/parancsok/vlan.js
-  var VLAN_SZO = { szo: "vlan", sugo: "VLAN létrehozása vagy szerkesztése" };
-  var VLAN_SZAM = { param: "szam", kulcs: "vlan", min: 1, max: 4094, sugo: "A VLAN száma" };
-  var KITERJESZTETT_TOL = 1006;
-  function kliensTiltas(ctx) {
-    if (ctx.eszkoz.vtpMod !== "client") return false;
-    ctx.kiir("VTP VLAN configuration not allowed when device is in CLIENT mode.");
-    return true;
-  }
-  var vlanParancsok = [
-    {
-      modok: ["konfig"],
-      szavak: [VLAN_SZO, VLAN_SZAM],
-      vegrehajt(ctx, { vlan }) {
-        const sw = ctx.eszkoz;
-        if (kliensTiltas(ctx)) return;
-        if (vlan >= KITERJESZTETT_TOL && sw.vtpMod !== "transparent") {
-          ctx.kiir("Extended VLAN(s) not allowed in current VTP mode.", "%Failed to commit extended VLAN(s) changes.");
-          return;
-        }
-        if (!sw.vlanok[vlan]) {
-          sw.vlanok[vlan] = { nev: alapVlanNev(vlan), gyari: false, tamogatott: true };
-          vtpVlanValtozas(sw);
-        }
-        ctx.modValt("konfig-vlan", { vlan });
-      }
-    },
-    {
-      modok: ["konfig"],
-      szavak: [SZO.no, { szo: "vlan", sugo: "VLAN törlése" }, VLAN_SZAM],
-      vegrehajt(ctx, { vlan }) {
-        const sw = ctx.eszkoz;
-        if (kliensTiltas(ctx)) return;
-        const v = sw.vlanok[vlan];
-        if (v && v.gyari) {
-          ctx.kiir(`%Default VLAN ${vlan} may not be deleted.`);
-          return;
-        }
-        if (!v) return;
-        delete sw.vlanok[vlan];
-        vtpVlanValtozas(sw);
-      }
-    },
-    {
-      modok: ["konfig-vlan"],
-      szavak: [
-        { szo: "name", sugo: "A VLAN nevének megadása" },
-        { param: "szo", kulcs: "nev", maxHossz: 32, sugo: "A VLAN neve (legfeljebb 32 karakter, szóköz nélkül)" }
-      ],
-      vegrehajt(ctx, { nev }) {
-        const szam = ctx.kontextus.vlan;
-        const v = ctx.eszkoz.vlanok[szam];
-        if (v.gyari) {
-          ctx.kiir(`%Default VLAN ${szam} may not have its name changed.`);
-          return;
-        }
-        if (v.nev === nev) return;
-        v.nev = nev;
-        vtpVlanValtozas(ctx.eszkoz);
-      }
-    },
-    {
-      modok: ["konfig-vlan"],
-      szavak: [SZO.no, { szo: "name", sugo: "A VLAN nevének visszaállítása (VLANxxxx)" }],
-      vegrehajt(ctx) {
-        const szam = ctx.kontextus.vlan;
-        const v = ctx.eszkoz.vlanok[szam];
-        if (!v.gyari && v.nev !== alapVlanNev(szam)) {
-          v.nev = alapVlanNev(szam);
-          vtpVlanValtozas(ctx.eszkoz);
-        }
-      }
-    }
-  ];
 
   // src/mag/vegpont.js
   var ARP_VARAKOZAS = 3e3;
@@ -1757,6 +1493,653 @@
     pc.ndTabla = {};
   }
 
+  // src/modell/mikrotik.js
+  var MODELL = "CRS326-24G-2S+";
+  var ROS_VERZIO = "7.24";
+  var KERETTIPUSOK = ["admit-all", "admit-only-untagged-and-priority-tagged", "admit-only-vlan-tagged"];
+  function ujPort2(tipus, szam) {
+    const nev = tipus + szam;
+    return { nev, rovid: nev, tipus, szam: String(szam), leallitva: false, fent: false, mac: "", komment: "" };
+  }
+  function ujHid(nev, mac) {
+    return { nev, mac, vlanSzures: false, pvid: 1, kerettipus: "admit-all", bemenetiSzures: true, komment: "", letiltva: false };
+  }
+  function ujHidPort(interfesz, hid) {
+    return { interfesz, hid, pvid: 1, kerettipus: "admit-all", bemenetiSzures: true, komment: "", letiltva: false };
+  }
+  function ujCrs326(b = {}) {
+    const hostname = b.hostname || "MikroTik";
+    const portok = [];
+    for (let i = 1; i <= 24; i++) portok.push(ujPort2("ether", i));
+    for (let i = 1; i <= 2; i++) portok.push(ujPort2("sfp-sfpplus", i));
+    for (const p of portok) p.mac = macNevbol(`mikrotik:${hostname}:${p.nev}`);
+    const sw = {
+      tipus: "switch",
+      gyarto: "mikrotik",
+      modell: MODELL,
+      hostname,
+      felhasznalo: "admin",
+      portok,
+      hidak: [],
+      hidPortok: [],
+      hidVlanok: [],
+      vlanIfek: [],
+      ipCimek: [],
+      macTabla: [],
+      mac: portok[0].mac
+    };
+    if (b.gyari !== false) {
+      const h = ujHid("bridge", portok[0].mac);
+      h.komment = "defconf";
+      h.adminMac = portok[0].mac;
+      sw.hidak.push(h);
+      for (const p of portok) sw.hidPortok.push({ ...ujHidPort(p.nev, "bridge"), komment: "defconf" });
+      sw.ipCimek.push({ cim: "192.168.88.1", hossz: 24, interfesz: "bridge", komment: "defconf", letiltva: false });
+    }
+    return sw;
+  }
+  function mtPort(sw, nev) {
+    return sw.portok.find((p) => p.nev === nev);
+  }
+  function hidKeres(sw, nev) {
+    return sw.hidak.find((h) => h.nev === nev);
+  }
+  function interfeszek(sw) {
+    return [
+      ...sw.portok.map((p) => ({ nev: p.nev, fajta: "ether", elem: p })),
+      ...sw.hidak.map((h) => ({ nev: h.nev, fajta: "bridge", elem: h })),
+      ...sw.vlanIfek.map((v) => ({ nev: v.nev, fajta: "vlan", elem: v }))
+    ];
+  }
+  function interfeszKeres(sw, nev) {
+    return interfeszek(sw).find((i) => i.nev === nev) || null;
+  }
+  function vlanListaElemez(szoveg) {
+    const ki = [];
+    for (const resz of String(szoveg).split(",")) {
+      const m = /^(\d{1,4})(?:-(\d{1,4}))?$/.exec(resz.trim());
+      if (!m) return null;
+      const a = Number(m[1]);
+      const b = m[2] !== void 0 ? Number(m[2]) : a;
+      if (a < 1 || b > 4094 || b < a) return null;
+      for (let v = a; v <= b; v++) if (!ki.includes(v)) ki.push(v);
+    }
+    return ki;
+  }
+  function sorVlanjai(sor2) {
+    return vlanListaElemez(sor2.vlanok) || [];
+  }
+  function macSzoveg(mac) {
+    return mac.toUpperCase().match(/.{2}/g).join(":");
+  }
+  function konfigMentes(sw) {
+    const m = JSON.parse(JSON.stringify({
+      hostname: sw.hostname,
+      hidak: sw.hidak,
+      hidPortok: sw.hidPortok,
+      hidVlanok: sw.hidVlanok,
+      vlanIfek: sw.vlanIfek,
+      ipCimek: sw.ipCimek
+    }));
+    m.portok = sw.portok.map((p) => ({ nev: p.nev, leallitva: p.leallitva, komment: p.komment }));
+    return m;
+  }
+  function konfigVisszaallit(sw, m) {
+    sw.hostname = m.hostname;
+    sw.hidak = m.hidak;
+    sw.hidPortok = m.hidPortok;
+    sw.hidVlanok = m.hidVlanok;
+    sw.vlanIfek = m.vlanIfek;
+    sw.ipCimek = m.ipCimek;
+    const valtozott3 = [];
+    for (const mp of m.portok) {
+      const p = mtPort(sw, mp.nev);
+      p.komment = mp.komment;
+      if (p.leallitva !== mp.leallitva) {
+        p.leallitva = mp.leallitva;
+        valtozott3.push(p);
+      }
+    }
+    sw.macTabla = [];
+    return valtozott3;
+  }
+
+  // src/mag/hid.js
+  var HID_MAC_ELETKOR = 3e5;
+  function hidPortja(sw, interfesz) {
+    return sw.hidPortok.find((hp) => hp.interfesz === interfesz && !hp.letiltva) || null;
+  }
+  function aktivTag(sw, hid, nev) {
+    if (nev === hid.nev) return !hid.letiltva;
+    const p = sw.portok.find((x) => x.nev === nev);
+    return !!(p && p.fent && hidPortja(sw, nev) && hidPortja(sw, nev).hid === hid.nev);
+  }
+  function tagsag(sw, hid, vlan, { csakAktiv = false } = {}) {
+    const cimkezett = [];
+    const cimkezetlen = [];
+    const hozza = (lista3, nev) => {
+      if (!lista3.includes(nev) && (!csakAktiv || aktivTag(sw, hid, nev))) lista3.push(nev);
+    };
+    for (const s of sw.hidVlanok) {
+      if (s.letiltva || s.hid !== hid.nev || !sorVlanjai(s).includes(vlan)) continue;
+      for (const n of s.cimkezett) hozza(cimkezett, n);
+      for (const n of s.cimkezetlen) if (!cimkezett.includes(n)) hozza(cimkezetlen, n);
+    }
+    for (const d of dinamikusTagok(sw, hid, vlan)) if (!cimkezett.includes(d)) hozza(cimkezetlen, d);
+    return { cimkezett, cimkezetlen };
+  }
+  function dinamikusTagok(sw, hid, vlan) {
+    const ki = [];
+    if (hid.pvid === vlan && hid.kerettipus !== "admit-only-vlan-tagged") ki.push(hid.nev);
+    for (const hp of sw.hidPortok) {
+      if (hp.hid !== hid.nev || hp.letiltva) continue;
+      if (hp.pvid === vlan && hp.kerettipus !== "admit-only-vlan-tagged") ki.push(hp.interfesz);
+    }
+    return ki;
+  }
+  function ismertVlanok(sw, hid) {
+    const v = /* @__PURE__ */ new Set();
+    for (const s of sw.hidVlanok) if (s.hid === hid.nev && !s.letiltva) for (const n of sorVlanjai(s)) v.add(n);
+    v.add(hid.pvid);
+    for (const hp of sw.hidPortok) if (hp.hid === hid.nev && !hp.letiltva) v.add(hp.pvid);
+    return [...v].sort((a, b) => a - b);
+  }
+  function bemenetBeall(sw, hid, bemenet) {
+    return bemenet === hid.nev ? hid : hidPortja(sw, bemenet);
+  }
+  function hidBe(sw, hid, bemenet, cimke) {
+    if (!hid.vlanSzures) return { ok: true, vlan: null };
+    const b = bemenetBeall(sw, hid, bemenet);
+    if (cimke === void 0 && b.kerettipus === "admit-only-vlan-tagged") {
+      return { ok: false, miert: `${bemenet}: csak címkés keretet fogad (frame-types=admit-only-vlan-tagged), ez pedig címke nélküli.` };
+    }
+    if (cimke !== void 0 && b.kerettipus === "admit-only-untagged-and-priority-tagged") {
+      return { ok: false, miert: `${bemenet}: csak címke nélküli keretet fogad (frame-types=admit-only-untagged-and-priority-tagged), ez pedig ${cimke}-es címkével jött.` };
+    }
+    const vlan = cimke !== void 0 ? cimke : b.pvid;
+    if (b.bemenetiSzures) {
+      const t = tagsag(sw, hid, vlan);
+      if (!t.cimkezett.includes(bemenet) && !t.cimkezetlen.includes(bemenet)) {
+        return { ok: false, miert: `${bemenet} nem tagja a ${vlan}-es VLAN-nak (bemeneti szűrés), ezért ${sw.hostname} eldobta a keretet.` };
+      }
+    }
+    return { ok: true, vlan };
+  }
+  function hidKi(sw, hid, vlan, kimenet, eredetiCimke) {
+    if (vlan === null) return { ok: true, cimke: eredetiCimke };
+    const t = tagsag(sw, hid, vlan);
+    if (t.cimkezett.includes(kimenet)) return { ok: true, cimke: vlan };
+    if (t.cimkezetlen.includes(kimenet)) return { ok: true, cimke: void 0 };
+    return { ok: false };
+  }
+  function hidUzemmod(sw, port2) {
+    const hp = hidPortja(sw, port2.nev);
+    if (!hp) return "access";
+    const hid = hidKeres(sw, hp.hid);
+    if (!hid || !hid.vlanSzures) return "access";
+    const trunk = sw.hidVlanok.some((s) => !s.letiltva && s.hid === hid.nev && s.cimkezett.includes(port2.nev));
+    return trunk ? "trunk" : "access";
+  }
+  function hidMacTabla(sw) {
+    const ido = sw.halozat ? sw.halozat.ora.ido : 0;
+    sw.macTabla = (sw.macTabla || []).filter((b) => ido - b.ido < HID_MAC_ELETKOR);
+    return sw.macTabla;
+  }
+  function macTanul(sw, hid, vlan, mac, port2, ido) {
+    const t = hidMacTabla(sw);
+    const v = vlan === null ? 0 : vlan;
+    const b = t.find((x) => x.hid === hid.nev && x.vlan === v && x.mac === mac);
+    if (b) {
+      b.port = port2;
+      b.ido = ido;
+    } else {
+      t.push({ hid: hid.nev, vlan: v, mac, port: port2, ido });
+    }
+  }
+  function hidFogad(h, sw, port2, keret2) {
+    if (keret2.tipus === "vtp") return;
+    const hp = hidPortja(sw, port2.nev);
+    if (!hp) return h.eldob(sw, port2, keret2, `${port2.nev} nincs egyetlen bridge-ben sem, ezért ${sw.hostname} nem továbbítja a keretet.`);
+    const hid = hidKeres(sw, hp.hid);
+    if (!hid || hid.letiltva) return h.eldob(sw, port2, keret2, `A(z) ${hp.hid} bridge le van tiltva.`);
+    const be = hidBe(sw, hid, port2.nev, keret2.vlan);
+    if (!be.ok) return h.eldob(sw, port2, keret2, be.miert);
+    tovabbit(h, sw, hid, port2.nev, be.vlan, keret2);
+  }
+  function tovabbit(h, sw, hid, forras, vlan, keret2) {
+    if (forras !== hid.nev && keret2.forrasMac !== SZORAS) macTanul(sw, hid, vlan, keret2.forrasMac, forras, h.ora.ido);
+    const v = vlan === null ? 0 : vlan;
+    let celok;
+    if (keret2.celMac === hid.mac) {
+      celok = [hid.nev];
+    } else {
+      const ismert = keret2.celMac !== SZORAS && hidMacTabla(sw).find((b) => b.hid === hid.nev && b.vlan === v && b.mac === keret2.celMac);
+      if (ismert) {
+        if (ismert.port === forras) return;
+        celok = [ismert.port];
+      } else {
+        celok = [hid.nev, ...sw.hidPortok.filter((hp) => hp.hid === hid.nev && !hp.letiltva).map((hp) => hp.interfesz)].filter((n) => n !== forras);
+      }
+    }
+    for (const cel of celok) {
+      const ki = hidKi(sw, hid, vlan, cel, keret2.vlan);
+      if (!ki.ok) continue;
+      if (cel === hid.nev) {
+        cpuFogad(h, sw, hid, ki.cimke, keret2);
+        continue;
+      }
+      const p = sw.portok.find((x) => x.nev === cel);
+      if (!p || !p.fent) continue;
+      h.kuld(sw, p, { ...keret2, vlan: ki.cimke });
+    }
+  }
+  var vegpontTar = /* @__PURE__ */ new WeakMap();
+  function l3Kapcsolat(sw, ifNev) {
+    const hid = hidKeres(sw, ifNev);
+    if (hid) return hid.letiltva ? null : { hid, cimke: void 0 };
+    const v = sw.vlanIfek.find((x) => x.nev === ifNev);
+    if (!v || v.letiltva) return null;
+    const szulo = hidKeres(sw, v.interfesz);
+    if (!szulo || szulo.letiltva) return null;
+    return { hid: szulo, cimke: v.vlanId };
+  }
+  function sajatVegpontok(sw) {
+    let tar = vegpontTar.get(sw);
+    if (!tar) vegpontTar.set(sw, tar = /* @__PURE__ */ new Map());
+    const kell = /* @__PURE__ */ new Map();
+    for (const c of sw.ipCimek) {
+      if (c.letiltva) continue;
+      const k = l3Kapcsolat(sw, c.interfesz);
+      if (!k) continue;
+      kell.set(`${c.interfesz}|${c.cim}/${c.hossz}`, { c, k });
+    }
+    for (const kulcs2 of [...tar.keys()]) if (!kell.has(kulcs2)) tar.delete(kulcs2);
+    for (const [kulcs2, { c, k }] of kell) {
+      if (tar.has(kulcs2)) continue;
+      const ifNev = c.interfesz;
+      const ep = {
+        tipus: "sajat",
+        hostname: sw.hostname,
+        ifNev,
+        mac: k.hid.mac,
+        ip: c.cim,
+        maszk: maszkSzoveg(c.hossz),
+        atjaro: "",
+        arpTabla: {},
+        ipv6: "",
+        ipv6Hossz: 64,
+        ipv6Atjaro: "",
+        ndTabla: {},
+        portok: [{ nev: ifNev, rovid: ifNev, fent: true, virtualis: true, kuld: (keret2) => cpuKuld(sw, ifNev, keret2) }]
+      };
+      tar.set(kulcs2, ep);
+    }
+    return [...tar.values()];
+  }
+  function cpuFogad(h, sw, hid, cimke, keret2) {
+    let ifNev = hid.nev;
+    if (cimke !== void 0) {
+      const v = sw.vlanIfek.find((x) => !x.letiltva && x.interfesz === hid.nev && x.vlanId === cimke);
+      if (!v) return;
+      ifNev = v.nev;
+    }
+    for (const ep of sajatVegpontok(sw)) {
+      if (ep.ifNev !== ifNev) continue;
+      vegpontFogad(h, ep, ep.portok[0], { ...keret2, vlan: void 0 });
+    }
+  }
+  function cpuKuld(sw, ifNev, keret2) {
+    const h = sw.halozat;
+    if (!h) return;
+    const k = l3Kapcsolat(sw, ifNev);
+    if (!k) return;
+    const be = hidBe(sw, k.hid, k.hid.nev, k.cimke);
+    if (!be.ok) return;
+    tovabbit(h, sw, k.hid, k.hid.nev, be.vlan, { ...keret2, vlan: k.cimke });
+  }
+  function vegpontCelhoz(sw, celIp) {
+    const c = ipSzam(celIp);
+    if (c === null) return null;
+    return sajatVegpontok(sw).find((ep) => {
+      const hossz = sw.ipCimek.find((x) => x.cim === ep.ip && x.interfesz === ep.ifNev).hossz;
+      return halozatSzam(ipSzam(ep.ip), hossz) === halozatSzam(c, hossz);
+    }) || null;
+  }
+  function elarasztas(h, kezdo) {
+    const pc = [];
+    const cpu = [];
+    const latott = /* @__PURE__ */ new Set();
+    const sor2 = [];
+    const kuldPortrol = (eszkoz, port2, cimke) => {
+      if (!port2.fent) return;
+      const tul = h.szomszed(eszkoz, port2);
+      if (tul) sor2.push({ eszkoz: tul.eszkoz, port: tul.port, cimke });
+    };
+    const hidban = (sw, hid, forras, vlan, eredetiCimke) => {
+      const tagok = [hid.nev, ...sw.hidPortok.filter((hp) => hp.hid === hid.nev && !hp.letiltva).map((hp) => hp.interfesz)];
+      for (const cel of tagok) {
+        if (cel === forras) continue;
+        const ki = hidKi(sw, hid, vlan, cel, eredetiCimke);
+        if (!ki.ok) continue;
+        if (cel === hid.nev) {
+          let ifNev = hid.nev;
+          if (ki.cimke !== void 0) {
+            const v = sw.vlanIfek.find((x) => !x.letiltva && x.interfesz === hid.nev && x.vlanId === ki.cimke);
+            if (!v) continue;
+            ifNev = v.nev;
+          }
+          cpu.push({ sw, ifNev });
+          continue;
+        }
+        const p = sw.portok.find((x) => x.nev === cel);
+        if (p) kuldPortrol(sw, p, ki.cimke);
+      }
+    };
+    if (kezdo.hid) {
+      const be = hidBe(kezdo.sw, kezdo.hid, kezdo.hid.nev, kezdo.cimke);
+      if (be.ok) hidban(kezdo.sw, kezdo.hid, kezdo.hid.nev, be.vlan, kezdo.cimke);
+    } else {
+      kuldPortrol(kezdo.eszkoz, kezdo.port, void 0);
+    }
+    while (sor2.length) {
+      const { eszkoz, port: port2, cimke } = sor2.shift();
+      const kulcs2 = `${eszkoz.hostname}|${port2.nev}|${cimke}`;
+      if (latott.has(kulcs2) || !port2.fent) continue;
+      latott.add(kulcs2);
+      if (eszkoz.tipus === "pc") {
+        if (cimke === void 0 && !pc.includes(eszkoz)) pc.push(eszkoz);
+        continue;
+      }
+      if (eszkoz.gyarto !== "mikrotik") continue;
+      const hp = hidPortja(eszkoz, port2.nev);
+      if (!hp) continue;
+      const hid = hidKeres(eszkoz, hp.hid);
+      if (!hid || hid.letiltva) continue;
+      const be = hidBe(eszkoz, hid, port2.nev, cimke);
+      if (be.ok) hidban(eszkoz, hid, port2.nev, be.vlan, cimke);
+    }
+    return { pc, cpu };
+  }
+  function kezelhetoE(h, pc, sw, ip) {
+    if (!pc.ip || !pc.maszk || !pc.portok[0].fent) return false;
+    const ep = sajatVegpontok(sw).find((x) => x.ip === ip);
+    if (!ep) return false;
+    const hossz = sw.ipCimek.find((x) => x.cim === ip && x.interfesz === ep.ifNev).hossz;
+    const maszkHossz = pc.maszk.split(".").reduce((a, o) => a + (Number(o) >>> 0).toString(2).replace(/0/g, "").length, 0);
+    if (halozatSzam(ipSzam(pc.ip), maszkHossz) !== halozatSzam(ipSzam(ip), maszkHossz)) return false;
+    if (halozatSzam(ipSzam(pc.ip), hossz) !== halozatSzam(ipSzam(ip), hossz)) return false;
+    const oda = elarasztas(h, { eszkoz: pc, port: pc.portok[0] });
+    if (!oda.cpu.some((c) => c.sw === sw && c.ifNev === ep.ifNev)) return false;
+    const k = l3Kapcsolat(sw, ep.ifNev);
+    const vissza = elarasztas(h, { sw, hid: k.hid, cimke: k.cimke });
+    return vissza.pc.includes(pc);
+  }
+
+  // src/mag/kapcsolas.js
+  var MAC_ELETKOR = 3e5;
+  function uzemmod(sw, port2) {
+    if (sw.gyarto === "mikrotik") return hidUzemmod(sw, port2);
+    if (port2.mod === "trunk") return "trunk";
+    if (port2.mod === "access") return "access";
+    if (!port2.fent || !sw.halozat) return "access";
+    const tul = sw.halozat.szomszed(sw, port2);
+    if (!tul || tul.eszkoz.tipus !== "switch" || tul.eszkoz.gyarto === "mikrotik") return "access";
+    const m = tul.port.mod;
+    const t1 = sw.vtpTartomany;
+    const t2 = tul.eszkoz.vtpTartomany;
+    if (t1 && t2 && t1 !== t2 && m !== "trunk") return "access";
+    if (port2.mod === "dinamikus-auto") return m === "trunk" || m === "dinamikus-kezdemenyezo" ? "trunk" : "access";
+    if (port2.mod === "dinamikus-kezdemenyezo") return m === "access" ? "access" : "trunk";
+    return "access";
+  }
+  function vlanAktiv(sw, vlan) {
+    const v = sw.vlanok[vlan];
+    return !!v && v.tamogatott !== false;
+  }
+  function portTagja(sw, port2, vlan) {
+    if (uzemmod(sw, port2) === "trunk") return vlanAktiv(sw, vlan);
+    return port2.accessVlan === vlan;
+  }
+  function macTabla(sw) {
+    const ido = sw.halozat ? sw.halozat.ora.ido : 0;
+    sw.macTabla = (sw.macTabla || []).filter((b) => ido - b.ido < MAC_ELETKOR);
+    return sw.macTabla;
+  }
+  function macTorolPort(sw, portNev) {
+    sw.macTabla = (sw.macTabla || []).filter((b) => b.port !== portNev);
+  }
+  function macTanul2(sw, vlan, mac, portNev, ido) {
+    const t = macTabla(sw);
+    const b = t.find((x) => x.vlan === vlan && x.mac === mac);
+    if (b) {
+      b.port = portNev;
+      b.ido = ido;
+    } else {
+      t.push({ vlan, mac, port: portNev, ido });
+    }
+  }
+  function kapcsoloFogad(h, sw, port2, keret2) {
+    if (keret2.tipus === "vtp") return vtpFogad(h, sw, port2, keret2);
+    let vlan;
+    if (uzemmod(sw, port2) === "trunk") {
+      vlan = keret2.vlan !== void 0 ? keret2.vlan : port2.nativVlan;
+    } else {
+      if (keret2.vlan !== void 0) return h.eldob(sw, port2, keret2, "Címkés (802.1Q) keret érkezett egy access portra.");
+      vlan = port2.accessVlan;
+    }
+    if (!vlanAktiv(sw, vlan)) {
+      return h.eldob(sw, port2, keret2, `${nevelo(vlan) === "az" ? "Az" : "A"} ${esRag(vlan)} VLAN nem létezik ezen a switchen (${sw.hostname}), ezért a keretet eldobta.`);
+    }
+    if (keret2.forrasMac !== SZORAS) macTanul2(sw, vlan, keret2.forrasMac, port2.nev, h.ora.ido);
+    let kimenok;
+    const ismert = keret2.celMac !== SZORAS && macTabla(sw).find((b) => b.vlan === vlan && b.mac === keret2.celMac);
+    if (ismert) {
+      if (ismert.port === port2.nev) return;
+      kimenok = sw.portok.filter((p) => p.nev === ismert.port);
+    } else {
+      kimenok = sw.portok.filter((p) => p !== port2);
+    }
+    for (const p of kimenok) {
+      if (!p.fent || !portTagja(sw, p, vlan)) continue;
+      const trunk = uzemmod(sw, p) === "trunk";
+      const cimke = trunk && vlan !== p.nativVlan ? vlan : void 0;
+      h.kuld(sw, p, { ...keret2, vlan: cimke });
+    }
+  }
+
+  // src/mag/vtp.js
+  var VTP_IDOKOZ = 3e5;
+  var VTP_MAC = "01000ccccccc";
+  function kivonat(szoveg) {
+    let h1 = 2166136261;
+    let h2 = 16777619;
+    for (let i = 0; i < szoveg.length; i++) {
+      const c = szoveg.charCodeAt(i);
+      h1 = Math.imul(h1 ^ c, 16777619) >>> 0;
+      h2 = Math.imul(h2 ^ c, 1540483477) >>> 0;
+    }
+    return [h1, h2, Math.imul(h1 ^ h2, 2246822507) >>> 0, Math.imul(h2 + 2654435769, 3266489909) >>> 0];
+  }
+  function jelszoKivonat(jelszo) {
+    return kivonat("jelszo:" + jelszo).join("-");
+  }
+  function vtpVlanok(sw) {
+    const v = {};
+    for (const [szam, adat] of Object.entries(sw.vlanok)) if (!adat.gyari) v[szam] = adat.nev;
+    return v;
+  }
+  function vtpMd5(sw) {
+    const szoveg = JSON.stringify([sw.vtpTartomany, sw.vtpJelszo, sw.vtpRevizio, vtpVlanok(sw)]);
+    const bajtok = [];
+    for (const sz of kivonat(szoveg)) for (let i = 0; i < 4; i++) bajtok.push(sz >>> 24 - 8 * i & 255);
+    return bajtok;
+  }
+  function trunkPortok(sw) {
+    return sw.portok.filter((p) => p.fent && uzemmod(sw, p) === "trunk");
+  }
+  function hirdethet(sw) {
+    return !!sw.halozat && !!sw.vtpTartomany && sw.vtpMod !== "transparent";
+  }
+  function keret(sw, keres) {
+    return {
+      forrasMac: sw.mac,
+      celMac: VTP_MAC,
+      tipus: "vtp",
+      adat: {
+        kuldo: sw.hostname,
+        tartomany: sw.vtpTartomany,
+        revizio: sw.vtpRevizio,
+        verzio: sw.vtpVerzio,
+        jelszoKivonat: jelszoKivonat(sw.vtpJelszo),
+        vlanok: vtpVlanok(sw),
+        keres
+      }
+    };
+  }
+  function vtpHirdet(sw, { keres = false, kiveve = null, csak = null } = {}) {
+    if (!hirdethet(sw)) return;
+    const portok = csak ? [csak] : trunkPortok(sw).filter((p) => p !== kiveve);
+    for (const p of portok) sw.halozat.kuld(sw, p, keret(sw, keres));
+  }
+  function vtpVlanValtozas(sw) {
+    if (sw.vtpMod === "transparent") return;
+    sw.vtpRevizio++;
+    sw.vtpModositva = sw.halozat ? sw.halozat.ora.ido : 0;
+    vtpHirdet(sw);
+    if (sw.halozat) sw.halozat.esemeny({ tipus: "allapot" });
+  }
+  function vtpBeallitasValtozas(sw) {
+    vtpHirdet(sw, { keres: true });
+  }
+  function vtpTrunkValtozas(sw, port2) {
+    if (!sw.halozat) return;
+    const tul = sw.halozat.szomszed(sw, port2);
+    for (const [e, p] of [[sw, port2], tul ? [tul.eszkoz, tul.port] : [null, null]]) {
+      if (e && e.tipus === "switch" && p.fent && uzemmod(e, p) === "trunk") vtpHirdet(e, { keres: true, csak: p });
+    }
+  }
+  function atvesz(sw, a) {
+    for (const szam of Object.keys(sw.vlanok)) {
+      if (!sw.vlanok[szam].gyari && !(szam in a.vlanok)) delete sw.vlanok[szam];
+    }
+    for (const [szam, nev] of Object.entries(a.vlanok)) {
+      const v = sw.vlanok[szam];
+      if (v && v.gyari) continue;
+      sw.vlanok[szam] = { nev: nev || alapVlanNev(szam), gyari: false, tamogatott: true };
+    }
+    sw.vtpRevizio = a.revizio;
+    if (a.verzio === 2) sw.vtpVerzio = 2;
+    sw.vtpModositva = sw.halozat.ora.ido;
+  }
+  function vtpFogad(h, sw, port2, k) {
+    if (uzemmod(sw, port2) !== "trunk") return;
+    const a = k.adat;
+    if (sw.vtpMod === "transparent") {
+      if (sw.vtpVerzio === 2 || a.tartomany === sw.vtpTartomany) {
+        for (const p of trunkPortok(sw)) if (p !== port2) h.kuld(sw, p, k);
+      }
+      return;
+    }
+    if (!sw.vtpTartomany && a.tartomany) {
+      sw.vtpTartomany = a.tartomany;
+    }
+    if (a.tartomany !== sw.vtpTartomany) return;
+    if (a.jelszoKivonat !== jelszoKivonat(sw.vtpJelszo)) {
+      sw.vtpMd5Hiba = port2.rovid;
+      return h.eldob(sw, port2, k, `A VTP-hirdetés jelszava nem egyezik (${sw.hostname}), ezért nem fogadta el.`);
+    }
+    sw.vtpMd5Hiba = null;
+    if (a.revizio > sw.vtpRevizio) {
+      atvesz(sw, a);
+      h.esemeny({ tipus: "allapot" });
+      vtpHirdet(sw, { kiveve: port2 });
+    } else if (a.revizio < sw.vtpRevizio || a.keres) {
+      vtpHirdet(sw, { csak: port2 });
+    }
+  }
+  function vtpIdozitoIndit(h) {
+    const kor2 = () => {
+      for (const e of h.eszkozok) if (e.tipus === "switch") vtpHirdet(e);
+      h.ora.utemez(VTP_IDOKOZ, kor2);
+    };
+    h.ora.utemez(VTP_IDOKOZ, kor2);
+  }
+
+  // src/gyartok/ios/parancsok/vlan.js
+  var VLAN_SZO = { szo: "vlan", sugo: "VLAN létrehozása vagy szerkesztése" };
+  var VLAN_SZAM = { param: "szam", kulcs: "vlan", min: 1, max: 4094, sugo: "A VLAN száma" };
+  var KITERJESZTETT_TOL = 1006;
+  function kliensTiltas(ctx) {
+    if (ctx.eszkoz.vtpMod !== "client") return false;
+    ctx.kiir("VTP VLAN configuration not allowed when device is in CLIENT mode.");
+    return true;
+  }
+  var vlanParancsok = [
+    {
+      modok: ["konfig"],
+      szavak: [VLAN_SZO, VLAN_SZAM],
+      vegrehajt(ctx, { vlan }) {
+        const sw = ctx.eszkoz;
+        if (kliensTiltas(ctx)) return;
+        if (vlan >= KITERJESZTETT_TOL && sw.vtpMod !== "transparent") {
+          ctx.kiir("Extended VLAN(s) not allowed in current VTP mode.", "%Failed to commit extended VLAN(s) changes.");
+          return;
+        }
+        if (!sw.vlanok[vlan]) {
+          sw.vlanok[vlan] = { nev: alapVlanNev(vlan), gyari: false, tamogatott: true };
+          vtpVlanValtozas(sw);
+        }
+        ctx.modValt("konfig-vlan", { vlan });
+      }
+    },
+    {
+      modok: ["konfig"],
+      szavak: [SZO.no, { szo: "vlan", sugo: "VLAN törlése" }, VLAN_SZAM],
+      vegrehajt(ctx, { vlan }) {
+        const sw = ctx.eszkoz;
+        if (kliensTiltas(ctx)) return;
+        const v = sw.vlanok[vlan];
+        if (v && v.gyari) {
+          ctx.kiir(`%Default VLAN ${vlan} may not be deleted.`);
+          return;
+        }
+        if (!v) return;
+        delete sw.vlanok[vlan];
+        vtpVlanValtozas(sw);
+      }
+    },
+    {
+      modok: ["konfig-vlan"],
+      szavak: [
+        { szo: "name", sugo: "A VLAN nevének megadása" },
+        { param: "szo", kulcs: "nev", maxHossz: 32, sugo: "A VLAN neve (legfeljebb 32 karakter, szóköz nélkül)" }
+      ],
+      vegrehajt(ctx, { nev }) {
+        const szam = ctx.kontextus.vlan;
+        const v = ctx.eszkoz.vlanok[szam];
+        if (v.gyari) {
+          ctx.kiir(`%Default VLAN ${szam} may not have its name changed.`);
+          return;
+        }
+        if (v.nev === nev) return;
+        v.nev = nev;
+        vtpVlanValtozas(ctx.eszkoz);
+      }
+    },
+    {
+      modok: ["konfig-vlan"],
+      szavak: [SZO.no, { szo: "name", sugo: "A VLAN nevének visszaállítása (VLANxxxx)" }],
+      vegrehajt(ctx) {
+        const szam = ctx.kontextus.vlan;
+        const v = ctx.eszkoz.vlanok[szam];
+        if (!v.gyari && v.nev !== alapVlanNev(szam)) {
+          v.nev = alapVlanNev(szam);
+          vtpVlanValtozas(ctx.eszkoz);
+        }
+      }
+    }
+  ];
+
   // src/mag/rip.js
   var VEGTELEN = 16;
   var UZENET_MERET = 25;
@@ -1786,9 +2169,9 @@
   function most(r) {
     return r.halozat ? r.halozat.ora.ido : 0;
   }
-  function naplo(r, ...sorok) {
+  function naplo(r, ...sorok2) {
     if (!r.halozat) return;
-    for (const s of sorok) r.halozat.naplo(r, s);
+    for (const s of sorok2) r.halozat.naplo(r, s);
   }
   function idozitok(r, csalad) {
     const t = csalad === 4 ? r.rip ? r.rip.idozitok : { frissites: 30, ervenytelen: 180, visszatartas: 180, torles: 240 } : RIPNG_IDOZITOK;
@@ -2363,9 +2746,9 @@
   function most2(r) {
     return r.halozat ? r.halozat.ora.ido : 0;
   }
-  function naplo2(r, ...sorok) {
+  function naplo2(r, ...sorok2) {
     if (!r.halozat) return;
-    for (const s of sorok) r.halozat.naplo(r, s);
+    for (const s of sorok2) r.halozat.naplo(r, s);
   }
   function valtozas2(r) {
     if (r.halozat) r.halozat.esemeny({ tipus: "allapot" });
@@ -3860,7 +4243,7 @@
     }
     /** Időbélyeges konzolüzenet egy eszközön (a nézet a konzoljára írja). */
     naplo(eszkoz, uzenet) {
-      if (eszkoz.tipus === "pc") return;
+      if (eszkoz.tipus === "pc" || eszkoz.gyarto === "mikrotik") return;
       this.esemeny({ tipus: "naplo", eszkoz, sor: `${naploIdobelyeg(this.ora.ido)}: ${uzenet}` });
     }
     /**
@@ -3870,6 +4253,7 @@
      * @param {Object} keret
      */
     kuld(eszkoz, port2, keret2) {
+      if (port2.virtualis) return port2.kuld(keret2);
       if (!port2.fent) return;
       const k = this.kabelVege(eszkoz, port2);
       if (!k) return;
@@ -3884,7 +4268,8 @@
     /** @private – egy keret megérkezett egy portra */
     fogad(eszkoz, port2, keret2) {
       if (!port2.fent) return;
-      if (eszkoz.tipus === "switch") kapcsoloFogad(this, eszkoz, port2, keret2);
+      if (eszkoz.tipus === "switch" && eszkoz.gyarto === "mikrotik") hidFogad(this, eszkoz, port2, keret2);
+      else if (eszkoz.tipus === "switch") kapcsoloFogad(this, eszkoz, port2, keret2);
       else if (eszkoz.tipus === "router") routerFogad(this, eszkoz, port2, keret2);
       else vegpontFogad(this, eszkoz, port2, keret2);
     }
@@ -4022,22 +4407,22 @@
   var PORT_OSZLOP_SZELESSEG = 31;
   var BEHUZAS = " ".repeat(4 + 1 + 32 + 1 + 9 + 1);
   function portSorok(portok) {
-    const sorok = [];
+    const sorok2 = [];
     let aktualis = "";
     for (const p of portok) {
       const jelolt = aktualis === "" ? p : `${aktualis}, ${p}`;
       if (aktualis !== "" && jelolt.length > PORT_OSZLOP_SZELESSEG) {
-        sorok.push(aktualis);
+        sorok2.push(aktualis);
         aktualis = p;
       } else {
         aktualis = jelolt;
       }
     }
-    if (aktualis !== "") sorok.push(aktualis);
-    return sorok;
+    if (aktualis !== "") sorok2.push(aktualis);
+    return sorok2;
   }
   function showVlanBrief(sw) {
-    const sorok = [
+    const sorok2 = [
       "",
       "VLAN Name                             Status    Ports",
       "---- -------------------------------- --------- -------------------------------"
@@ -4049,10 +4434,10 @@
       const portok = sw.portok.filter((p) => p.accessVlan === szam && uzemmod(sw, p) !== "trunk").map((p) => p.rovid);
       const elso = `${String(szam).padEnd(4)} ${vlan.nev.padEnd(32)} ${allapot3.padEnd(9)} `;
       const ps = portSorok(portok);
-      sorok.push((elso + (ps[0] || "")).trimEnd());
-      for (const folytatas of ps.slice(1)) sorok.push(BEHUZAS + folytatas);
+      sorok2.push((elso + (ps[0] || "")).trimEnd());
+      for (const folytatas of ps.slice(1)) sorok2.push(BEHUZAS + folytatas);
     }
-    return sorok;
+    return sorok2;
   }
 
   // src/gyartok/ios/kimenetek/running-config.js
@@ -4375,10 +4760,10 @@
   var VTP = { szo: "vtp", sugo: "VTP (VLAN Trunking Protocol) beállításai" };
   var MODE2 = { szo: "mode", sugo: "A switch VTP-szerepe" };
   var MOD_NEV3 = { server: "SERVER", client: "CLIENT", transparent: "TRANSPARENT" };
-  function modParancs2(mod, sugo2) {
+  function modParancs2(mod, sugo3) {
     return {
       modok: ["konfig"],
-      szavak: [VTP, MODE2, { szo: mod, sugo: sugo2 }],
+      szavak: [VTP, MODE2, { szo: mod, sugo: sugo3 }],
       vegrehajt(ctx) {
         const sw = ctx.eszkoz;
         if (sw.vtpMod === mod) {
@@ -4668,7 +5053,7 @@
   function ujOspfPort() {
     return { folyamat: null, terulet: null, koltseg: null, prioritas: 1, halozatTipus: "", hello: null, dead: null, hitelesites: "", kulcsok: {}, jelszo: "" };
   }
-  function ujPort2(hostname, tipus, szam) {
+  function ujPort3(hostname, tipus, szam) {
     return {
       nev: tipus + szam,
       rovid: ROUTER_ROVID[tipus] + szam,
@@ -4707,8 +5092,8 @@
   function ujRouter4331(b = {}) {
     const hostname = b.hostname || ALAP_ROUTER_HOSTNAME;
     const portok = [];
-    for (let i = 0; i <= 2; i++) portok.push(ujPort2(hostname, "GigabitEthernet", `0/0/${i}`));
-    for (let i = 0; i <= 1; i++) portok.push(ujPort2(hostname, "Serial", `0/1/${i}`));
+    for (let i = 0; i <= 2; i++) portok.push(ujPort3(hostname, "GigabitEthernet", `0/0/${i}`));
+    for (let i = 0; i <= 1; i++) portok.push(ujPort3(hostname, "Serial", `0/1/${i}`));
     return {
       tipus: "router",
       modell: "ISR4331",
@@ -4742,7 +5127,7 @@
     const nev = `Loopback${szam}`;
     let p = routerPort(r, nev);
     if (!p) {
-      p = ujPort2(r.hostname, "Loopback", String(szam));
+      p = ujPort3(r.hostname, "Loopback", String(szam));
       p.fent = true;
       r.portok.push(p);
       r.portok.sort(portSorrend);
@@ -5619,7 +6004,7 @@
       const u = e.utak[0];
       return [`${eleje} is possibly down, routing via ${ipSzoveg(u.kovetkezo)}, ${u.port}`];
     }
-    const sorok = [];
+    const sorok2 = [];
     e.utak.forEach((u, i) => {
       let resz;
       if (e.kod === "S" && u.kovetkezo === null) resz = `is directly connected, ${u.port}`;
@@ -5628,10 +6013,10 @@
         if (e.kod === "R" || e.kod === "O") resz += `, ${kor(most4(r) - u.ido)}`;
         if (u.port) resz += `, ${u.port}`;
       }
-      if (i === 0) sorok.push(`${eleje} ${resz}`);
-      else sorok.push(`${" ".repeat(eleje.length + 1)}${resz}`);
+      if (i === 0) sorok2.push(`${eleje} ${resz}`);
+      else sorok2.push(`${" ".repeat(eleje.length + 1)}${resz}`);
     });
-    return sorok;
+    return sorok2;
   }
   function showIpRoute(r, szuro = null) {
     const s = [...KODOK4, ""];
@@ -5757,29 +6142,29 @@
   function showIpRipDatabase(r) {
     if (!r.rip) return [];
     const db = ripAdatbazis(r, 4);
-    const sorok = [];
-    for (const c of db.kapcsolt) sorok.push({ h: c.halozat, l: c.hossz, s: [`${ipSzoveg(c.halozat)}/${c.hossz}    directly connected, ${c.port}`] });
+    const sorok2 = [];
+    for (const c of db.kapcsolt) sorok2.push({ h: c.halozat, l: c.hossz, s: [`${ipSzoveg(c.halozat)}/${c.hossz}    directly connected, ${c.port}`] });
     for (const e of db.tanult) {
       if (db.kapcsolt.some((c) => c.halozat === e.halozat && c.hossz === e.hossz)) continue;
       const fej = `${ipSzoveg(e.halozat)}/${e.hossz}`;
       if (e.le) {
-        sorok.push({ h: e.halozat, l: e.hossz, s: [`${fej}    is possibly down`] });
+        sorok2.push({ h: e.halozat, l: e.hossz, s: [`${fej}    is possibly down`] });
         continue;
       }
-      sorok.push({ h: e.halozat, l: e.hossz, s: [fej, ...e.utak.map((u) => `    [${e.metrika}] via ${ipSzoveg(u.kovetkezo)}, ${kor(most4(r) - u.ido)}, ${u.port}`)] });
+      sorok2.push({ h: e.halozat, l: e.hossz, s: [fej, ...e.utak.map((u) => `    [${e.metrika}] via ${ipSzoveg(u.kovetkezo)}, ${kor(most4(r) - u.ido)}, ${u.port}`)] });
     }
     if (r.rip.autoSummary) {
       const fok = /* @__PURE__ */ new Map();
-      for (const x of sorok) {
+      for (const x of sorok2) {
         if (x.l === 0) continue;
         const o = osztalyos(x.h);
         if (o.hossz < x.l) fok.set(o.halozat, o);
       }
-      for (const o of fok.values()) sorok.push({ h: o.halozat, l: o.hossz - 0.5, s: [`${ipSzoveg(o.halozat)}/${o.hossz}    auto-summary`] });
+      for (const o of fok.values()) sorok2.push({ h: o.halozat, l: o.hossz - 0.5, s: [`${ipSzoveg(o.halozat)}/${o.hossz}    auto-summary`] });
     }
-    if (r.rip.alapUtvonal) sorok.push({ h: 0, l: -0.5, s: ["0.0.0.0/0    auto-summary"] });
-    sorok.sort((a, b) => a.h - b.h || a.l - b.l);
-    return sorok.flatMap((x) => x.s);
+    if (r.rip.alapUtvonal) sorok2.push({ h: 0, l: -0.5, s: ["0.0.0.0/0    auto-summary"] });
+    sorok2.sort((a, b) => a.h - b.h || a.l - b.l);
+    return sorok2.flatMap((x) => x.s);
   }
   function showIpv6Rip(r) {
     const s = [];
@@ -5828,16 +6213,16 @@
   }
   function showIpArp(r) {
     const s = ["Protocol  Address          Age (min)  Hardware Addr   Type   Interface"];
-    const sorok = [];
+    const sorok2 = [];
     for (const p of r.portok) {
-      if (p.ip && portFent(p) && p.tipus === "GigabitEthernet") sorok.push([p.ip, "-", p.mac, p.nev]);
+      if (p.ip && portFent(p) && p.tipus === "GigabitEthernet") sorok2.push([p.ip, "-", p.mac, p.nev]);
     }
     for (const [ip, b] of Object.entries(r.arpTabla)) {
       const port2 = r.portok.find((p) => p.nev === b.port);
-      if (port2 && port2.tipus === "GigabitEthernet") sorok.push([ip, String(Math.floor((most4(r) - b.ido) / 6e4)), b.mac, b.port]);
+      if (port2 && port2.tipus === "GigabitEthernet") sorok2.push([ip, String(Math.floor((most4(r) - b.ido) / 6e4)), b.mac, b.port]);
     }
-    sorok.sort((a, b) => ipSzam(a[0]) - ipSzam(b[0]));
-    for (const [ip, kor_, mac, port2] of sorok) {
+    sorok2.sort((a, b) => ipSzam(a[0]) - ipSzam(b[0]));
+    for (const [ip, kor_, mac, port2] of sorok2) {
       s.push(`Internet  ${ip.padEnd(17)}${kor_.padStart(9)}   ${macPontos(mac)}  ARPA   ${port2}`);
     }
     return s;
@@ -6061,9 +6446,9 @@
         return;
       }
     }
-    const sorok = ["Type escape sequence to abort.", `Sending 5, 100-byte ICMP Echos to ${cel}, timeout is 2 seconds:`];
-    if (forras) sorok.push(`Packet sent with a source address of ${forras}`);
-    ctx.kiir(...sorok, pingFolyamat(r, cel, forras));
+    const sorok2 = ["Type escape sequence to abort.", `Sending 5, 100-byte ICMP Echos to ${cel}, timeout is 2 seconds:`];
+    if (forras) sorok2.push(`Packet sent with a source address of ${forras}`);
+    ctx.kiir(...sorok2, pingFolyamat(r, cel, forras));
   }
   var TRACE_TURELEM = 5;
   function traceFolyamat(r, cel) {
@@ -6727,12 +7112,12 @@
   function debugParancsok() {
     const l = [];
     for (const csalad of [4, 6]) {
-      for (const [szo, mezo, sugo2] of [["hello", "Hello", "A Hello csomagok (küldés, fogadás, eltérések)"], ["adj", "Adj", "A szomszédság felépülése (DBD, DR/BDR, hitelesítés)"]]) {
+      for (const [szo, mezo, sugo3] of [["hello", "Hello", "A Hello csomagok (küldés, fogadás, eltérések)"], ["adj", "Adj", "A szomszédság felépülése (DBD, DR/BDR, hitelesítés)"]]) {
         const kulcs2 = `${csalad === 4 ? "ospf" : "ospf6"}${mezo}`;
         const elo = [
           csalad === 4 ? { szo: "ip", sugo: "IPv4-es hibakeresés" } : { szo: "ipv6", sugo: "IPv6-os hibakeresés" },
           { szo: "ospf", sugo: csalad === 4 ? "Az OSPF üzenetei" : "Az OSPFv3 üzenetei" },
-          { szo, sugo: sugo2 }
+          { szo, sugo: sugo3 }
         ];
         const be = (ertek) => (ctx) => {
           ctx.eszkoz.debug[kulcs2] = ertek;
@@ -6811,6 +7196,1351 @@
     return eszkoz && eszkoz.tipus === "router" ? iosRouter : ios;
   }
 
+  // src/gyartok/routeros/menuk.js
+  var KOMMENT = { nev: "comment", tipus: "szoveg", mezo: "komment", alap: "", sugo: "Megjegyzés az elemhez (a listában ;;; után látszik)" };
+  var LETILTVA = { nev: "disabled", tipus: "bool", mezo: "letiltva", alap: false, sugo: "Le van-e tiltva az elem (yes = nem működik)" };
+  var KERETTIPUS_SUGO = {
+    "admit-all": "címkés és címke nélküli keretet is fogad",
+    "admit-only-untagged-and-priority-tagged": "csak címke nélküli keretet fogad (access port)",
+    "admit-only-vlan-tagged": "csak VLAN-címkés keretet fogad (trunk port)"
+  };
+  function fut2(sw, nev) {
+    const i = interfeszKeres(sw, nev);
+    if (!i) return false;
+    if (i.fajta === "ether") return i.elem.fent && !i.elem.leallitva;
+    if (i.fajta === "bridge") return !i.elem.letiltva;
+    return !i.elem.letiltva && fut2(sw, i.elem.interfesz);
+  }
+  function ifTipus(i) {
+    return i.fajta === "ether" ? "ether" : i.fajta;
+  }
+  var interfaceLista = {
+    lista: true,
+    nevMezo: "name",
+    szekcio: null,
+    elemek: (sw) => interfeszek(sw).map((i) => ({ ...i, _sajat: i.elem })),
+    tulajdonsagok: [
+      { nev: "name", tipus: "nev", olvas: (e) => e.nev, csakOlvas: true, sugo: "Az interfész neve" },
+      { nev: "default-name", tipus: "nev", olvas: (e) => e.fajta === "ether" ? e.nev : "", csakOlvas: true, sugo: "A gyári név (csak a fizikai portoknál)" },
+      { nev: "type", tipus: "nev", olvas: (e) => ifTipus(e), csakOlvas: true, sugo: "Az interfész fajtája" },
+      {
+        nev: "comment",
+        tipus: "szoveg",
+        alap: "",
+        sugo: KOMMENT.sugo,
+        olvas: (e) => e.fajta === "ether" ? e.elem.komment : e.elem.komment || "",
+        ir: (e, v) => {
+          e.elem.komment = v;
+        }
+      },
+      {
+        nev: "disabled",
+        tipus: "bool",
+        alap: false,
+        sugo: LETILTVA.sugo,
+        olvas: (e) => e.fajta === "ether" ? e.elem.leallitva : e.elem.letiltva,
+        ir: (e, v, sw) => {
+          if (e.fajta === "ether") {
+            if (e.elem.leallitva !== v) {
+              e.elem.leallitva = v;
+              portValtozott(sw, e.elem);
+            }
+          } else e.elem.letiltva = v;
+        }
+      }
+    ],
+    zaszlok: [
+      { betu: "X", nev: "DISABLED", fn: (e) => e.fajta === "ether" ? e.elem.leallitva : e.elem.letiltva },
+      { betu: "R", nev: "RUNNING", fn: (e, sw) => fut2(sw, e.nev) },
+      { betu: "S", nev: "SLAVE", fn: (e, sw) => e.fajta === "ether" && !!hidPortja(sw, e.nev) }
+    ],
+    oszlopok: [
+      { cim: "NAME", ertek: (e) => e.nev },
+      { cim: "TYPE", ertek: (e) => ifTipus(e) },
+      { cim: "ACTUAL-MTU", ertek: () => "1500", jobbra: true },
+      { cim: "L2MTU", ertek: (e) => e.fajta === "vlan" ? "1588" : "1592", jobbra: true },
+      { cim: "MAX-L2MTU", ertek: (e) => e.fajta === "ether" ? "10218" : "", jobbra: true },
+      { cim: "MAC-ADDRESS", ertek: (e, sw) => macSzoveg(e.fajta === "ether" ? e.elem.mac : e.fajta === "bridge" ? e.elem.mac : (hidKeres(sw, e.elem.interfesz) || { mac: sw.mac }).mac) }
+    ],
+    nincsAdd: true
+  };
+  var bridgeLista = {
+    lista: true,
+    nevMezo: "name",
+    szekcio: "/interface bridge",
+    elemek: (sw) => sw.hidak,
+    tulajdonsagok: [
+      { nev: "name", tipus: "nev", mezo: "nev", sugo: "A bridge neve", alapNev: "bridge" },
+      { nev: "vlan-filtering", tipus: "bool", mezo: "vlanSzures", alap: false, sugo: "VLAN-szűrés: csak bekapcsolva számít a PVID és a VLAN-tábla" },
+      { nev: "pvid", tipus: "szam", min: 1, max: 4094, mezo: "pvid", alap: 1, sugo: "A bridge saját (a switch processzora felé néző) VLAN-ja" },
+      { nev: "frame-types", tipus: "enum", ertekek: KERETTIPUSOK, ertekSugo: KERETTIPUS_SUGO, mezo: "kerettipus", alap: "admit-all", sugo: "Milyen kereteket fogad a bridge a processzortól" },
+      { nev: "ingress-filtering", tipus: "bool", mezo: "bemenetiSzures", alap: true, sugo: "Bemeneti szűrés: eldobja a keretet, ha a bridge nem tagja a VLAN-jának" },
+      KOMMENT,
+      LETILTVA
+    ],
+    zaszlok: [
+      { betu: "X", nev: "DISABLED", fn: (e) => e.letiltva },
+      { betu: "R", nev: "RUNNING", fn: (e) => !e.letiltva }
+    ],
+    reszletesKiiras: true,
+    hozzaad(sw, ertekek2) {
+      let nev = ertekek2.name;
+      if (!nev) for (let i = 1; !nev || interfeszKeres(sw, nev); i++) nev = `bridge${i}`;
+      if (interfeszKeres(sw, nev)) return "failure: already have interface with such name";
+      const h = ujHid(nev, sw.portok[0].mac);
+      sw.hidak.push(h);
+      return { elem: h };
+    },
+    modosit(sw, e, ertekek2) {
+      if (ertekek2.name !== void 0 && ertekek2.name !== e.nev && interfeszKeres(sw, ertekek2.name)) return "failure: already have interface with such name";
+      return null;
+    },
+    torol(sw, e) {
+      sw.hidak = sw.hidak.filter((x) => x !== e);
+    },
+    /** A részletes (detail) kiírás tulajdonságai – a valódi eszköz sorrendjét követve, rövidítve. */
+    reszletek(sw, e) {
+      const r = [
+        ["name", `"${e.nev}"`],
+        ["mtu", "auto"],
+        ["actual-mtu", "1500"],
+        ["l2mtu", "1592"],
+        ["arp", "enabled"],
+        ["arp-timeout", "auto"],
+        ["mac-address", macSzoveg(e.mac)],
+        ["protocol-mode", "rstp"],
+        ["fast-forward", "yes"],
+        ["igmp-snooping", "no"]
+      ];
+      if (e.adminMac) r.push(["auto-mac", "no"], ["admin-mac", macSzoveg(e.adminMac)]);
+      else r.push(["auto-mac", "yes"]);
+      r.push(
+        ["ageing-time", "5m"],
+        ["priority", "0x8000"],
+        ["max-message-age", "20s"],
+        ["forward-delay", "15s"],
+        ["transmit-hold-count", "6"],
+        ["vlan-filtering", e.vlanSzures ? "yes" : "no"]
+      );
+      if (e.vlanSzures) r.push(["ether-type", "0x8100"], ["pvid", String(e.pvid)], ["frame-types", e.kerettipus], ["ingress-filtering", e.bemenetiSzures ? "yes" : "no"]);
+      r.push(["dhcp-snooping", "no"]);
+      return r;
+    },
+    exportExtra: (e) => e.adminMac ? [["admin-mac", macSzoveg(e.adminMac)], ["auto-mac", "no"]] : []
+  };
+  var bridgePortLista = {
+    lista: true,
+    nevMezo: "interface",
+    szekcio: "/interface bridge port",
+    elemek: (sw) => sw.hidPortok,
+    tulajdonsagok: [
+      { nev: "interface", tipus: "interfesz", fajtak: ["ether", "vlan"], mezo: "interfesz", kotelezo: true, sugo: "Melyik interfész legyen a bridge portja" },
+      { nev: "bridge", tipus: "hid", mezo: "hid", kotelezo: true, sugo: "Melyik bridge-hez tartozzon" },
+      { nev: "pvid", tipus: "szam", min: 1, max: 4094, mezo: "pvid", alap: 1, sugo: "A port VLAN-ja: a címke nélkül érkező keretek ebbe a VLAN-ba kerülnek" },
+      { nev: "frame-types", tipus: "enum", ertekek: KERETTIPUSOK, ertekSugo: KERETTIPUS_SUGO, mezo: "kerettipus", alap: "admit-all", sugo: "Milyen kereteket fogad a port (címkés, címke nélküli, mindkettő)" },
+      { nev: "ingress-filtering", tipus: "bool", mezo: "bemenetiSzures", alap: true, sugo: "Bemeneti szűrés: eldobja a keretet, ha a port nem tagja a VLAN-jának" },
+      KOMMENT,
+      LETILTVA
+    ],
+    zaszlok: [
+      { betu: "X", nev: "DISABLED", fn: (e) => e.letiltva, csakHaVan: true },
+      { betu: "I", nev: "INACTIVE", fn: (e, sw) => e.letiltva || !hidKeres(sw, e.hid) || !fut2(sw, e.interfesz) },
+      { betu: "H", nev: "HW-OFFLOAD", fn: (e, sw) => !e.letiltva && !!hidKeres(sw, e.hid) && fut2(sw, e.interfesz) && interfeszKeres(sw, e.interfesz).fajta === "ether" }
+    ],
+    oszlopok: [
+      { cim: "INTERFACE", ertek: (e) => e.interfesz },
+      { cim: "BRIDGE", ertek: (e) => e.hid },
+      { cim: "HW", ertek: (e, sw) => interfeszKeres(sw, e.interfesz) && interfeszKeres(sw, e.interfesz).fajta === "ether" ? "yes" : "" },
+      { cim: "PVID", ertek: (e) => String(e.pvid), jobbra: true },
+      { cim: "PRIORITY", ertek: () => "0x80" },
+      { cim: "PATH-COST", ertek: () => "10", jobbra: true },
+      { cim: "INTERNAL-PATH-COST", ertek: () => "10", jobbra: true },
+      { cim: "HORIZON", ertek: () => "none" }
+    ],
+    hozzaad(sw, ertekek2) {
+      if (sw.hidPortok.some((hp2) => hp2.interfesz === ertekek2.interface)) return "failure: device already added as bridge port";
+      const hp = ujHidPort(ertekek2.interface, ertekek2.bridge);
+      sw.hidPortok.push(hp);
+      return { elem: hp };
+    },
+    modosit(sw, e, ertekek2) {
+      if (ertekek2.interface !== void 0 && ertekek2.interface !== e.interfesz && sw.hidPortok.some((hp) => hp.interfesz === ertekek2.interface)) {
+        return "failure: device already added as bridge port";
+      }
+      return null;
+    },
+    torol(sw, e) {
+      sw.hidPortok = sw.hidPortok.filter((x) => x !== e);
+    },
+    utana: (sw) => {
+      sw.macTabla = [];
+    },
+    reszletek(sw, e) {
+      return [
+        ["interface", e.interfesz],
+        ["bridge", e.hid],
+        ["priority", "0x80"],
+        ["path-cost", "10"],
+        ["internal-path-cost", "10"],
+        ["edge", "auto"],
+        ["point-to-point", "auto"],
+        ["learn", "auto"],
+        ["horizon", "none"],
+        ["hw", "yes"],
+        ["pvid", String(e.pvid)],
+        ["frame-types", e.kerettipus],
+        ["ingress-filtering", e.bemenetiSzures ? "yes" : "no"],
+        ["unknown-unicast-flood", "yes"],
+        ["unknown-multicast-flood", "yes"],
+        ["broadcast-flood", "yes"],
+        ["tag-stacking", "no"]
+      ];
+    }
+  };
+  function vlanSorok(sw) {
+    const ki = [...sw.hidVlanok];
+    for (const hid of sw.hidak) {
+      for (const v of ismertVlanok(sw, hid)) {
+        const vanStatikus = sw.hidVlanok.some((s) => !s.letiltva && s.hid === hid.nev && sorVlanjai(s).includes(v));
+        if (vanStatikus) continue;
+        const dyn = dinamikusTagok(sw, hid, v);
+        if (!dyn.length) continue;
+        ki.push({ hid: hid.nev, vlanok: String(v), cimkezett: [], cimkezetlen: dyn, komment: "", letiltva: false, _dinamikus: true });
+      }
+    }
+    return ki;
+  }
+  function aktualisTagok(sw, s) {
+    const hid = hidKeres(sw, s.hid);
+    if (!hid || s.letiltva) return { cimkezett: [], cimkezetlen: [] };
+    const c = [];
+    const u = [];
+    for (const v of sorVlanjai(s)) {
+      const t = tagsag(sw, hid, v, { csakAktiv: true });
+      for (const n of t.cimkezett) if (!c.includes(n) && (s.cimkezett.includes(n) || s._dinamikus)) c.push(n);
+      for (const n of t.cimkezetlen) if (!u.includes(n) && !c.includes(n)) u.push(n);
+    }
+    return { cimkezett: c, cimkezetlen: u };
+  }
+  var bridgeVlanLista = {
+    lista: true,
+    nevMezo: null,
+    szekcio: "/interface bridge vlan",
+    elemek: (sw) => vlanSorok(sw),
+    tulajdonsagok: [
+      { nev: "bridge", tipus: "hid", mezo: "hid", kotelezo: true, sugo: "Melyik bridge VLAN-táblájába kerüljön a sor" },
+      { nev: "vlan-ids", tipus: "vlanLista", mezo: "vlanok", kotelezo: true, sugo: "A VLAN-azonosító(k): pl. 10, vagy 10,20, vagy 30-35" },
+      { nev: "tagged", tipus: "interfeszLista", fajtak: ["ether", "bridge", "vlan"], mezo: "cimkezett", alap: [], sugo: "Címkézett tagok: ezeken a portokon 802.1Q-címkével megy a VLAN (trunk)" },
+      { nev: "untagged", tipus: "interfeszLista", fajtak: ["ether", "bridge", "vlan"], mezo: "cimkezetlen", alap: [], sugo: "Címkézetlen tagok: ezeken címke nélkül megy ki a VLAN forgalma (access)" },
+      KOMMENT,
+      LETILTVA
+    ],
+    zaszlok: [
+      { betu: "X", nev: "DISABLED", fn: (e) => e.letiltva, csakHaVan: true },
+      { betu: "D", nev: "DYNAMIC", fn: (e) => !!e._dinamikus }
+    ],
+    oszlopok: [
+      { cim: "BRIDGE", ertek: (e) => e.hid },
+      { cim: "VLAN-IDS", ertek: (e) => e.vlanok, jobbra: true },
+      { cim: "CURRENT-TAGGED", ertek: (e, sw) => aktualisTagok(sw, e).cimkezett },
+      { cim: "CURRENT-UNTAGGED", ertek: (e, sw) => aktualisTagok(sw, e).cimkezetlen }
+    ],
+    hozzaad(sw, ertekek2) {
+      const s = { hid: ertekek2.bridge, vlanok: ertekek2["vlan-ids"], cimkezett: [], cimkezetlen: [], komment: "", letiltva: false };
+      sw.hidVlanok.push(s);
+      return { elem: s };
+    },
+    torol(sw, e) {
+      sw.hidVlanok = sw.hidVlanok.filter((x) => x !== e);
+    },
+    utana: (sw) => {
+      sw.macTabla = [];
+    },
+    reszletek(sw, e) {
+      const a = aktualisTagok(sw, e);
+      return [
+        ["bridge", e.hid],
+        ["vlan-ids", e.vlanok],
+        ["tagged", e.cimkezett.join(",")],
+        ["untagged", e.cimkezetlen.join(",")],
+        ["current-tagged", a.cimkezett.join(",")],
+        ["current-untagged", a.cimkezetlen.join(",")]
+      ];
+    }
+  };
+  var bridgeHostLista = {
+    lista: true,
+    csakOlvas: true,
+    nevMezo: null,
+    szekcio: null,
+    elemek: (sw) => {
+      const sajat = sw.hidak.filter((h) => !h.letiltva).map((h) => ({ mac: h.mac, vlan: 0, port: h.nev, hid: h.nev, _helyi: true }));
+      return [...sajat, ...hidMacTabla(sw)];
+    },
+    tulajdonsagok: [],
+    zaszlok: [
+      { betu: "D", nev: "DYNAMIC", fn: (e) => !e._helyi },
+      { betu: "L", nev: "LOCAL", fn: (e) => !!e._helyi }
+    ],
+    oszlopok: [
+      { cim: "MAC-ADDRESS", ertek: (e) => macSzoveg(e.mac) },
+      { cim: "VID", ertek: (e) => e.vlan ? String(e.vlan) : "", jobbra: true },
+      { cim: "ON-INTERFACE", ertek: (e) => e.port },
+      { cim: "BRIDGE", ertek: (e) => e.hid }
+    ]
+  };
+  var vlanLista = {
+    lista: true,
+    nevMezo: "name",
+    szekcio: "/interface vlan",
+    elemek: (sw) => sw.vlanIfek,
+    tulajdonsagok: [
+      { nev: "name", tipus: "nev", mezo: "nev", sugo: "A VLAN-interfész neve" },
+      { nev: "vlan-id", tipus: "szam", min: 1, max: 4094, mezo: "vlanId", kotelezo: true, sugo: "A VLAN azonosítója (ezt a címkét kapják a keretei)" },
+      { nev: "interface", tipus: "interfesz", fajtak: ["ether", "bridge", "vlan"], mezo: "interfesz", kotelezo: true, sugo: "Melyik interfészen (pl. a bridge-en) legyen ez a VLAN" },
+      KOMMENT,
+      LETILTVA
+    ],
+    zaszlok: [
+      { betu: "X", nev: "DISABLED", fn: (e) => e.letiltva, csakHaVan: true },
+      { betu: "R", nev: "RUNNING", fn: (e, sw) => fut2(sw, e.nev) }
+    ],
+    oszlopok: [
+      { cim: "NAME", ertek: (e) => e.nev },
+      { cim: "MTU", ertek: () => "1500", jobbra: true },
+      { cim: "ARP", ertek: () => "enabled" },
+      { cim: "VLAN-ID", ertek: (e) => String(e.vlanId), jobbra: true },
+      { cim: "INTERFACE", ertek: (e) => e.interfesz }
+    ],
+    hozzaad(sw, ertekek2) {
+      let nev = ertekek2.name;
+      if (!nev) for (let i = 1; !nev || interfeszKeres(sw, nev); i++) nev = `vlan${i}`;
+      if (interfeszKeres(sw, nev)) return "failure: already have interface with such name";
+      const v = { nev, vlanId: ertekek2["vlan-id"], interfesz: ertekek2.interface, komment: "", letiltva: false };
+      sw.vlanIfek.push(v);
+      return { elem: v };
+    },
+    modosit(sw, e, ertekek2) {
+      if (ertekek2.name !== void 0 && ertekek2.name !== e.nev && interfeszKeres(sw, ertekek2.name)) return "failure: already have interface with such name";
+      return null;
+    },
+    torol(sw, e) {
+      sw.vlanIfek = sw.vlanIfek.filter((x) => x !== e);
+    },
+    utana: (sw) => {
+      sw.macTabla = [];
+    }
+  };
+  function halozatSz(e) {
+    return ipSzoveg(halozatSzam(ipSzam(e.cim), e.hossz));
+  }
+  var ipAddressLista = {
+    lista: true,
+    nevMezo: null,
+    szekcio: "/ip address",
+    elemek: (sw) => sw.ipCimek,
+    tulajdonsagok: [
+      {
+        nev: "address",
+        tipus: "cim",
+        kotelezo: true,
+        sugo: "Az IP-cím előtaghosszal, pl. 192.168.99.2/24",
+        olvas: (e) => `${e.cim}/${e.hossz}`,
+        ir: (e, v) => {
+          e.cim = v.cim;
+          e.hossz = v.hossz;
+        }
+      },
+      { nev: "network", tipus: "nev", olvas: (e) => halozatSz(e), csakOlvas: true, sugo: "A hálózat címe (a címből számolja ki)" },
+      { nev: "interface", tipus: "interfesz", fajtak: ["ether", "bridge", "vlan"], mezo: "interfesz", kotelezo: true, sugo: "Melyik interfészen legyen a cím" },
+      KOMMENT,
+      LETILTVA
+    ],
+    zaszlok: [
+      { betu: "X", nev: "DISABLED", fn: (e) => e.letiltva, csakHaVan: true },
+      { betu: "I", nev: "INVALID", fn: (e, sw) => !e.letiltva && !l3Kapcsolat(sw, e.interfesz) && !interfeszKeres(sw, e.interfesz), csakHaVan: true },
+      { betu: "D", nev: "DYNAMIC", fn: () => false }
+    ],
+    oszlopok: [
+      { cim: "ADDRESS", ertek: (e) => `${e.cim}/${e.hossz}` },
+      { cim: "NETWORK", ertek: (e) => halozatSz(e) },
+      { cim: "INTERFACE", ertek: (e) => e.interfesz }
+    ],
+    hozzaad(sw, ertekek2) {
+      const c = { cim: ertekek2.address.cim, hossz: ertekek2.address.hossz, interfesz: ertekek2.interface, komment: "", letiltva: false };
+      sw.ipCimek.push(c);
+      return { elem: c };
+    },
+    torol(sw, e) {
+      sw.ipCimek = sw.ipCimek.filter((x) => x !== e);
+    },
+    exportExtra: (e) => [["network", halozatSz(e)]]
+  };
+  var identityBeall = {
+    lista: false,
+    szekcio: "/system identity",
+    tulajdonsagok: [
+      { nev: "name", tipus: "nev", sugo: "Az eszköz neve (ez látszik a promptban is)", olvas: (sw) => sw.hostname, ir: (sw, v) => {
+        sw.hostname = v;
+      }, alap: "MikroTik" }
+    ]
+  };
+  var MENUFA = {
+    nev: "",
+    sugo: "A főmenü",
+    almenuk: [
+      {
+        nev: "interface",
+        sugo: "Interfészek: portok, bridge-ek, VLAN-interfészek",
+        adat: interfaceLista,
+        almenuk: [
+          {
+            nev: "bridge",
+            sugo: "Bridge-ek: a portokat összekapcsoló „szoftveres switch” és beállításai",
+            adat: bridgeLista,
+            almenuk: [
+              { nev: "host", sugo: "A bridge MAC-táblája: melyik MAC-cím melyik porton (és VLAN-ban) van", adat: bridgeHostLista, almenuk: [] },
+              { nev: "port", sugo: "A bridge portjai és VLAN-beállításaik (PVID, kerettípus, bemeneti szűrés)", adat: bridgePortLista, almenuk: [] },
+              { nev: "vlan", sugo: "A bridge VLAN-táblája: VLAN-onként a címkézett és címkézetlen tagok", adat: bridgeVlanLista, almenuk: [] }
+            ]
+          },
+          { nev: "vlan", sugo: "VLAN-interfészek: a switch saját „lába” egy VLAN-ban (pl. a kezelő IP-címhez)", adat: vlanLista, almenuk: [] }
+        ]
+      },
+      {
+        nev: "ip",
+        sugo: "IP-beállítások",
+        almenuk: [
+          { nev: "address", sugo: "Az eszköz saját IP-címei", adat: ipAddressLista, almenuk: [] }
+        ]
+      },
+      {
+        nev: "system",
+        sugo: "Rendszerbeállítások",
+        almenuk: [
+          { nev: "identity", sugo: "Az eszköz neve (identity)", adat: identityBeall, almenuk: [] }
+        ]
+      }
+    ]
+  };
+  (function szulok(cs, szulo, ut) {
+    cs.szulo = szulo;
+    cs.ut = ut;
+    for (const a of cs.almenuk) szulok(a, cs, [...ut, a.nev]);
+  })(MENUFA, null, []);
+  function menuUtbol(ut) {
+    let cs = MENUFA;
+    for (const n of ut) {
+      cs = cs.almenuk.find((a) => a.nev === n);
+      if (!cs) return null;
+    }
+    return cs;
+  }
+  var EXPORT_SORREND = [
+    ["interface", "bridge"],
+    ["interface", "ethernet"],
+    ["interface", "vlan"],
+    ["interface", "bridge", "port"],
+    ["interface", "bridge", "vlan"],
+    ["ip", "address"],
+    ["system", "identity"]
+  ];
+
+  // src/gyartok/routeros/kimenetek.js
+  function jelzok(adat, elemek, sw) {
+    const hasznalt = (adat.zaszlok || []).filter((z) => elemek.some((e) => z.fn(e, sw)));
+    const betuk = (e) => hasznalt.map((z) => z.fn(e, sw) ? z.betu : " ").join("");
+    const fejlec2 = hasznalt.length ? `Flags: ${hasznalt.map((z) => `${z.betu} - ${z.nev}`).join("; ")}` : null;
+    return { szel: Math.max(1, hasznalt.length), betuk, fejlec: fejlec2 };
+  }
+  function tablaKiir(adat, sw) {
+    const elemek = adat.elemek(sw);
+    const j = jelzok(adat, elemek, sw);
+    const osz = adat.oszlopok;
+    const cellak = elemek.map((e) => osz.map((o) => {
+      const v = o.ertek(e, sw);
+      return Array.isArray(v) ? v : [v];
+    }));
+    const szel = osz.map((o, i) => Math.max(o.cim.length, ...cellak.map((c) => Math.max(0, ...c[i].map((x) => x.length)))));
+    const iw = Math.max(1, String(Math.max(0, elemek.length - 1)).length);
+    const sorBol = (idx, betuk, ertekek2) => {
+      const reszek = ertekek2.map((v, i) => osz[i].jobbra ? v.padStart(szel[i]) : v.padEnd(szel[i]));
+      return `${idx.padEnd(iw)} ${betuk.padEnd(j.szel)} ${reszek.join("  ")}`.replace(/\s+$/, "");
+    };
+    const ki = [];
+    if (j.fejlec) ki.push(j.fejlec);
+    ki.push(`Columns: ${osz.map((o) => o.cim).join(", ")}`);
+    ki.push(sorBol("#", "", osz.map((o) => o.cim)));
+    elemek.forEach((e, n) => {
+      if (e.komment || e.elem && e.elem.komment) ki.push(`;;; ${e.komment || e.elem.komment}`);
+      const c = cellak[n];
+      const sorok2 = Math.max(1, ...c.map((x) => x.length));
+      for (let s = 0; s < sorok2; s++) {
+        ki.push(sorBol(s === 0 ? String(n) : "", s === 0 ? j.betuk(e) : "", c.map((x) => x[s] || "")));
+      }
+    });
+    return ki;
+  }
+  function tordel(parok, behuzas, szel = 100) {
+    const sorok2 = [];
+    let sor2 = "";
+    for (const [n, v] of parok) {
+      const resz = `${n}=${v}`;
+      if (sor2 && behuzas + sor2.length + 1 + resz.length > szel) {
+        sorok2.push(sor2);
+        sor2 = resz;
+      } else sor2 = sor2 ? `${sor2} ${resz}` : resz;
+    }
+    if (sor2) sorok2.push(sor2);
+    return sorok2.map((s) => " ".repeat(behuzas) + s);
+  }
+  function reszletesKiir(adat, sw) {
+    const elemek = adat.elemek(sw);
+    const j = jelzok(adat, elemek, sw);
+    const iw = Math.max(2, String(Math.max(0, elemek.length - 1)).length + 1);
+    const ki = [];
+    if (j.fejlec) ki.push(j.fejlec);
+    elemek.forEach((e, n) => {
+      const parok = adat.reszletek ? adat.reszletek(sw, e) : adat.tulajdonsagok.filter((t) => !["comment", "disabled"].includes(t.nev)).map((t) => [t.nev, olvas(t, e, sw)]);
+      const fej = `${String(n).padStart(iw)} ${j.betuk(e).padEnd(j.szel)} `;
+      const komment = e.komment || e.elem && e.elem.komment;
+      const behuz = fej.length;
+      const sorok2 = tordel(parok.map(([a, b]) => [a, b === "" ? '""' : b]), behuz);
+      if (komment) {
+        ki.push(`${fej};;; ${komment}`);
+        ki.push(...sorok2);
+      } else {
+        ki.push(fej + sorok2[0].trimStart());
+        ki.push(...sorok2.slice(1));
+      }
+      ki.push("");
+    });
+    return ki;
+  }
+  function identityKiir(sw) {
+    return [`  name: ${sw.hostname}`];
+  }
+  var k2 = (n) => String(n).padStart(2, "0");
+  function datum2(ora) {
+    const d = new Date(Date.UTC(1970, 0, 2) + (ora ? ora.ido : 0));
+    return `${d.getUTCFullYear()}-${k2(d.getUTCMonth() + 1)}-${k2(d.getUTCDate())} ${k2(d.getUTCHours())}:${k2(d.getUTCMinutes())}:${k2(d.getUTCSeconds())}`;
+  }
+  function azonosito(mac, hossz, abc) {
+    let h = 0;
+    for (const c of mac) h = h * 31 + c.charCodeAt(0) >>> 0;
+    let s = "";
+    for (let i = 0; i < hossz; i++) {
+      h = Math.imul(h, 1103515245) + 12345 >>> 0;
+      s += abc[(h >>> 16) % abc.length];
+    }
+    return s;
+  }
+  function elemExport(adat, e, sw) {
+    const parok = [];
+    for (const t of adat.tulajdonsagok) {
+      if (t.csakOlvas) continue;
+      const v = olvas(t, e, sw);
+      const alap = t.alap === void 0 ? void 0 : t.tipus === "bool" ? t.alap ? "yes" : "no" : Array.isArray(t.alap) ? t.alap.join(",") : String(t.alap);
+      if (alap !== void 0 && v === alap) continue;
+      if (v === "" && alap === void 0) continue;
+      parok.push([t.nev, v]);
+    }
+    if (adat.exportExtra) parok.push(...adat.exportExtra(e));
+    parok.sort((a, b) => a[0].localeCompare(b[0]));
+    return `add ${parok.map(([n, v]) => `${n}=${ertekIr(v)}`).join(" ")}`;
+  }
+  function szekcio(ut, sw) {
+    if (ut.join(" ") === "interface ethernet") {
+      const sorok2 = sw.portok.filter((p) => p.leallitva || p.komment).map((p) => {
+        const parok = [];
+        if (p.komment) parok.push(`comment=${ertekIr(p.komment)}`);
+        if (p.leallitva) parok.push("disabled=yes");
+        return `set [ find default-name=${p.nev} ] ${parok.join(" ")}`;
+      });
+      return sorok2.length ? ["/interface ethernet", ...sorok2] : [];
+    }
+    const menu = menuUtbol(ut);
+    const adat = menu.adat;
+    if (!adat.lista) {
+      const parok = adat.tulajdonsagok.map((t) => [t.nev, olvas(t, sw, sw), t.alap]).filter(([, v, a]) => v !== a);
+      return parok.length ? [`/${ut.join(" ")}`, `set ${parok.map(([n, v]) => `${n}=${ertekIr(v)}`).join(" ")}`] : [];
+    }
+    const elemek = adat.elemek(sw).filter((e) => !e._dinamikus);
+    if (!elemek.length) return [];
+    return [`/${ut.join(" ")}`, ...elemek.map((e) => elemExport(adat, e, sw))];
+  }
+  function exportKiir(sw, menu, ora) {
+    const ki = [
+      `# ${datum2(ora)} by RouterOS ${ROS_VERZIO}`,
+      `# software id = ${azonosito(sw.mac, 4, "ABCDEFGHJKLMNPQRSTUVWXYZ23456789")}-${azonosito(sw.mac + "x", 4, "ABCDEFGHJKLMNPQRSTUVWXYZ23456789")}`,
+      "#",
+      `# model = ${MODELL}`,
+      `# serial number = ${azonosito(sw.mac + "s", 11, "0123456789ABCDEF")}`
+    ];
+    const elotag = menu.ut;
+    for (const ut of EXPORT_SORREND) {
+      if (elotag.some((n, i) => ut[i] !== n)) continue;
+      ki.push(...szekcio(ut, sw));
+    }
+    return ki;
+  }
+  var PING_FEJ = "  SEQ HOST                                     SIZE TTL TIME       STATUS";
+  function pingSor(seq2, cim, e) {
+    const eleje = `${String(seq2).padStart(5)} ${cim.padEnd(40)}`;
+    if (e.fajta === "valasz") return `${eleje} ${"56".padStart(4)} ${String(e.ttl).padStart(3)} ${`${Math.round(e.keses || 0)}ms`.padEnd(10)}`.replace(/\s+$/, "");
+    return `${eleje}${" ".repeat(20)}timeout`;
+  }
+  function pingFolyamat2(sw, cel, db) {
+    return {
+      folyamat: (kiir, kesz) => {
+        kiir(PING_FEJ);
+        const h = sw.halozat;
+        const ep = vegpontCelhoz(sw, cel);
+        const idok = [];
+        let i = 0;
+        const egy = () => {
+          if (i >= db || !h) return vege();
+          const seq2 = i++;
+          if (!ep) {
+            kiir(`${String(seq2).padStart(5)} ${cel.padEnd(40)}${" ".repeat(20)}no route to host`);
+            return h.ora.utemez(1e3, egy);
+          }
+          egyPing(h, ep, cel, (e) => {
+            if (e.fajta === "valasz") idok.push(Math.round(e.keses || 0));
+            kiir(pingSor(seq2, cel, e));
+            h.ora.utemez(e.fajta === "valasz" ? 1e3 : 1, egy);
+          }, { ttl: 64 });
+        };
+        const vege = () => {
+          const n = idok.length;
+          let sor2 = `    sent=${db} received=${n} packet-loss=${Math.round((db - n) / db * 100)}%`;
+          if (n) {
+            const atl = Math.round(idok.reduce((a, b) => a + b, 0) / n);
+            sor2 += ` min-rtt=${Math.min(...idok)}ms avg-rtt=${atl}ms max-rtt=${Math.max(...idok)}ms`;
+          }
+          kiir(sor2);
+          kesz();
+        };
+        egy();
+      }
+    };
+  }
+
+  // src/gyartok/routeros/parancssor.js
+  function tokenekre(sor2) {
+    const t = [];
+    let i = 0;
+    while (i < sor2.length) {
+      if (/\s/.test(sor2[i])) {
+        i++;
+        continue;
+      }
+      const kezdet = i;
+      let melyseg = 0;
+      let idezet = false;
+      while (i < sor2.length) {
+        const c = sor2[i];
+        if (idezet) {
+          if (c === '"') idezet = false;
+        } else if (c === '"') idezet = true;
+        else if (c === "[") melyseg++;
+        else if (c === "]") melyseg = Math.max(0, melyseg - 1);
+        else if (/\s/.test(c) && melyseg === 0) break;
+        i++;
+      }
+      t.push({ szoveg: sor2.slice(kezdet, i), kezdet });
+    }
+    return t;
+  }
+  function idezetNelkul(s) {
+    return s.length >= 2 && s.startsWith('"') && s.endsWith('"') ? s.slice(1, -1) : s;
+  }
+  function ertekIr(v) {
+    const s = String(v);
+    return s === "" || /[\s"$;\\[\]=]/.test(s) ? `"${s.replace(/"/g, '\\"')}"` : s;
+  }
+  var PARANCS_SUGO = {
+    add: "Új elem létrehozása",
+    set: "Elem(ek) beállításainak módosítása",
+    remove: "Elem(ek) törlése",
+    print: "Az elemek listázása (print detail: minden beállítással)",
+    enable: "Elem(ek) engedélyezése",
+    disable: "Elem(ek) letiltása",
+    export: "A beállítások kiírása parancsként (ebből a menüből és az almenükből)",
+    ping: "Ping egy IP-címre (a switch saját címéről)"
+  };
+  function parancsok(menu) {
+    if (menu === MENUFA) return ["export", "ping"];
+    const a = menu.adat;
+    if (!a) return ["export"];
+    if (!a.lista) return ["export", "print", "set"];
+    if (a.csakOlvas) return ["print"];
+    if (a.nincsAdd) return ["disable", "enable", "export", "print", "set"];
+    return ["add", "disable", "enable", "export", "print", "remove", "set"];
+  }
+  function elemesParancs(parancs, menu) {
+    return menu.adat && menu.adat.lista && ["set", "remove", "enable", "disable"].includes(parancs);
+  }
+  function nevesParameterek(parancs, menu) {
+    if (parancs === "ping") return [{ nev: "count", tipus: "szam", min: 1, max: 100, sugo: "Hány pinget küldjön (alapból 4)" }];
+    if (parancs !== "add" && parancs !== "set") return [];
+    return (menu.adat.tulajdonsagok || []).filter((t) => !t.csakOlvas);
+  }
+  function pozicios(parancs) {
+    if (parancs === "print") return ["detail"];
+    return [];
+  }
+  function szoIllesztes(menu, szo, csakMenu = false) {
+    const lehetosegek = [
+      ...menu.almenuk.map((a) => ({ fajta: "menu", nev: a.nev, menu: a })),
+      ...csakMenu ? [] : parancsok(menu).map((p) => ({ fajta: "parancs", nev: p }))
+    ];
+    const pontos = lehetosegek.filter((l) => l.nev === szo);
+    if (pontos.length) return { ok: true, ...pontos.find((l) => l.fajta === "menu") || pontos[0] };
+    const elotag = lehetosegek.filter((l) => l.nev.startsWith(szo));
+    if (elotag.length === 1) return { ok: true, ...elotag[0] };
+    return { ok: false, tobb: elotag.length > 1, lehetosegek: elotag };
+  }
+  function utvonal(tokenek, kezdoMenu) {
+    let menu = kezdoMenu;
+    let i = 0;
+    for (; i < tokenek.length; i++) {
+      const t = tokenek[i];
+      if (t.szoveg.includes("=") || t.szoveg.startsWith("[")) break;
+      let resz = t.szoveg;
+      let eltolas = 0;
+      if (resz.startsWith("/")) {
+        menu = MENUFA;
+        resz = resz.slice(1);
+        eltolas = 1;
+      }
+      const szavak = resz.split("/");
+      for (let j = 0; j < szavak.length; j++) {
+        const szo = szavak[j];
+        const oszlop = t.kezdet + eltolas + 1;
+        eltolas += szo.length + 1;
+        if (szo === "") continue;
+        if (szo === "..") {
+          menu = menu.szulo || MENUFA;
+          continue;
+        }
+        const r = szoIllesztes(menu, szo);
+        if (!r.ok) return { ok: false, hiba: `${r.tobb ? "ambiguous" : "bad"} command name ${szo} (line 1 column ${oszlop})` };
+        if (r.fajta === "menu") {
+          menu = r.menu;
+          continue;
+        }
+        if (j < szavak.length - 1) return { ok: false, hiba: `expected end of command (line 1 column ${oszlop + szo.length})` };
+        return { ok: true, menu, parancs: r.nev, maradek: tokenek.slice(i + 1) };
+      }
+    }
+    if (i < tokenek.length) return { ok: false, hiba: `expected end of command (line 1 column ${tokenek[i].kezdet + 1})` };
+    return { ok: true, menu, parancs: null, maradek: [] };
+  }
+  function ertekElemez(t, nyers, sw) {
+    const v = idezetNelkul(nyers);
+    const nincs = { ok: false, hiba: `input does not match any value of ${t.nev}` };
+    switch (t.tipus) {
+      case "nev":
+        return v === "" ? { ok: false, hiba: `invalid value for argument ${t.nev}` } : { ok: true, ertek: v };
+      case "szoveg":
+        return { ok: true, ertek: v };
+      case "bool":
+        if (v === "yes") return { ok: true, ertek: true };
+        if (v === "no") return { ok: true, ertek: false };
+        return nincs;
+      case "szam": {
+        if (!/^\d+$/.test(v)) return { ok: false, hiba: `invalid value for argument ${t.nev}` };
+        const n = Number(v);
+        if (n < t.min || n > t.max) return { ok: false, hiba: `value of ${t.nev} out of range (${t.min}..${t.max})` };
+        return { ok: true, ertek: n };
+      }
+      case "enum":
+        return t.ertekek.includes(v) ? { ok: true, ertek: v } : nincs;
+      case "hid":
+        return hidKeres(sw, v) ? { ok: true, ertek: v } : nincs;
+      case "interfesz": {
+        const i = interfeszKeres(sw, v);
+        return i && (!t.fajtak || t.fajtak.includes(i.fajta)) ? { ok: true, ertek: v } : nincs;
+      }
+      case "interfeszLista": {
+        if (v === "") return { ok: true, ertek: [] };
+        const nevek = v.split(",");
+        for (const n of nevek) {
+          const i = interfeszKeres(sw, n);
+          if (!i || t.fajtak && !t.fajtak.includes(i.fajta)) return nincs;
+        }
+        return { ok: true, ertek: [...new Set(nevek)] };
+      }
+      case "vlanLista": {
+        if (!/^[\d,-]+$/.test(v) || v === "") return { ok: false, hiba: `invalid value for argument ${t.nev}` };
+        const l = vlanListaElemez(v);
+        if (!l) return { ok: false, hiba: `value of ${t.nev} out of range (1..4094)` };
+        return { ok: true, ertek: v };
+      }
+      case "cim": {
+        const m = /^(\d+\.\d+\.\d+\.\d+)(?:\/(\d{1,2}))?$/.exec(v);
+        const n = m && ipSzam(m[1]);
+        const hossz = m && m[2] !== void 0 ? Number(m[2]) : 32;
+        if (n === null || !m || hossz > 32) return { ok: false, hiba: `invalid value for argument ${t.nev}` };
+        return { ok: true, ertek: { cim: ipSzoveg(n), hossz } };
+      }
+      default:
+        return nincs;
+    }
+  }
+  function olvas(t, e, sw) {
+    const raw = t.olvas ? t.olvas(e, sw) : e[t.mezo];
+    if (t.tipus === "bool") return raw ? "yes" : "no";
+    if (Array.isArray(raw)) return raw.join(",");
+    return raw === void 0 || raw === null ? "" : String(raw);
+  }
+  function ir(t, e, ertek, sw) {
+    if (t.ir) t.ir(e, ertek, sw);
+    else e[t.mezo] = ertek;
+  }
+  function nevErtek(szoveg) {
+    const h = szoveg.indexOf("=");
+    return { nev: szoveg.slice(0, h), ertek: szoveg.slice(h + 1) };
+  }
+  function paramIllesztes(defs, nev) {
+    const pontos = defs.find((d) => d.nev === nev);
+    if (pontos) return pontos;
+    const e = defs.filter((d) => d.nev.startsWith(nev));
+    return e.length === 1 ? e[0] : null;
+  }
+  function elemekKeres(nyers, menu, sw) {
+    const a = menu.adat;
+    const mind = a.elemek(sw);
+    const s = nyers.trim();
+    if (s.startsWith("[")) {
+      const belso5 = tokenekre(s.replace(/^\[\s*/, "").replace(/\s*\]$/, ""));
+      if (!belso5.length || belso5[0].szoveg !== "find") return { ok: false, hiba: "expected end of command (line 1 column 2)" };
+      let feltetelek = belso5.slice(1);
+      if (feltetelek.length && feltetelek[0].szoveg === "where") feltetelek = feltetelek.slice(1);
+      let talalt = mind;
+      for (const f of feltetelek) {
+        if (!f.szoveg.includes("=")) return { ok: false, hiba: "expected end of command" };
+        const { nev, ertek } = nevErtek(f.szoveg);
+        const t = a.tulajdonsagok.find((x) => x.nev === nev);
+        if (!t) return { ok: false, hiba: "expected end of command" };
+        const keresett = idezetNelkul(ertek);
+        talalt = talalt.filter((e) => olvas(t, e, sw) === keresett);
+      }
+      return { ok: true, elemek: talalt };
+    }
+    const ki = [];
+    for (const resz of s.split(",")) {
+      let e = null;
+      if (/^\d+$/.test(resz)) e = mind[Number(resz)];
+      else if (a.nevMezo) {
+        const t = a.tulajdonsagok.find((x) => x.nev === a.nevMezo);
+        e = mind.find((x) => olvas(t, x, sw) === idezetNelkul(resz));
+      }
+      if (!e) return { ok: false, hiba: "no such item" };
+      if (!ki.includes(e)) ki.push(e);
+    }
+    return { ok: true, elemek: ki };
+  }
+  function vegrehajt(sor2, k) {
+    const tokenek = tokenekre(sor2);
+    if (!tokenek.length) return { kimenet: [] };
+    const u = utvonal(tokenek, k.menu);
+    if (!u.ok) return { kimenet: [u.hiba] };
+    if (!u.parancs) return { kimenet: [], ut: u.menu.ut };
+    const kanonikus = `/${[...u.menu.ut, u.parancs].join(" ")}`;
+    const r = parancsFuttat(u.menu, u.parancs, u.maradek, k);
+    return { ...r, kanonikus };
+  }
+  function parancsFuttat(menu, parancs, tokenek, k) {
+    const { sw } = k;
+    const defs = nevesParameterek(parancs, menu);
+    const poz = pozicios(parancs);
+    const ertekek2 = {};
+    const kulcsszavak = [];
+    let numbers = null;
+    let cim = null;
+    for (const t of tokenek) {
+      if (t.szoveg.includes("=") && !t.szoveg.startsWith("[")) {
+        const { nev, ertek } = nevErtek(t.szoveg);
+        const d = paramIllesztes(defs, nev);
+        if (!d) return { kimenet: [`expected end of command (line 1 column ${t.kezdet + 1})`] };
+        const e = ertekElemez(d, ertek, sw);
+        if (!e.ok) return { kimenet: [e.hiba] };
+        ertekek2[d.nev] = e.ertek;
+        continue;
+      }
+      if (elemesParancs(parancs, menu) && numbers === null) {
+        numbers = t.szoveg;
+        continue;
+      }
+      if (parancs === "ping" && cim === null) {
+        cim = t.szoveg;
+        continue;
+      }
+      const kulcs2 = poz.find((p) => p === t.szoveg || p.startsWith(t.szoveg));
+      if (kulcs2) {
+        kulcsszavak.push(kulcs2);
+        continue;
+      }
+      return { kimenet: [`expected end of command (line 1 column ${t.kezdet + 1})`] };
+    }
+    switch (parancs) {
+      case "print":
+        if (!menu.adat.lista) return { kimenet: identityKiir(sw) };
+        if (kulcsszavak.includes("detail") || menu.adat.reszletesKiiras) return { kimenet: reszletesKiir(menu.adat, sw) };
+        return { kimenet: tablaKiir(menu.adat, sw) };
+      case "export":
+        return { kimenet: exportKiir(sw, menu, k.ora) };
+      case "ping":
+        if (cim === null) return kerdez("address: ", (v) => pingInditas(sw, v, ertekek2.count));
+        return pingInditas(sw, cim, ertekek2.count);
+      case "add":
+        return hozzaad(menu, ertekek2, k);
+      case "set":
+        if (!menu.adat.lista) {
+          for (const [n, v] of Object.entries(ertekek2)) ir(menu.adat.tulajdonsagok.find((t) => t.nev === n), sw, v, sw);
+          return { kimenet: [], valtozott: true };
+        }
+      // falls through
+      case "remove":
+      case "enable":
+      case "disable":
+        if (numbers === null) return kerdez("numbers: ", (v) => v.trim() === "" ? { kimenet: [] } : elemMuvelet(menu, parancs, v, ertekek2, k));
+        return elemMuvelet(menu, parancs, numbers, ertekek2, k);
+      default:
+        return { kimenet: [] };
+    }
+  }
+  function kerdez(prompt, folytat) {
+    return { kimenet: [], kerdes: { prompt, folytat } };
+  }
+  function pingInditas(sw, cim, db) {
+    const n = ipSzam(cim);
+    if (n === null) return { kimenet: ["invalid value for argument address"] };
+    return { kimenet: [pingFolyamat2(sw, ipSzoveg(n), db || 4)] };
+  }
+  function hozzaad(menu, ertekek2, k) {
+    const a = menu.adat;
+    const hianyzo = a.tulajdonsagok.find((t) => t.kotelezo && ertekek2[t.nev] === void 0);
+    if (hianyzo) {
+      return kerdez(`${hianyzo.nev}: `, (v) => {
+        if (v.trim() === "") return { kimenet: [] };
+        const e = ertekElemez(hianyzo, v.trim(), k.sw);
+        if (!e.ok) return { kimenet: [e.hiba] };
+        return hozzaad(menu, { ...ertekek2, [hianyzo.nev]: e.ertek }, k);
+      });
+    }
+    const r = a.hozzaad(k.sw, ertekek2);
+    if (typeof r === "string") return { kimenet: [r] };
+    for (const [n, v] of Object.entries(ertekek2)) ir(a.tulajdonsagok.find((t) => t.nev === n), r.elem, v, k.sw);
+    if (a.utana) a.utana(k.sw);
+    return { kimenet: [], valtozott: true };
+  }
+  function elemMuvelet(menu, parancs, numbers, ertekek2, k) {
+    const { sw } = k;
+    const a = menu.adat;
+    const ker = elemekKeres(numbers, menu, sw);
+    if (!ker.ok) return { kimenet: [ker.hiba] };
+    for (const e of ker.elemek) {
+      if (e._dinamikus) return { kimenet: ["failure: can not modify dynamic entry"] };
+    }
+    for (const e of ker.elemek) {
+      if (parancs === "remove") {
+        if (a.torol) a.torol(sw, e);
+        continue;
+      }
+      const uj = parancs === "enable" ? { disabled: false } : parancs === "disable" ? { disabled: true } : ertekek2;
+      if (a.modosit) {
+        const h = a.modosit(sw, e, uj);
+        if (h) return { kimenet: [h] };
+      }
+      for (const [n, v] of Object.entries(uj)) ir(a.tulajdonsagok.find((t) => t.nev === n), e, v, sw);
+    }
+    if (a.utana) a.utana(sw);
+    return { kimenet: [], valtozott: true };
+  }
+  function sugoSorok(cim, elemek) {
+    const szel = Math.max(0, ...elemek.map((e) => e.nev.length));
+    return [cim, "", ...elemek.map((e) => `${e.nev.padEnd(szel)} -- ${e.sugo}`)];
+  }
+  function menuSugoElemek(menu) {
+    const ki = [];
+    if (menu.szulo) ki.push({ nev: "..", sugo: `vissza a(z) ${menu.szulo === MENUFA ? "főmenübe" : `/${menu.szulo.ut.join("/")} menübe`}` });
+    for (const a of menu.almenuk) ki.push({ nev: a.nev, sugo: `[menü] ${a.sugo}` });
+    for (const p of parancsok(menu)) ki.push({ nev: p, sugo: PARANCS_SUGO[p] });
+    return ki.sort((x, y) => x.nev === ".." ? -1 : y.nev === ".." ? 1 : x.nev.localeCompare(y.nev));
+  }
+  function ertekLehetosegek(t, sw) {
+    switch (t.tipus) {
+      case "bool":
+        return [{ nev: "yes", sugo: "igen" }, { nev: "no", sugo: "nem" }];
+      case "enum":
+        return t.ertekek.map((v) => ({ nev: v, sugo: t.ertekSugo && t.ertekSugo[v] || "" }));
+      case "hid":
+        return sw.hidak.map((h) => ({ nev: h.nev, sugo: "bridge" }));
+      case "interfesz":
+      case "interfeszLista": {
+        const ifek = [...sw.portok.map((p) => ({ nev: p.nev, f: "ether" })), ...sw.hidak.map((h) => ({ nev: h.nev, f: "bridge" })), ...sw.vlanIfek.map((v) => ({ nev: v.nev, f: "vlan" }))];
+        return ifek.filter((i) => !t.fajtak || t.fajtak.includes(i.f)).map((i) => ({ nev: i.nev, sugo: i.f === "ether" ? "port" : i.f }));
+      }
+      default:
+        return [];
+    }
+  }
+  function ertekForma(t) {
+    switch (t.tipus) {
+      case "szam":
+        return `szám: ${t.min}..${t.max}`;
+      case "vlanLista":
+        return "VLAN-azonosító(k), pl. 10 vagy 10,20 vagy 30-35";
+      case "cim":
+        return "IP-cím/előtaghossz, pl. 192.168.99.2/24";
+      case "interfeszLista":
+        return "interfésznevek vesszővel elválasztva, pl. ether23,ether24";
+      case "nev":
+        return "név";
+      case "szoveg":
+        return "szöveg (szóközzel: idézőjelek között)";
+      default:
+        return "";
+    }
+  }
+  function sugo2(sor2, k) {
+    const vegeUres = sor2 === "" || /\s$/.test(sor2);
+    const tokenek = tokenekre(sor2);
+    const utolso = vegeUres ? null : tokenek[tokenek.length - 1];
+    const elozok = utolso ? tokenek.slice(0, -1) : tokenek;
+    const u = utvonal(elozok, k.menu);
+    if (!u.ok) return [u.hiba];
+    if (!u.parancs) {
+      let menu = u.menu;
+      let resz2 = utolso ? utolso.szoveg : "";
+      if (resz2.includes("/")) {
+        const r = utvonal([{ szoveg: resz2.slice(0, resz2.lastIndexOf("/") + 1) || "/", kezdet: 0 }], menu);
+        if (!r.ok || r.parancs) return [r.ok ? "" : r.hiba];
+        menu = r.menu;
+        resz2 = resz2.slice(resz2.lastIndexOf("/") + 1);
+      }
+      const elemek2 = menuSugoElemek(menu).filter((e) => e.nev.startsWith(resz2));
+      return sugoSorok(menu === MENUFA ? "Főmenü" : menu.sugo, elemek2);
+    }
+    const defs = nevesParameterek(u.parancs, u.menu);
+    if (utolso && utolso.szoveg.includes("=") && !utolso.szoveg.startsWith("[")) {
+      const { nev, ertek } = nevErtek(utolso.szoveg);
+      const d = paramIllesztes(defs, nev);
+      if (!d) return [`expected end of command (line 1 column ${utolso.kezdet + 1})`];
+      const l = ertekLehetosegek(d, k.sw).filter((e) => e.nev.startsWith(ertek));
+      if (l.length) return sugoSorok(`${d.nev} -- ${d.sugo}`, l);
+      return [`${d.nev} -- ${d.sugo}`, ertekForma(d)].filter(Boolean);
+    }
+    const parameterek = u.maradek;
+    const hasznalt = parameterek.map((t) => t.szoveg.includes("=") ? nevErtek(t.szoveg).nev : null).filter(Boolean);
+    const vanPozicios = parameterek.some((t) => !t.szoveg.includes("=") || t.szoveg.startsWith("["));
+    const resz = utolso ? utolso.szoveg : "";
+    const elemek = defs.filter((d) => !hasznalt.includes(d.nev) && d.nev.startsWith(resz)).map((d) => ({ nev: d.nev, sugo: d.sugo }));
+    if (elemesParancs(u.parancs, u.menu) && !vanPozicios) {
+      elemek.unshift({ nev: "<numbers>", sugo: "melyik elem(ek): sorszám a print szerint (0, 1 …), név, vagy [find …]" });
+    }
+    for (const p of pozicios(u.parancs)) if (p.startsWith(resz)) elemek.push({ nev: p, sugo: "részletes lista, minden beállítással" });
+    if (u.parancs === "ping" && !vanPozicios) elemek.unshift({ nev: "<address>", sugo: "a pingelendő IP-cím" });
+    return sugoSorok(PARANCS_SUGO[u.parancs], elemek);
+  }
+  function kozosElotag(lista3) {
+    if (!lista3.length) return "";
+    let p = lista3[0];
+    for (const s of lista3) while (!s.startsWith(p)) p = p.slice(0, -1);
+    return p;
+  }
+  function kiegeszit2(sor2, k) {
+    if (sor2 === "" || /\s$/.test(sor2)) return null;
+    const tokenek = tokenekre(sor2);
+    const utolso = tokenek[tokenek.length - 1];
+    const u = utvonal(tokenek.slice(0, -1), k.menu);
+    if (!u.ok) return null;
+    const eleje = sor2.slice(0, utolso.kezdet);
+    const s = utolso.szoveg;
+    if (!u.parancs) {
+      let menu = u.menu;
+      const perPoz = s.lastIndexOf("/");
+      let resz = s;
+      if (perPoz >= 0) {
+        const r = utvonal([{ szoveg: s.slice(0, perPoz + 1), kezdet: 0 }], menu);
+        if (!r.ok || r.parancs) return null;
+        menu = r.menu;
+        resz = s.slice(perPoz + 1);
+      }
+      const nevek2 = [...menu.almenuk.map((a) => a.nev), ...parancsok(menu)].filter((n) => n.startsWith(resz));
+      if (!nevek2.length) return null;
+      const uj2 = nevek2.length === 1 ? `${nevek2[0]} ` : kozosElotag(nevek2);
+      if (uj2.length <= resz.length) return null;
+      return eleje + s.slice(0, perPoz + 1) + uj2;
+    }
+    const defs = nevesParameterek(u.parancs, u.menu);
+    if (s.includes("=") && !s.startsWith("[")) {
+      const { nev, ertek } = nevErtek(s);
+      const d = paramIllesztes(defs, nev);
+      if (!d) return null;
+      const lista3 = d.tipus === "interfeszLista" ? ertek.split(",") : [ertek];
+      const reszErtek = lista3[lista3.length - 1];
+      const nevek2 = ertekLehetosegek(d, k.sw).map((e) => e.nev).filter((n) => n.startsWith(reszErtek));
+      if (!nevek2.length) return null;
+      const uj2 = nevek2.length === 1 ? nevek2[0] : kozosElotag(nevek2);
+      if (uj2.length <= reszErtek.length) return null;
+      lista3[lista3.length - 1] = uj2;
+      return `${eleje}${d.nev}=${lista3.join(",")}${nevek2.length === 1 && d.tipus !== "interfeszLista" ? " " : ""}`;
+    }
+    const nevek = [...defs.map((d) => `${d.nev}=`), ...pozicios(u.parancs)].filter((n) => n.startsWith(s));
+    if (!nevek.length) return null;
+    const uj = nevek.length === 1 ? nevek[0] : kozosElotag(nevek);
+    if (uj.length <= s.length) return null;
+    return eleje + uj;
+  }
+
+  // src/gyartok/routeros/munkamenet.js
+  var TORTENET_MERET2 = 50;
+  var KAPCSOLAT_FIGYELES = 500;
+  var KAPCSOLAT_TURES = 2e3;
+  var VISSZAVONAS_IDO = 1e4;
+  var RouterOsMunkamenet = class {
+    /**
+     * @param {Object} p
+     * @param {Object} p.eszkoz – a MikroTik switch (modell/mikrotik.js)
+     * @param {Ora} [p.ora]
+     * @param {{mod: 'konzol'}|{mod: 'ssh', honnan: Object, ip: string}} [p.kapcsolat]
+     */
+    constructor({ eszkoz, ora, kapcsolat }) {
+      this.eszkoz = eszkoz;
+      this.ora = ora || new Ora();
+      this.felirat = "RouterOS-szerű parancssor";
+      this.vanCtrlZ = false;
+      this.f1Sugo = true;
+      this.ut = [];
+      this.kontextus = {};
+      this.mod = "routeros";
+      this.tortenetLista = [];
+      this.varakozas = null;
+      this.figyelok = [];
+      this.utolsoKanonikus = "";
+      this.safeMode = false;
+      this.mentes = null;
+      this.kapcsolat = kapcsolat && kapcsolat.mod === "ssh" ? { ...kapcsolat } : { mod: "konzol" };
+      this.allapot = "el";
+      this.ujraBelepesek = 0;
+      this.rosszIdo = null;
+      this.figyeles = null;
+      if (this.kapcsolat.mod === "ssh") this.figyelesIndit();
+    }
+    figyel(fn) {
+      this.figyelok.push(fn);
+    }
+    /** @private */
+    ertesit() {
+      for (const fn of this.figyelok) fn();
+    }
+    /** A terminál fejléce. */
+    fejlec() {
+      if (this.allapot === "megszakadt") return `${this.kapcsolat.honnan.hostname} – parancssor (nincs kapcsolat a switch-csel)`;
+      if (this.kapcsolat.mod === "ssh") return `${this.eszkoz.hostname} – SSH (${this.kapcsolat.honnan.hostname} → ${this.kapcsolat.ip})`;
+      return `${this.eszkoz.hostname} – konzol`;
+    }
+    prompt() {
+      if (this.varakozas) return this.varakozas.prompt;
+      if (this.allapot === "megszakadt") return "C:\\>";
+      const menu = this.ut.length ? `/${this.ut.join("/")}` : "";
+      const vege = this.safeMode ? "<SAFE>" : ">";
+      return `[${this.eszkoz.felhasznalo}@${this.eszkoz.hostname}] ${menu}${vege} `;
+    }
+    tortenet() {
+      return this.tortenetLista;
+    }
+    /** @private */
+    kornyezet() {
+      return { sw: this.eszkoz, menu: menuUtbol(this.ut) || MENUFA, ora: this.ora };
+    }
+    /**
+     * Egy beírt sor feldolgozása.
+     * @returns {{kimenet: Array, lapozhato: boolean}}
+     */
+    bevitel(sor2) {
+      if (this.varakozas) {
+        const { folytat } = this.varakozas;
+        this.varakozas = null;
+        return this.eredmeny(folytat(sor2));
+      }
+      if (this.allapot === "megszakadt") return { kimenet: this.pcParancs(sor2), lapozhato: false };
+      this.utolsoKanonikus = "";
+      if (sor2.trim() === "") return { kimenet: [], lapozhato: false };
+      if (this.tortenetLista[this.tortenetLista.length - 1] !== sor2) this.tortenetLista.push(sor2);
+      while (this.tortenetLista.length > TORTENET_MERET2) this.tortenetLista.shift();
+      return this.eredmeny(vegrehajt(sor2, this.kornyezet()));
+    }
+    /** @private – a parancs eredményének feldolgozása (menüváltás, kérdés, változás) */
+    eredmeny(r) {
+      if (r.ut) this.ut = r.ut;
+      if (r.kerdes) {
+        const k = r.kerdes;
+        this.varakozas = { prompt: k.prompt, folytat: (v) => k.folytat(v) };
+      }
+      if (r.kanonikus) this.utolsoKanonikus = r.kanonikus;
+      if (r.valtozott && this.eszkoz.halozat) this.eszkoz.halozat.esemeny({ tipus: "allapot" });
+      this.ertesit();
+      if (r.valtozott) this.kapcsolatEllenoriz();
+      return { kimenet: r.kimenet || [], lapozhato: false };
+    }
+    sugo(sor2) {
+      if (this.varakozas) return { kimenet: [], sor: sor2 };
+      if (this.allapot === "megszakadt") {
+        return {
+          kimenet: [
+            "[Szimulátor] Most a(z) " + this.kapcsolat.honnan.hostname + " gép parancssorában vagy. Amit itt írhatsz:",
+            "[Szimulátor]   ssh admin@<cím>  – belépés a switchre a hálózaton át (a switch egyik IP-címére)",
+            "[Szimulátor]   konzol           – a soros konzolkábel (mindig működik, de oda kell menni a switchhez)"
+          ],
+          sor: sor2
+        };
+      }
+      return { kimenet: sugo2(sor2, this.kornyezet()), sor: sor2 };
+    }
+    kiegeszit(sor2) {
+      if (this.varakozas || this.allapot === "megszakadt") return null;
+      return kiegeszit2(sor2, this.kornyezet());
+    }
+    // -------------------------------------------------------------------------
+    // Safe Mode
+    // -------------------------------------------------------------------------
+    /**
+     * Ctrl+X: Safe Mode be/ki.
+     * @returns {{kimenet: string[]}}
+     */
+    ctrlX() {
+      if (this.allapot !== "el" || this.varakozas) return { kimenet: [] };
+      let kimenet;
+      if (!this.safeMode) {
+        this.safeMode = true;
+        this.mentes = konfigMentes(this.eszkoz);
+        kimenet = ["[Safe Mode taken]"];
+      } else {
+        this.safeMode = false;
+        this.mentes = null;
+        kimenet = ["[Safe Mode released]"];
+      }
+      this.ertesit();
+      return { kimenet };
+    }
+    /** @private – a Safe Mode óta tett változtatások visszavonása */
+    visszavon(mentes2) {
+      const sw = this.eszkoz;
+      const valtozott3 = konfigVisszaallit(sw, mentes2);
+      for (const p of valtozott3) portValtozott(sw, p);
+      if (sw.halozat) sw.halozat.esemeny({ tipus: "allapot" });
+    }
+    // -------------------------------------------------------------------------
+    // Hálózati kezelés (SSH) – figyelés, megszakadás, újracsatlakozás
+    // -------------------------------------------------------------------------
+    /** Él-e most az út a kezelő PC és a switch címe között. */
+    kapcsolatElo() {
+      const h = this.eszkoz.halozat;
+      if (this.kapcsolat.mod !== "ssh" || !h) return true;
+      return kezelhetoE(h, this.kapcsolat.honnan, this.eszkoz, this.kapcsolat.ip);
+    }
+    /** @private */
+    figyelesIndit() {
+      if (this.figyeles) return;
+      const tick = () => {
+        this.figyeles = null;
+        if (this.allapot !== "el" || this.kapcsolat.mod !== "ssh") return;
+        this.kapcsolatEllenoriz();
+        if (this.allapot === "el" && this.kapcsolat.mod === "ssh") this.figyeles = this.ora.utemez(KAPCSOLAT_FIGYELES, tick);
+      };
+      this.figyeles = this.ora.utemez(KAPCSOLAT_FIGYELES, tick);
+    }
+    /** @private – ha az út elég ideje nem él, megszakad a kapcsolat */
+    kapcsolatEllenoriz() {
+      if (this.allapot !== "el" || this.kapcsolat.mod !== "ssh") return;
+      if (this.kapcsolatElo()) {
+        this.rosszIdo = null;
+        return;
+      }
+      if (this.rosszIdo === null) {
+        this.rosszIdo = this.ora.ido;
+        return;
+      }
+      if (this.ora.ido - this.rosszIdo >= KAPCSOLAT_TURES) this.megszakad();
+    }
+    /** @private */
+    aszinkron(sor2) {
+      const h = this.eszkoz.halozat;
+      if (h) h.esemeny({ tipus: "naplo", eszkoz: this.eszkoz, sor: sor2 });
+    }
+    /** @private – a kapcsolat megszakadt */
+    megszakad() {
+      const k = this.kapcsolat;
+      this.allapot = "megszakadt";
+      this.varakozas = null;
+      this.rosszIdo = null;
+      this.aszinkron(`[Szimulátor] Megszakadt a kapcsolat: ${k.honnan.hostname} nem éri el a switch ${k.ip} címét (az SSH-kapcsolat lefagyott, majd bezárult).`);
+      if (this.safeMode) {
+        const mentes2 = this.mentes;
+        this.safeMode = false;
+        this.mentes = null;
+        this.aszinkron(`[Szimulátor] A switch Safe Mode-ban volt: hamarosan visszavonja a Safe Mode óta tett változtatásokat (a valódi eszközön a TCP időtúllépése miatt ez kb. 9 perc; itt ${VISSZAVONAS_IDO / 1e3} másodperc).`);
+        this.ora.utemez(VISSZAVONAS_IDO, () => {
+          this.visszavon(mentes2);
+          this.aszinkron(`[Szimulátor] ${this.eszkoz.hostname} visszavonta a változtatásokat. Lépj be újra: ssh admin@${k.ip}`);
+          this.ertesit();
+        });
+      } else {
+        this.aszinkron("[Szimulátor] Safe Mode nélkül a változtatások megmaradtak. Ha a switch egyik címét sem éred el, kizártad magad: csak a soros konzolkábellel tudsz belépni (konzol).");
+      }
+      this.aszinkron("[Szimulátor] Most a gép parancssorában vagy: ssh admin@<cím> vagy konzol (a ? megmutatja).");
+      this.ertesit();
+    }
+    /** @private – parancs a kezelő PC parancssorában (kapcsolat nélkül) */
+    pcParancs(sor2) {
+      const s = sor2.trim();
+      if (!s) return [];
+      if (/^konzol$/i.test(s)) {
+        this.kapcsolat = { mod: "konzol" };
+        this.allapot = "el";
+        this.ujraBelepesek++;
+        this.ut = [];
+        this.ertesit();
+        return [`[Szimulátor] A konzolkábellel csatlakoztál ${this.eszkoz.hostname} soros portjára (ehhez a valóságban oda kell menni a switchhez).`];
+      }
+      const m = /^ssh\s+(?:(\S+)@)?(\d+\.\d+\.\d+\.\d+)$/i.exec(s);
+      if (!m) {
+        if (/^ssh\b/i.test(s)) return ["usage: ssh [-l login_name] [user@]hostname"];
+        return [`[Szimulátor] Itt csak az ssh és a konzol parancs működik; a gép többi parancsához kattints a rajzon a gépre (${this.kapcsolat.honnan.hostname}).`];
+      }
+      const ip = m[2];
+      const h = this.eszkoz.halozat;
+      const ok = h && kezelhetoE(h, this.kapcsolat.honnan, this.eszkoz, ip);
+      if (!ok) return [{ varj: 1500 }, `ssh: connect to host ${ip} port 22: Connection timed out`];
+      this.kapcsolat = { mod: "ssh", honnan: this.kapcsolat.honnan, ip };
+      this.allapot = "el";
+      this.ujraBelepesek++;
+      this.ut = [];
+      this.rosszIdo = null;
+      this.figyelesIndit();
+      this.ertesit();
+      return [`[Szimulátor] Bejelentkezve: ${this.eszkoz.hostname} (${ip}), felhasználó: ${m[1] || "admin"}.`];
+    }
+  };
+
+  // src/gyartok/index.js
+  var GYARTOK = {
+    cisco: { nev: "Cisco", felirat: "IOS-szerű parancssor" },
+    mikrotik: { nev: "MikroTik", felirat: "RouterOS-szerű parancssor" }
+  };
+  function gyartoja(eszkoz) {
+    return eszkoz && eszkoz.gyarto || "cisco";
+  }
+  function munkamenetKeszit(eszkoz, ora, kapcsolat) {
+    if (gyartoja(eszkoz) === "mikrotik") return new RouterOsMunkamenet({ eszkoz, ora, kapcsolat });
+    return new Munkamenet({ szemelyiseg: szemelyiseg(eszkoz), eszkoz, ora });
+  }
+
   // src/nezet/terminal.js
   var OLDAL_SOROK = 23;
   var MAX_SOROK = 1e3;
@@ -6834,7 +8564,7 @@
       this.foglalt = false;
       this.lapozas = null;
       this.doboz = elem("section", "hsz-terminal");
-      this.doboz.setAttribute("aria-label", "IOS-szerű parancssor");
+      this.doboz.setAttribute("aria-label", munkamenet.felirat || "IOS-szerű parancssor");
       this.fej = elem("div", "hsz-terminal__fej");
       this.fejCim = elem("span", "hsz-terminal__cim");
       this.fej.append(elem("span", "hsz-terminal__pottyok"), this.fejCim);
@@ -6859,6 +8589,7 @@
         fel: this.gomb("↑", "Előző parancs", () => this.tortenetLep(-1)),
         le: this.gomb("↓", "Következő parancs", () => this.tortenetLep(1)),
         ctrlz: this.gomb("Ctrl+Z", "Kilépés a konfigurációs módból", () => this.ctrlZ()),
+        ctrlx: this.gomb("Ctrl+X", "Safe Mode be/ki (a változtatások visszavonhatók, ha megszakad a kapcsolat)", () => this.ctrlX()),
         tovabb: this.gomb("Tovább", "Következő oldal (szóköz)", () => this.lapozasLep("oldal")),
         kilep: this.gomb("Kilépés", "A lista vége (q)", () => this.lapozasLep("kilep"))
       };
@@ -6931,7 +8662,8 @@
       const nincs = {
         sugo: this.mm.sugoBillentyu === false,
         tab: this.mm.vanTab === false,
-        ctrlz: this.mm.vanCtrlZ === false
+        ctrlz: this.mm.vanCtrlZ === false,
+        ctrlx: typeof this.mm.ctrlX !== "function"
       };
       for (const [nev, g] of Object.entries(this.gombok)) {
         const lapozoGomb = nev === "tovabb" || nev === "kilep";
@@ -6992,8 +8724,8 @@
     // Lapozás (--More--)
     // -------------------------------------------------------------------------
     /** @private */
-    lapozasIndit(sorok, kesz) {
-      this.lapozas = { sorok: sorok.filter((s) => typeof s === "string"), hol: 0, kesz, more: null };
+    lapozasIndit(sorok2, kesz) {
+      this.lapozas = { sorok: sorok2.filter((s) => typeof s === "string"), hol: 0, kesz, more: null };
       this.lapozasKiir(OLDAL_SOROK);
     }
     /** @private – `db` sor kiírása, utána --More--, vagy vége */
@@ -7048,7 +8780,7 @@
       } else if (k === "Tab") {
         e.preventDefault();
         this.tab();
-      } else if (k === "?" && this.mm.sugoBillentyu !== false) {
+      } else if (k === "?" && this.mm.sugoBillentyu !== false || k === "F1" && this.mm.f1Sugo) {
         e.preventDefault();
         this.sugo();
       } else if (k === "ArrowUp" || ctrl && (k === "p" || k === "P")) {
@@ -7060,6 +8792,9 @@
       } else if (ctrl && (k === "z" || k === "Z")) {
         e.preventDefault();
         this.ctrlZ();
+      } else if (ctrl && (k === "x" || k === "X") && typeof this.mm.ctrlX === "function") {
+        e.preventDefault();
+        this.ctrlX();
       } else if (ctrl && (k === "a" || k === "A")) {
         e.preventDefault();
         this.bevitel.setSelectionRange(0, 0);
@@ -7124,6 +8859,14 @@
       const r = this.mm.ctrlZ();
       this.kiirMind(r.kimenet, false);
     }
+    /** Ctrl+X – (RouterOS) Safe Mode be/ki; a beírás alatt álló sor megmarad. */
+    ctrlX() {
+      if (this.foglalt || typeof this.mm.ctrlX !== "function") return;
+      const r = this.mm.ctrlX();
+      for (const sor2 of r.kimenet) this.kiirSor(sor2);
+      this.frissitPrompt();
+      this.fokusz();
+    }
     /** Előzmények: -1 = régebbi, +1 = újabb. */
     tortenetLep(irany) {
       if (this.foglalt) return;
@@ -7164,9 +8907,9 @@
     return adat && adat.feliratok || [];
   }
   function swPortHely(p) {
-    const sorszam = Number(p.szam.split("/")[1]);
+    const sorszam = p.szam.includes("/") ? Number(p.szam.split("/")[1]) : Number(p.szam);
     const kezdX = 82;
-    if (p.tipus === "FastEthernet") {
+    if (p.tipus === "FastEthernet" || p.tipus === "ether") {
       const oszlop = Math.floor((sorszam - 1) / 2);
       const csoport = Math.floor(oszlop / 6);
       return {
@@ -7181,6 +8924,20 @@
       sorszam
     };
   }
+  function mtPortLeiras(sw, p) {
+    if (p.leallitva) return `${p.nev} – letiltva (disabled)`;
+    const hp = hidPortja(sw, p.nev);
+    const hid = hp && hidKeres(sw, hp.hid);
+    let leiras = p.fent ? "működik" : "nincs kábel";
+    if (!hid) leiras += ", nincs bridge-ben";
+    else if (!hid.vlanSzures) leiras += `, ${hid.nev} (VLAN-szűrés nélkül)`;
+    else {
+      const cimkes = sw.hidVlanok.filter((s) => !s.letiltva && s.hid === hid.nev && s.cimkezett.includes(p.nev)).map((s) => s.vlanok);
+      leiras += `, PVID ${hp.pvid}`;
+      if (cimkes.length) leiras += `, címkézett (trunk): ${cimkes.join(", ")}`;
+    }
+    return `${p.nev} – ${leiras}`;
+  }
   var Topologia = class {
     /**
      * @param {HTMLElement} szulo
@@ -7191,7 +8948,7 @@
     constructor(szulo, { elemek, halozat, meret, feliratok }, beallitasok = {}) {
       this.elemek = elemek;
       this.halozat = halozat;
-      this.vanVtp = elemek.filter((e) => e.tipus === "switch").length > 1;
+      this.vanVtp = elemek.filter((e) => e.tipus === "switch" && e.eszkoz.gyarto !== "mikrotik").length > 1;
       this.vanSwitch = elemek.some((e) => e.tipus === "switch");
       this.vanRouter = elemek.some((e) => e.tipus === "router");
       this.vanSoros = halozat.kabelek.some((k) => k.soros);
@@ -7251,7 +9008,7 @@
       const n = SW.nagyitas;
       const kulso = svg("g", { class: "hsz-eszkoz" });
       this.kattinthato(kulso, eszkoz, `Switch: ${eszkoz.hostname} – kattints, és írj a parancssorába`);
-      const g = svg("g", { transform: `translate(${x} ${y}) scale(${n})` });
+      const g = svg("g", { transform: `translate(${x} ${y}) scale(${n})`, class: eszkoz.gyarto === "mikrotik" ? "hsz-switch--mt" : "" });
       g.append(svg("rect", { x: 0, y: 0, width: SW.szel, height: SW.mag, rx: 10, class: "hsz-eszkoz__haz" }));
       g.append(svg("rect", { x: 8, y: 8, width: SW.szel - 16, height: SW.mag - 16, rx: 6, class: "hsz-eszkoz__elolap" }));
       g.append(svg("circle", { cx: 28, cy: 34, r: 5, class: "hsz-led hsz-led--be" }));
@@ -7268,8 +9025,9 @@
         pg.append(svg("rect", { x: h.x + 6, y: h.y + SW.portMag - 6, width: SW.portSzel - 12, height: 4, class: "hsz-port__nyelv" }));
         const led = svg("rect", { x: h.x + 5, y: h.y - 7, width: SW.portSzel - 10, height: 4, rx: 1, class: "hsz-led" });
         pg.append(led);
-        const felul = p.tipus === "FastEthernet" && h.sorszam % 2 === 1;
-        const szam = p.tipus === "FastEthernet" ? String(h.sorszam) : `G${h.sorszam}`;
+        const also = p.tipus === "FastEthernet" || p.tipus === "ether";
+        const felul = also && h.sorszam % 2 === 1;
+        const szam = also ? String(h.sorszam) : p.tipus === "sfp-sfpplus" ? `S${h.sorszam}` : `G${h.sorszam}`;
         pg.append(svg("text", { x: h.x + SW.portSzel / 2, y: felul ? h.y - 10 : h.y + SW.portMag + 11, class: "hsz-eszkoz__apro hsz-kozep" }, szam));
         g.append(pg);
         portok.set(p.nev, {
@@ -7282,7 +9040,7 @@
       }
       const felirat = svg("text", { x, y: y - 9, class: "hsz-eszkoz__nev" });
       const nev = svg("tspan");
-      const tipus = svg("tspan", { class: "hsz-eszkoz__tipus", dx: 8 }, "2960-24 jellegű switch");
+      const tipus = svg("tspan", { class: "hsz-eszkoz__tipus", dx: 8 }, eszkoz.gyarto === "mikrotik" ? "CRS326 jellegű switch" : "2960-24 jellegű switch");
       felirat.append(nev, tipus);
       kulso.append(g, felirat);
       this.eszkozReteg.append(kulso);
@@ -7415,17 +9173,21 @@
           continue;
         }
         if (r.tipus === "router") {
-          const sorok = eszkoz.portok.filter((p) => p.ip || p.ipv6.length).map((p) => {
+          const sorok2 = eszkoz.portok.filter((p) => p.ip || p.ipv6.length).map((p) => {
             const allapot3 = p.leallitva ? "shutdown" : p.fent || p.tipus === "Loopback" ? "működik" : "nincs link";
             return `${p.rovid}: ${[p.ip, ...p.ipv6.map((c) => `${c.cim}/${c.hossz}`)].filter(Boolean).join(", ")} (${allapot3})`;
           });
-          r.cim.textContent = [`${eszkoz.hostname} – router`, ...sorok].join("\n");
+          r.cim.textContent = [`${eszkoz.hostname} – router`, ...sorok2].join("\n");
           continue;
         }
         for (const p of eszkoz.portok) {
           const pe = r.portok.get(p.nev);
           pe.pg.classList.toggle("hsz-port--lekapcsolva", p.leallitva);
           pe.led.classList.toggle("hsz-led--be", p.fent);
+          if (eszkoz.gyarto === "mikrotik") {
+            pe.cim.textContent = mtPortLeiras(eszkoz, p);
+            continue;
+          }
           let allapot3;
           if (p.leallitva) allapot3 = "lekapcsolva (shutdown)";
           else if (p.fent) allapot3 = uzemmod(eszkoz, p) === "trunk" ? "működik, trunk" : `működik, VLAN ${p.accessVlan}`;
@@ -7704,10 +9466,134 @@
     }
   };
 
-  // src/feladat/ellenorzo.js
+  // src/feladat/ellenorzo-mikrotik.js
   var aVlan = (n) => `${nevelo(n)} ${esRag(n)}`;
   var AVlan = (n) => {
     const t = aVlan(n);
+    return t[0].toUpperCase() + t.slice(1);
+  };
+  function sorok(sw, vlan) {
+    return sw.hidVlanok.filter((s) => !s.letiltva && sorVlanjai(s).includes(vlan));
+  }
+  function portHid(sw, portNev) {
+    const p = sw.portok.find((x) => x.nev === portNev);
+    const hp = hidPortja(sw, portNev);
+    if (!hp) return { hiba: `${portNev} nincs a bridge-ben` };
+    const hid = hidKeres(sw, hp.hid);
+    if (!hid) return { hiba: `${portNev} egy nem létező bridge-hez (${hp.hid}) tartozik` };
+    return { p, hp, hid };
+  }
+  function cimkezettVlanok(sw, hid, portNev) {
+    const v = [];
+    for (const s of sw.hidVlanok) {
+      if (s.letiltva || s.hid !== hid.nev || !s.cimkezett.includes(portNev)) continue;
+      for (const n of sorVlanjai(s)) if (!v.includes(n)) v.push(n);
+    }
+    return v.sort((a, b) => a - b);
+  }
+  var MT_CELOK = {
+    "hid-port"(f, c) {
+      const sw = f.eszkoz(c.eszkoz);
+      const hp = hidPortja(sw, c.port);
+      if (!hp) return { ok: false, megjegyzes: `${c.port} nincs a bridge-ben.` };
+      const hibak = [];
+      if (c.pvid !== void 0 && hp.pvid !== c.pvid) hibak.push(`a PVID most ${hp.pvid} (${c.pvid} kellene)`);
+      if (c.kerettipus && hp.kerettipus !== c.kerettipus) hibak.push(`frame-types most ${hp.kerettipus} (${c.kerettipus} kellene)`);
+      if (hibak.length) return { ok: false, megjegyzes: hibak.join("; ") + "." };
+      return { ok: true, megjegyzes: `${c.port}: PVID ${hp.pvid}, ${hp.kerettipus}.` };
+    },
+    "hid-vlan"(f, c) {
+      const sw = f.eszkoz(c.eszkoz);
+      const s = sorok(sw, c.vlan);
+      const cimkes = new Set(s.flatMap((x) => x.cimkezett));
+      const cimke = new Set(s.flatMap((x) => x.cimkezetlen));
+      const hiany = [
+        ...(c.tagged || []).filter((n) => !cimkes.has(n)).map((n) => `${n} (tagged)`),
+        ...(c.untagged || []).filter((n) => !cimke.has(n)).map((n) => `${n} (untagged)`)
+      ];
+      if (!s.length) return { ok: false, megjegyzes: `${AVlan(c.vlan)} VLAN nincs a VLAN-táblában.` };
+      if (hiany.length) return { ok: false, megjegyzes: `${AVlan(c.vlan)} VLAN-ból hiányzik: ${hiany.join(", ")}.` };
+      return { ok: true, megjegyzes: `${c.vlan}: tagged ${[...cimkes].join(",") || "–"}, untagged ${[...cimke].join(",") || "–"}.` };
+    },
+    "vlan-szures"(f, c) {
+      const sw = f.eszkoz(c.eszkoz);
+      const be = sw.hidak.some((h) => h.vlanSzures && !h.letiltva);
+      const kell = c.be !== false;
+      return be === kell ? { ok: true, megjegyzes: `A VLAN-szűrés ${be ? "be" : "ki"} van kapcsolva.` } : { ok: false, megjegyzes: `A VLAN-szűrés most ${be ? "be" : "ki"} van kapcsolva (${kell ? "be" : "ki"} kellene).` };
+    },
+    "kezelo-ip"(f, c) {
+      const sw = f.eszkoz(c.eszkoz);
+      const [cim, hossz] = c.ip.split("/");
+      const ip = sw.ipCimek.find((x) => x.cim === cim && !x.letiltva);
+      if (!ip) return { ok: false, megjegyzes: `${c.eszkoz}-nek nincs ${cim} címe.` };
+      const hibak = [];
+      if (String(ip.hossz) !== hossz) hibak.push(`az előtaghossz most /${ip.hossz} (/${hossz} kellene)`);
+      const v = sw.vlanIfek.find((x) => x.nev === ip.interfesz);
+      if (!v) hibak.push(`a cím a(z) ${ip.interfesz} interfészen van, nem egy VLAN-interfészen`);
+      else {
+        if (v.vlanId !== c.vlan) hibak.push(`a(z) ${v.nev} VLAN-interfész most a ${v.vlanId}-es VLAN-ban van (${c.vlan} kellene)`);
+        if (!l3Kapcsolat(sw, v.nev)) hibak.push(`a(z) ${v.nev} nem egy működő bridge-en van (vagy le van tiltva)`);
+      }
+      if (hibak.length) return { ok: false, megjegyzes: hibak.join("; ") + "." };
+      return { ok: true, megjegyzes: `${c.ip} a(z) ${v.nev} interfészen (VLAN ${v.vlanId}).` };
+    },
+    vlan(f, c) {
+      const sw = f.eszkoz(c.eszkoz);
+      const s = sorok(sw, c.vlan);
+      if (!s.length) return { ok: false, megjegyzes: `${AVlan(c.vlan)} VLAN nincs a bridge VLAN-táblájában (${c.eszkoz}).` };
+      if (c.nev && !s.some((x) => x.komment === c.nev)) {
+        const most5 = s.map((x) => x.komment || "(nincs)").join(", ");
+        return { ok: false, megjegyzes: `A VLAN-tábla sorának megjegyzése (comment) most: ${most5} (${c.nev} kellene; kis- és nagybetű számít).` };
+      }
+      return { ok: true, megjegyzes: `Megvan: ${c.vlan}${c.nev ? ` (${c.nev})` : ""}` };
+    },
+    "access-port"(f, c) {
+      const sw = f.eszkoz(c.eszkoz);
+      const ph = portHid(sw, c.port);
+      if (ph.hiba) return { ok: false, megjegyzes: `${ph.hiba}.` };
+      const { p, hp, hid } = ph;
+      const hibak = [];
+      if (hp.pvid !== c.vlan) hibak.push(`a PVID most ${hp.pvid} (${c.vlan} kellene)`);
+      if (hp.kerettipus !== "admit-only-untagged-and-priority-tagged") hibak.push(`a port most ${hp.kerettipus === "admit-all" ? "címkés keretet is fogad" : "csak címkés keretet fogad"} (frame-types=${hp.kerettipus})`);
+      const cimkes = cimkezettVlanok(sw, hid, c.port);
+      if (cimkes.length) hibak.push(`a port címkézett (tagged) tag is ebben: ${cimkes.join(", ")}`);
+      if (!hid.vlanSzures) hibak.push(`a ${hid.nev} bridge-en nincs bekapcsolva a VLAN-szűrés (vlan-filtering), így a PVID még nem számít`);
+      if (p.leallitva) hibak.push("a port le van tiltva (disabled)");
+      if (hibak.length) return { ok: false, megjegyzes: hibak.join("; ") + "." };
+      return { ok: true, megjegyzes: `access, PVID ${c.vlan}` };
+    },
+    trunk(f, c) {
+      const sw = f.eszkoz(c.eszkoz);
+      const p = sw.portok.find((x) => x.nev === c.port);
+      if (!p.fent) return { ok: false, megjegyzes: `Nincs link a(z) ${p.nev} porton (le van tiltva?).` };
+      const tul = sw.halozat.szomszed(sw, p);
+      const vegek = [[sw, p], [tul.eszkoz, tul.port]];
+      const hibak = [];
+      const leirasok = [];
+      for (const [e, pp] of vegek) {
+        if (e.gyarto !== "mikrotik") continue;
+        const ph = portHid(e, pp.nev);
+        if (ph.hiba) {
+          hibak.push(`${e.hostname}: ${ph.hiba}`);
+          continue;
+        }
+        const cimkes = cimkezettVlanok(e, ph.hid, pp.nev);
+        const kell = (c.vlanok || []).map(Number);
+        const hiany = kell.filter((v) => !cimkes.includes(v));
+        if (!ph.hid.vlanSzures) hibak.push(`${e.hostname}: nincs bekapcsolva a VLAN-szűrés`);
+        if (hiany.length) hibak.push(`${e.hostname} ${pp.nev}: nem címkézett tagja ennek: ${hiany.join(", ")}`);
+        else if (!cimkes.length) hibak.push(`${e.hostname} ${pp.nev}: egyetlen VLAN-nak sem címkézett tagja`);
+        leirasok.push(`${e.hostname}: ${cimkes.join(", ") || "–"}`);
+      }
+      if (hibak.length) return { ok: false, megjegyzes: `Nem működik trunkként (${hibak.join("; ")}).` };
+      return { ok: true, megjegyzes: `Mindkét vég címkézett tagja (${leirasok.join("; ")}).` };
+    }
+  };
+
+  // src/feladat/ellenorzo.js
+  var aVlan2 = (n) => `${nevelo(n)} ${esRag(n)}`;
+  var AVlan2 = (n) => {
+    const t = aVlan2(n);
     return t[0].toUpperCase() + t.slice(1);
   };
   var MOD_SZOVEG2 = { access: "access", trunk: "trunk", "dinamikus-auto": "dynamic auto", "dinamikus-kezdemenyezo": "dynamic desirable" };
@@ -7718,26 +9604,34 @@
     return Array.isArray(k) ? ipv6Szoveg(k) : ipSzoveg(k);
   }
   var ALLAPOT_CELOK = {
+    /** A MikroTik-switch kezelő IP-címe egy VLAN-interfészen (lásd ellenorzo-mikrotik.js). */
+    "kezelo-ip": (f, c) => MT_CELOK["kezelo-ip"](f, c),
+    "hid-port": (f, c) => MT_CELOK["hid-port"](f, c),
+    "hid-vlan": (f, c) => MT_CELOK["hid-vlan"](f, c),
+    "vlan-szures": (f, c) => MT_CELOK["vlan-szures"](f, c),
     vlan(f, c) {
       const sw = f.eszkoz(c.eszkoz);
+      if (sw.gyarto === "mikrotik") return MT_CELOK.vlan(f, c);
       const v = sw.vlanok[c.vlan];
-      if (!v) return { ok: false, megjegyzes: `${AVlan(c.vlan)} VLAN nincs létrehozva (${c.eszkoz}).` };
+      if (!v) return { ok: false, megjegyzes: `${AVlan2(c.vlan)} VLAN nincs létrehozva (${c.eszkoz}).` };
       if (c.nev && v.nev !== c.nev) return { ok: false, megjegyzes: `A VLAN neve most: ${v.nev} (${c.nev} kellene).` };
       return { ok: true, megjegyzes: `Megvan: ${c.vlan} ${v.nev}` };
     },
     "access-port"(f, c) {
       const sw = f.eszkoz(c.eszkoz);
+      if (sw.gyarto === "mikrotik") return MT_CELOK["access-port"](f, c);
       const p = portKeres(sw, c.port);
       const hibak = [];
       if (p.mod !== "access") hibak.push(`a port üzemmódja most ${MOD_SZOVEG2[p.mod]} (access kellene)`);
-      if (p.accessVlan !== c.vlan) hibak.push(`a port most ${aVlan(p.accessVlan)} VLAN-ban van`);
-      else if (!sw.vlanok[c.vlan]) hibak.push(`${aVlan(c.vlan)} VLAN nem létezik ezen a switchen`);
+      if (p.accessVlan !== c.vlan) hibak.push(`a port most ${aVlan2(p.accessVlan)} VLAN-ban van`);
+      else if (!sw.vlanok[c.vlan]) hibak.push(`${aVlan2(c.vlan)} VLAN nem létezik ezen a switchen`);
       if (p.leallitva) hibak.push("a port le van kapcsolva (shutdown)");
       if (hibak.length) return { ok: false, megjegyzes: hibak.join("; ") + "." };
       return { ok: true, megjegyzes: `access, VLAN ${c.vlan}` };
     },
     trunk(f, c) {
       const sw = f.eszkoz(c.eszkoz);
+      if (sw.gyarto === "mikrotik") return MT_CELOK.trunk(f, c);
       const p = portKeres(sw, c.port);
       if (!p.fent) return { ok: false, megjegyzes: `Nincs link a(z) ${rovid3(p.nev)} porton (le van kapcsolva?).` };
       const tul = sw.halozat.szomszed(sw, p);
@@ -7753,8 +9647,8 @@
     "vlan-nincs"(f, c) {
       const sw = f.eszkoz(c.eszkoz);
       const v = sw.vlanok[c.vlan];
-      if (v) return { ok: false, megjegyzes: `${AVlan(c.vlan)} VLAN (${v.nev}) megvan ezen: ${c.eszkoz}, pedig itt nem szabadna lennie.` };
-      return { ok: true, megjegyzes: `${AVlan(c.vlan)} VLAN nincs ezen: ${c.eszkoz} – ahogy kell.` };
+      if (v) return { ok: false, megjegyzes: `${AVlan2(c.vlan)} VLAN (${v.nev}) megvan ezen: ${c.eszkoz}, pedig itt nem szabadna lennie.` };
+      return { ok: true, megjegyzes: `${AVlan2(c.vlan)} VLAN nincs ezen: ${c.eszkoz} – ahogy kell.` };
     },
     vtp(f, c) {
       const sw = f.eszkoz(c.eszkoz);
@@ -8066,7 +9960,7 @@
   function modSzint(mod) {
     return mod in MOD_SZINT ? MOD_SZINT[mod] : 3;
   }
-  var ATMENETI = ["kivalasztva", "mod", "parancs"];
+  var ATMENETI = ["kivalasztva", "mod", "parancs", "safe-mode", "kapcsolat"];
   function atmeneti(lepes) {
     const k = Array.isArray(lepes.kesz) ? lepes.kesz : [lepes.kesz];
     return k.every((c) => ATMENETI.includes(c.tipus));
@@ -8115,6 +10009,16 @@
           return parancsIllik(k.utolsoParancs(c.eszkoz), c.szavak) && !(k.foglalt && k.foglalt(c.eszkoz));
         case "ellenorzes":
           return !!k.ellenorzesKesz();
+        case "safe-mode": {
+          const mm = k.munkamenet(c.eszkoz);
+          return !!mm && !!mm.safeMode === (c.be !== false);
+        }
+        case "kapcsolat": {
+          const mm = k.munkamenet(c.eszkoz);
+          if (!mm || mm.allapot !== c.allapot) return false;
+          if (c.ujra && !mm.ujraBelepesek) return false;
+          return !c.ip || mm.kapcsolat && mm.kapcsolat.ip === c.ip;
+        }
         default: {
           const e = allapotCel(k.f, c);
           return !!(e && e.ok);
@@ -8444,10 +10348,10 @@
       const pc = this.eszkoz;
       const kapcsolo = (arg[0] || "").toLowerCase();
       if (kapcsolo === "-a" || kapcsolo === "-g") {
-        const sorok = Object.entries(pc.arpTabla);
-        if (sorok.length === 0) return ["No ARP Entries Found.", ""];
+        const sorok2 = Object.entries(pc.arpTabla);
+        if (sorok2.length === 0) return ["No ARP Entries Found.", ""];
         const s = ["", `Interface: ${pc.ip || "0.0.0.0"} --- 0x2`, "  Internet Address      Physical Address      Type"];
-        for (const [ip, b] of sorok) s.push(`  ${ip.padEnd(22)}${macKotojeles(b.mac).toLowerCase().padEnd(22)}dynamic`);
+        for (const [ip, b] of sorok2) s.push(`  ${ip.padEnd(22)}${macKotojeles(b.mac).toLowerCase().padEnd(22)}dynamic`);
         s.push("");
         return s;
       }
@@ -8823,7 +10727,7 @@
       this.osszegzes.className = "hsz-panel__osszegzes";
       this.lista.textContent = "";
       this.lista.hidden = false;
-      const sorok = this.f.feladat.celok.map((c) => {
+      const sorok2 = this.f.feladat.celok.map((c) => {
         const li = elem4("li", "hsz-cel hsz-cel--var");
         const jel = elem4("span", "hsz-cel__jel", "·");
         jel.setAttribute("aria-hidden", "true");
@@ -8841,13 +10745,13 @@
       ellenoriz(this.f, {
         szunet: PROBA_SZUNET,
         indul: (i) => {
-          sorok[i].li.className = "hsz-cel hsz-cel--fut";
-          sorok[i].jel.textContent = "…";
-          sorok[i].allapot.textContent = "fut";
-          if (sorok[i].li.scrollIntoView) sorok[i].li.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          sorok2[i].li.className = "hsz-cel hsz-cel--fut";
+          sorok2[i].jel.textContent = "…";
+          sorok2[i].allapot.textContent = "fut";
+          if (sorok2[i].li.scrollIntoView) sorok2[i].li.scrollIntoView({ block: "nearest", behavior: "smooth" });
         },
         lepes: (i, e) => {
-          const s = sorok[i];
+          const s = sorok2[i];
           s.li.className = `hsz-cel ${e.ok ? "hsz-cel--ok" : "hsz-cel--hiba"}`;
           s.jel.textContent = e.ok ? "✔" : "✘";
           s.allapot.textContent = e.ok ? "teljesült" : "nem teljesült";
@@ -9007,13 +10911,23 @@
     if (!azon) return lista3[0] || null;
     return lista3.find((f) => f.azon === azon) || null;
   }
+  function feladatGyartok(feladat) {
+    return [feladat.gyarto || "cisco", ...Object.keys(feladat.gyartok || {})];
+  }
+  function gyartoValtozat(feladat, gyarto) {
+    const { gyartok, ...alap } = feladat;
+    if (!gyartok || !gyartok[gyarto]) return alap;
+    return { ...alap, ...gyartok[gyarto], gyarto, azon: feladat.azon };
+  }
   function feladatBetolt(feladat, beallitasok = {}) {
     const halozat = new Halozat(beallitasok);
     const nevek = /* @__PURE__ */ new Map();
     const elemek = [];
     for (const e of feladat.topologia.eszkozok) {
       let eszkoz;
-      if (e.tipus === "switch") eszkoz = ujSwitch2960({ hostname: e.nev });
+      const gyarto = e.gyarto || feladat.gyarto || "cisco";
+      if (e.tipus === "switch" && gyarto === "mikrotik") eszkoz = ujCrs326({ hostname: e.nev });
+      else if (e.tipus === "switch") eszkoz = ujSwitch2960({ hostname: e.nev });
       else if (e.tipus === "pc") eszkoz = ujPc({ nev: e.nev });
       else if (e.tipus === "router") eszkoz = ujRouter4331({ hostname: e.nev });
       else throw new Error(`Ismeretlen eszköztípus: ${e.tipus}`);
@@ -9029,6 +10943,10 @@
       }
       if (eszkoz.tipus === "router") {
         routerBeallit(eszkoz, beall2);
+        continue;
+      }
+      if (eszkoz.gyarto === "mikrotik") {
+        if (beall2.hostname) eszkoz.hostname = beall2.hostname;
         continue;
       }
       if (beall2.hostname) eszkoz.hostname = beall2.hostname;
@@ -9180,7 +11098,7 @@
   }
 
   // src/fo.js
-  var VERZIO = true ? "0.9.0" : "fejlesztői";
+  var VERZIO = true ? "0.10.0" : "fejlesztői";
   var HIBAJELENTO = "https://routerrantotta.hu/otlet.html";
   var ANIM_KESLELTETES = 260;
   var SEBESSEGEK = [
@@ -9210,11 +11128,13 @@
     let azon = beallitasok.feladat;
     let mod = beallitasok.mod;
     let kezdoMag = beallitasok.mag;
+    let gyarto = beallitasok.gyarto || "cisco";
     try {
       const p = new URLSearchParams(window.location.search);
       azon = p.get("feladat") || azon;
       mod = p.get("mod") || mod;
       if (p.get("mag")) kezdoMag = p.get("mag");
+      if (GYARTOK[p.get("gyarto")]) gyarto = p.get("gyarto");
     } catch (e) {
     }
     kezdoMag = ervenyesMag(kezdoMag) ? Number(kezdoMag) : null;
@@ -9229,8 +11149,9 @@
     gyoker.append(kisKepernyo);
     const lista3 = feladatLista();
     let aktualis = null;
-    let fut2 = null;
+    let fut3 = null;
     let mag = null;
+    const aktivGyarto = (f) => feladatGyartok(f).includes(gyarto) ? gyarto : feladatGyartok(f)[0];
     const valtozatLink = () => {
       try {
         const url = new URL(window.location.href);
@@ -9238,26 +11159,28 @@
         url.searchParams.set("mod", mod);
         if (mag !== null) url.searchParams.set("mag", String(mag));
         else url.searchParams.delete("mag");
+        if (aktualis && feladatGyartok(aktualis).length > 1) url.searchParams.set("gyarto", aktivGyarto(aktualis));
+        else url.searchParams.delete("gyarto");
         return url.toString();
       } catch (e) {
         return "";
       }
     };
     const betolt = (feladat, ujMod = mod, ujMagErtek) => {
-      if (fut2) fut2.leallit();
+      if (fut3) fut3.leallit();
       tartalom.textContent = "";
       aktualis = feladat;
       mod = ujMod;
       if (mod === "oktato" || !feladat.valtozok) mag = null;
       else mag = ujMagErtek !== void 0 && ujMagErtek !== null ? ujMagErtek : ujMag();
-      fut2 = feladatInditas(tartalom, feladatValtozat(feladat, mag), mod, valtozatLink, sebessegKezelo, hibajelento);
-      if (valaszto) valaszto.igazit(feladat, mod);
+      fut3 = feladatInditas(tartalom, feladatValtozat(gyartoValtozat(feladat, aktivGyarto(feladat)), mag), mod, valtozatLink, sebessegKezelo, hibajelento);
+      if (valaszto) valaszto.igazit(feladat, mod, aktivGyarto(feladat));
       try {
         window.history.replaceState(null, "", valtozatLink());
       } catch (e) {
       }
     };
-    const mehet = (kerdes) => !fut2 || !fut2.piszkos || window.confirm(kerdes);
+    const mehet = (kerdes) => !fut3 || !fut3.piszkos || window.confirm(kerdes);
     const valaszto = lista3.length ? feladatValaszto(lista3, {
       feladat: (f) => {
         if (!mehet("Másik feladatra váltasz? Az eddigi beállítások elvesznek.")) return false;
@@ -9277,6 +11200,13 @@
       ujValtozat: () => {
         if (!mehet("Új változatot kérsz (más számokkal és nevekkel)? Az eddigi beállítások elvesznek.")) return;
         betolt(aktualis, mod);
+      },
+      gyarto: (g) => {
+        if (g === aktivGyarto(aktualis)) return true;
+        if (!mehet(`${GYARTOK[g].nev} eszközökre váltasz? A feladat újraindul, az eddigi beállítások elvesznek.`)) return false;
+        gyarto = g;
+        betolt(aktualis, mod, mag);
+        return true;
       }
     }) : null;
     if (valaszto) gyoker.append(valaszto.doboz);
@@ -9294,35 +11224,45 @@
       get mag() {
         return mag;
       },
+      get gyarto() {
+        return aktivGyarto(aktualis);
+      },
+      /** Gyártó váltása (a feladat újraindul). */
+      gyartoValt: (g) => {
+        if (GYARTOK[g]) {
+          gyarto = g;
+          betolt(aktualis, mod, mag);
+        }
+      },
       /** Mód váltása (a feladat újraindul). */
       modValt: (m, ujM) => {
         if (MODOK2[m]) betolt(aktualis, m, ujM);
       },
       get panel() {
-        return fut2.panel;
+        return fut3.panel;
       },
       get feladat() {
-        return fut2.feladat;
+        return fut3.feladat;
       },
       get halozat() {
-        return fut2.halozat;
+        return fut3.halozat;
       },
       get ora() {
-        return fut2.ora;
+        return fut3.ora;
       },
       get nezetek() {
-        return fut2.nezetek;
+        return fut3.nezetek;
       },
       get eszkoz() {
-        return fut2.eszkoz;
+        return fut3.eszkoz;
       },
       get munkamenet() {
-        return fut2.munkamenet;
+        return fut3.munkamenet;
       },
       get terminal() {
-        return fut2.terminal;
+        return fut3.terminal;
       },
-      valaszt: (e, fokusz) => fut2.valaszt(e, fokusz)
+      valaszt: (e, fokusz) => fut3.valaszt(e, fokusz)
     };
   }
   function feladatValaszto(lista3, h) {
@@ -9338,6 +11278,13 @@
     };
     const tipusSel = mezo("Feladattípus");
     const feladatSel = mezo("Feladat");
+    const gyartoSel = mezo("Gyártó");
+    const gyartoMezo = gyartoSel.parentElement;
+    gyartoSel.title = "Melyik gyártó eszközein (és parancssorában) oldod meg a feladatot";
+    let aktGyarto = null;
+    gyartoSel.addEventListener("change", () => {
+      if (!h.gyarto(gyartoSel.value)) gyartoSel.value = aktGyarto;
+    });
     const modMezo = elem5("div", "hsz-valaszto__mezo");
     const modCim = elem5("span", "", "Mód");
     modCim.id = `hsz-mod-${Math.random().toString(36).slice(2, 8)}`;
@@ -9389,8 +11336,14 @@
     });
     return {
       doboz,
-      /** A választó beállítása az éppen futó feladatra és módra. */
-      igazit(f, mod) {
+      /** A választó beállítása az éppen futó feladatra, módra és gyártóra. */
+      igazit(f, mod, gy) {
+        const gyartok = feladatGyartok(f);
+        gyartoSel.textContent = "";
+        for (const g of gyartok) gyartoSel.append(new Option(GYARTOK[g] ? GYARTOK[g].nev : g, g));
+        gyartoSel.value = gy;
+        aktGyarto = gy;
+        gyartoMezo.hidden = gyartok.length < 2;
         for (const [kulcs2, g] of Object.entries(gombok)) {
           g.setAttribute("aria-pressed", String(kulcs2 === mod));
           g.classList.toggle("hsz-modgomb--aktiv", kulcs2 === mod);
@@ -9615,7 +11568,7 @@
       for (const n of nezetek.values()) n.cimFrissit();
       if (bemutato) bemutato.frissit();
     };
-    for (const { eszkoz, tipus } of f.elemek) {
+    for (const { eszkoz, tipus, nev } of f.elemek) {
       const ful = elem5("button", "hsz-ful");
       ful.type = "button";
       ful.setAttribute("role", "tab");
@@ -9624,15 +11577,19 @@
       let n;
       if (tipus === "switch" || tipus === "router") {
         const doboz = elem5("div", "hsz-nezet");
-        const munkamenet = new Munkamenet({ szemelyiseg: szemelyiseg(eszkoz), eszkoz, ora });
+        const kez = feladat.kezeles && feladat.kezeles[nev];
+        const munkamenet = munkamenetKeszit(eszkoz, ora, kez ? { mod: "ssh", honnan: f.eszkoz(kez.honnan), ip: kez.ip } : void 0);
         const terminal = new Terminal(doboz, munkamenet, {
           parancsUtan: (sor2) => {
-            utolsoParancs.set(eszkoz, sor2);
+            utolsoParancs.set(eszkoz, munkamenet.utolsoKanonikus || sor2);
             jelzoFrissit(sor2);
             if (bemutato) setTimeout(bemutato.frissit, 0);
           }
         });
         munkamenet.figyel(frissitMind);
+        munkamenet.figyel(() => {
+          if (!terminal.foglalt) terminal.frissitPrompt();
+        });
         nezetHely.append(doboz);
         n = {
           doboz,
@@ -9642,7 +11599,7 @@
             doboz.hidden = !l;
           },
           cimFrissit: () => {
-            terminal.cim(`${eszkoz.hostname} – konzol`);
+            terminal.cim(munkamenet.fejlec ? munkamenet.fejlec() : `${eszkoz.hostname} – konzol`);
             ful.textContent = eszkoz.hostname;
           }
         };
@@ -9705,7 +11662,9 @@
       bemutato.indit();
     }
     const lab = elem5("div", "hsz-lab");
-    const verzio = elem5("span", "", `IOS-szerű parancssor · Haloszim v${VERZIO.replace(/\.0$/, "")}`);
+    const gyartokItt = [...new Set(f.elemek.filter((x) => x.tipus !== "pc").map((x) => x.eszkoz.gyarto || "cisco"))];
+    const felirat = (gyartokItt.length ? gyartokItt : ["cisco"]).map((g) => GYARTOK[g].felirat).join(" · ");
+    const verzio = elem5("span", "", `${felirat} · Haloszim v${VERZIO.replace(/\.0$/, "")}`);
     lab.append(verzio, jelzo);
     gyoker.append(lab);
     const elso = nezetek.get(f.elemek[0].eszkoz);

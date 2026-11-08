@@ -8,6 +8,7 @@
 
 import { Halozat } from '../mag/halozat.js';
 import { ujSwitch2960 } from '../modell/switch.js';
+import { ujCrs326 } from '../modell/mikrotik.js';
 import { ujPc } from '../modell/pc.js';
 import { ipBeallit } from '../mag/vegpont.js';
 import { vtpIdozitoIndit } from '../mag/vtp.js';
@@ -30,6 +31,26 @@ export function feladatKeres(azon) {
 }
 
 /**
+ * A feladat gyártói (a gyártóváltóhoz): a feladat saját gyártója (alapból Cisco), és a „gyartok”
+ * mezőben leírt további változatok, pl. gyartok: { mikrotik: { lepesek, bemutato, celok, … } }.
+ * @returns {string[]}
+ */
+export function feladatGyartok(feladat) {
+  return [feladat.gyarto || 'cisco', ...Object.keys(feladat.gyartok || {})];
+}
+
+/**
+ * A feladat egy gyártóra szabott változata: a „gyartok[gyarto]” mezői felülírják az alapokat
+ * (pl. más teendők, bemutató, portnevek), az eszközök pedig ennek a gyártónak a modelljei lesznek.
+ * Ismeretlen gyártónál az alapváltozat.
+ */
+export function gyartoValtozat(feladat, gyarto) {
+  const { gyartok, ...alap } = feladat;
+  if (!gyartok || !gyartok[gyarto]) return alap;
+  return { ...alap, ...gyartok[gyarto], gyarto, azon: feladat.azon };
+}
+
+/**
  * @typedef {Object} BetoltottFeladat
  * @property {Object} feladat
  * @property {import('../mag/halozat.js').Halozat} halozat
@@ -49,7 +70,10 @@ export function feladatBetolt(feladat, beallitasok = {}) {
   const elemek = [];
   for (const e of feladat.topologia.eszkozok) {
     let eszkoz;
-    if (e.tipus === 'switch') eszkoz = ujSwitch2960({ hostname: e.nev });
+    // A gyártó az eszköznél vagy az egész feladatra adható meg (gyarto: 'mikrotik'); alapból Cisco.
+    const gyarto = e.gyarto || feladat.gyarto || 'cisco';
+    if (e.tipus === 'switch' && gyarto === 'mikrotik') eszkoz = ujCrs326({ hostname: e.nev });
+    else if (e.tipus === 'switch') eszkoz = ujSwitch2960({ hostname: e.nev });
     else if (e.tipus === 'pc') eszkoz = ujPc({ nev: e.nev });
     else if (e.tipus === 'router') eszkoz = ujRouter4331({ hostname: e.nev });
     else throw new Error(`Ismeretlen eszköztípus: ${e.tipus}`);
@@ -69,6 +93,11 @@ export function feladatBetolt(feladat, beallitasok = {}) {
     }
     if (eszkoz.tipus === 'router') {
       routerBeallit(eszkoz, beall);
+      continue;
+    }
+    if (eszkoz.gyarto === 'mikrotik') {
+      // MikroTik: a gyári (defconf) állapotból indul; itt csak a gépnév adható meg.
+      if (beall.hostname) eszkoz.hostname = beall.hostname;
       continue;
     }
     if (beall.hostname) eszkoz.hostname = beall.hostname;

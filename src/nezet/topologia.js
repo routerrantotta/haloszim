@@ -11,6 +11,8 @@
  */
 
 import { uzemmod } from '../mag/kapcsolas.js';
+import { hidPortja } from '../mag/hid.js';
+import { hidKeres } from '../modell/mikrotik.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -35,11 +37,11 @@ function adatFeliratok(adat) {
   return (adat && adat.feliratok) || [];
 }
 
-/** A port helye a switch saját rajzán (a bal felső sarka). */
+/** A port helye a switch saját rajzán (a bal felső sarka). A MikroTik ether1–24 a 2960 Fa0/1–24 helyén, az SFP+ a Gi helyén. */
 function swPortHely(p) {
-  const sorszam = Number(p.szam.split('/')[1]);
+  const sorszam = p.szam.includes('/') ? Number(p.szam.split('/')[1]) : Number(p.szam);
   const kezdX = 82;
-  if (p.tipus === 'FastEthernet') {
+  if (p.tipus === 'FastEthernet' || p.tipus === 'ether') {
     const oszlop = Math.floor((sorszam - 1) / 2);
     const csoport = Math.floor(oszlop / 6);
     return {
@@ -55,6 +57,22 @@ function swPortHely(p) {
   };
 }
 
+/** Egy MikroTik-port állapota a rajz súgójában (bridge, PVID, címkézett VLAN-ok). */
+function mtPortLeiras(sw, p) {
+  if (p.leallitva) return `${p.nev} – letiltva (disabled)`;
+  const hp = hidPortja(sw, p.nev);
+  const hid = hp && hidKeres(sw, hp.hid);
+  let leiras = p.fent ? 'működik' : 'nincs kábel';
+  if (!hid) leiras += ', nincs bridge-ben';
+  else if (!hid.vlanSzures) leiras += `, ${hid.nev} (VLAN-szűrés nélkül)`;
+  else {
+    const cimkes = sw.hidVlanok.filter((s) => !s.letiltva && s.hid === hid.nev && s.cimkezett.includes(p.nev)).map((s) => s.vlanok);
+    leiras += `, PVID ${hp.pvid}`;
+    if (cimkes.length) leiras += `, címkézett (trunk): ${cimkes.join(', ')}`;
+  }
+  return `${p.nev} – ${leiras}`;
+}
+
 export class Topologia {
   /**
    * @param {HTMLElement} szulo
@@ -66,7 +84,8 @@ export class Topologia {
     this.elemek = elemek;
     this.halozat = halozat;
     /** Van-e értelme a VTP-jelnek a jelmagyarázatban (legalább két switch). */
-    this.vanVtp = elemek.filter((e) => e.tipus === 'switch').length > 1;
+    // VTP csak Cisco-switchek között van (a MikroTik nem ismeri).
+    this.vanVtp = elemek.filter((e) => e.tipus === 'switch' && e.eszkoz.gyarto !== 'mikrotik').length > 1;
     this.vanSwitch = elemek.some((e) => e.tipus === 'switch');
     this.vanRouter = elemek.some((e) => e.tipus === 'router');
     this.vanSoros = halozat.kabelek.some((k) => k.soros);
@@ -144,7 +163,7 @@ export class Topologia {
     const n = SW.nagyitas;
     const kulso = svg('g', { class: 'hsz-eszkoz' });
     this.kattinthato(kulso, eszkoz, `Switch: ${eszkoz.hostname} – kattints, és írj a parancssorába`);
-    const g = svg('g', { transform: `translate(${x} ${y}) scale(${n})` });
+    const g = svg('g', { transform: `translate(${x} ${y}) scale(${n})`, class: eszkoz.gyarto === 'mikrotik' ? 'hsz-switch--mt' : '' });
     g.append(svg('rect', { x: 0, y: 0, width: SW.szel, height: SW.mag, rx: 10, class: 'hsz-eszkoz__haz' }));
     g.append(svg('rect', { x: 8, y: 8, width: SW.szel - 16, height: SW.mag - 16, rx: 6, class: 'hsz-eszkoz__elolap' }));
     g.append(svg('circle', { cx: 28, cy: 34, r: 5, class: 'hsz-led hsz-led--be' }));
@@ -162,8 +181,9 @@ export class Topologia {
       pg.append(svg('rect', { x: h.x + 6, y: h.y + SW.portMag - 6, width: SW.portSzel - 12, height: 4, class: 'hsz-port__nyelv' }));
       const led = svg('rect', { x: h.x + 5, y: h.y - 7, width: SW.portSzel - 10, height: 4, rx: 1, class: 'hsz-led' });
       pg.append(led);
-      const felul = p.tipus === 'FastEthernet' && h.sorszam % 2 === 1;
-      const szam = p.tipus === 'FastEthernet' ? String(h.sorszam) : `G${h.sorszam}`;
+      const also = p.tipus === 'FastEthernet' || p.tipus === 'ether';
+      const felul = also && h.sorszam % 2 === 1;
+      const szam = also ? String(h.sorszam) : p.tipus === 'sfp-sfpplus' ? `S${h.sorszam}` : `G${h.sorszam}`;
       pg.append(svg('text', { x: h.x + SW.portSzel / 2, y: felul ? h.y - 10 : h.y + SW.portMag + 11, class: 'hsz-eszkoz__apro hsz-kozep' }, szam));
       g.append(pg);
       portok.set(p.nev, {
@@ -176,7 +196,7 @@ export class Topologia {
     }
     const felirat = svg('text', { x, y: y - 9, class: 'hsz-eszkoz__nev' });
     const nev = svg('tspan');
-    const tipus = svg('tspan', { class: 'hsz-eszkoz__tipus', dx: 8 }, '2960-24 jellegű switch');
+    const tipus = svg('tspan', { class: 'hsz-eszkoz__tipus', dx: 8 }, eszkoz.gyarto === 'mikrotik' ? 'CRS326 jellegű switch' : '2960-24 jellegű switch');
     felirat.append(nev, tipus);
     kulso.append(g, felirat);
     this.eszkozReteg.append(kulso);
@@ -340,6 +360,10 @@ export class Topologia {
         const pe = r.portok.get(p.nev);
         pe.pg.classList.toggle('hsz-port--lekapcsolva', p.leallitva);
         pe.led.classList.toggle('hsz-led--be', p.fent);
+        if (eszkoz.gyarto === 'mikrotik') {
+          pe.cim.textContent = mtPortLeiras(eszkoz, p);
+          continue;
+        }
         let allapot;
         if (p.leallitva) allapot = 'lekapcsolva (shutdown)';
         else if (p.fent) allapot = uzemmod(eszkoz, p) === 'trunk' ? 'működik, trunk' : `működik, VLAN ${p.accessVlan}`;

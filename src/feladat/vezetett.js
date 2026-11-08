@@ -20,6 +20,10 @@
  *   { tipus: 'parancs', eszkoz, szavak: [] }   – az utoljára beírt parancs ez volt (rövidítve is, „do”-val is),
  *                                                 és a kimenete már végigfutott (pl. a ping befejeződött)
  *   { tipus: 'ellenorzes' }                    – az Ellenőrzés lefutott, és minden cél teljesült
+ *   { tipus: 'safe-mode', eszkoz, be }         – (MikroTik) a Safe Mode be / ki van kapcsolva
+ *   { tipus: 'kapcsolat', eszkoz, allapot, ip?, ujra? } – (MikroTik, hálózati kezelés) a kapcsolat él ('el') vagy
+ *                                                 megszakadt ('megszakadt'); ip: ehhez a címhez kapcsolódva;
+ *                                                 ujra: legalább egyszer újra belépett (megszakadás után)
  *
  * Az „átmeneti” lépések (kivalasztva, mod, parancs) csak az adott pillanatban igazak. Ha a tanuló
  * előreszaladt (pl. már a konfigurációs módban van, vagy a VLAN már kész), a bemutató ezeket
@@ -36,7 +40,7 @@ function modSzint(mod) {
   return mod in MOD_SZINT ? MOD_SZINT[mod] : 3;
 }
 
-const ATMENETI = ['kivalasztva', 'mod', 'parancs'];
+const ATMENETI = ['kivalasztva', 'mod', 'parancs', 'safe-mode', 'kapcsolat'];
 
 /** Átmeneti-e a lépés (csak a pillanatnyi helyzettől függ). */
 function atmeneti(lepes) {
@@ -93,6 +97,16 @@ export class Vezeto {
         return parancsIllik(k.utolsoParancs(c.eszkoz), c.szavak) && !(k.foglalt && k.foglalt(c.eszkoz));
       case 'ellenorzes':
         return !!k.ellenorzesKesz();
+      case 'safe-mode': {
+        const mm = k.munkamenet(c.eszkoz);
+        return !!mm && !!mm.safeMode === (c.be !== false);
+      }
+      case 'kapcsolat': {
+        const mm = k.munkamenet(c.eszkoz);
+        if (!mm || mm.allapot !== c.allapot) return false;
+        if (c.ujra && !mm.ujraBelepesek) return false;
+        return !c.ip || (mm.kapcsolat && mm.kapcsolat.ip === c.ip);
+      }
       default: {
         const e = allapotCel(k.f, c);
         return !!(e && e.ok);

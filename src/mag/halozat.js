@@ -15,6 +15,7 @@
 
 import { Ora, naploIdobelyeg } from './ido.js';
 import { kapcsoloFogad, macTorolPort } from './kapcsolas.js';
+import { hidFogad } from './hid.js';
 import { vegpontFogad } from './vegpont.js';
 import { vtpTrunkValtozas } from './vtp.js';
 import { routerFogad, szomszedTorol } from './router.js';
@@ -102,7 +103,8 @@ export class Halozat {
 
   /** Időbélyeges konzolüzenet egy eszközön (a nézet a konzoljára írja). */
   naplo(eszkoz, uzenet) {
-    if (eszkoz.tipus === 'pc') return;
+    // A PC-nek nincs konzolja; a RouterOS a link-üzeneteket csak a naplóba (/log) írja, a konzolra nem.
+    if (eszkoz.tipus === 'pc' || eszkoz.gyarto === 'mikrotik') return;
     this.esemeny({ tipus: 'naplo', eszkoz, sor: `${naploIdobelyeg(this.ora.ido)}: ${uzenet}` });
   }
 
@@ -113,6 +115,8 @@ export class Halozat {
    * @param {Object} keret
    */
   kuld(eszkoz, port, keret) {
+    // Virtuális port: a switch saját IP-címének „kártyája” (mag/hid.js) – a keret a bridge-en belül marad.
+    if (port.virtualis) return port.kuld(keret);
     if (!port.fent) return;
     const k = this.kabelVege(eszkoz, port);
     if (!k) return;
@@ -128,7 +132,8 @@ export class Halozat {
   /** @private – egy keret megérkezett egy portra */
   fogad(eszkoz, port, keret) {
     if (!port.fent) return;
-    if (eszkoz.tipus === 'switch') kapcsoloFogad(this, eszkoz, port, keret);
+    if (eszkoz.tipus === 'switch' && eszkoz.gyarto === 'mikrotik') hidFogad(this, eszkoz, port, keret);
+    else if (eszkoz.tipus === 'switch') kapcsoloFogad(this, eszkoz, port, keret);
     else if (eszkoz.tipus === 'router') routerFogad(this, eszkoz, port, keret);
     else vegpontFogad(this, eszkoz, port, keret);
   }

@@ -12,20 +12,20 @@
  * egyetlen switch-csel indul (szabad gyakorlás).
  *
  * Ha több feladat van betöltve, felül egy választó jelenik meg: feladattípus (pl. VLAN) és
- * azon belül a feladat, valamint „Újrakezdés” gomb. Váltáskor a régi hálózat leáll, és az
+ * azon belül a feladat, valamint „Újrakezdés” gomb. Ha a feladatnak több gyártói változata van
+ * (pl. Cisco és MikroTik), egy „Gyártó” választó is (az URL-ben: ?gyarto=mikrotik). Váltáskor a régi hálózat leáll, és az
  * új feladat ugyanebben az elemben indul.
  */
 
 import { Ora } from './mag/ido.js';
-import { Munkamenet } from './cli/terminal-munkamenet.js';
-import { szemelyiseg } from './gyartok/ios/index.js';
+import { munkamenetKeszit, GYARTOK } from './gyartok/index.js';
 import { Terminal } from './nezet/terminal.js';
 import { Topologia } from './nezet/topologia.js';
 import { Buborek } from './nezet/buborek.js';
 import { Vezeto } from './feladat/vezetett.js';
 import { PcAblak } from './nezet/pc-ablak.js';
 import { FeladatPanel, MODOK } from './nezet/panel.js';
-import { feladatKeres, feladatBetolt, feladatLista } from './feladat/betolto.js';
+import { feladatKeres, feladatBetolt, feladatLista, feladatGyartok, gyartoValtozat } from './feladat/betolto.js';
 import { feladatValtozat, ujMag, ervenyesMag } from './feladat/veletlen.js';
 
 /* global __VERZIO__ */
@@ -74,7 +74,7 @@ function tipusa(f) {
  * Elindítja a szimulátort a megadott elemben.
  * @param {HTMLElement} gyoker
  * @param {{feladat?: string, mod?: 'oktato'|'gyakorlo'|'vizsga', mag?: number, sebesseg?: number,
- *          hibajelento?: string}} [beallitasok]
+ *          hibajelento?: string, gyarto?: 'cisco'|'mikrotik'}} [beallitasok]
  *   hibajelento: a „Hibás a kimenet? Jelezd!” link célja (pl. '../otlet.html'); alapból a routerrantotta.hu ötletküldője
  */
 export function indit(gyoker, beallitasok = {}) {
@@ -84,11 +84,14 @@ export function indit(gyoker, beallitasok = {}) {
   let azon = beallitasok.feladat;
   let mod = beallitasok.mod;
   let kezdoMag = beallitasok.mag;
+  /** A választott gyártó (ha a feladatnak több gyártói változata van). */
+  let gyarto = beallitasok.gyarto || 'cisco';
   try {
     const p = new URLSearchParams(window.location.search);
     azon = p.get('feladat') || azon;
     mod = p.get('mod') || mod;
     if (p.get('mag')) kezdoMag = p.get('mag');
+    if (GYARTOK[p.get('gyarto')]) gyarto = p.get('gyarto');
   } catch (e) {
     // nincs URL (pl. teszt): marad a megadott
   }
@@ -108,6 +111,8 @@ export function indit(gyoker, beallitasok = {}) {
   let fut = null;
 
   let mag = null;
+  /** A feladatnál ténylegesen használt gyártó (ha a választott nincs meg hozzá, a feladat sajátja). */
+  const aktivGyarto = (f) => (feladatGyartok(f).includes(gyarto) ? gyarto : feladatGyartok(f)[0]);
   /** A változat linkje (a tanár ezzel adhatja ugyanazt a változatot mindenkinek). */
   const valtozatLink = () => {
     try {
@@ -116,6 +121,8 @@ export function indit(gyoker, beallitasok = {}) {
       url.searchParams.set('mod', mod);
       if (mag !== null) url.searchParams.set('mag', String(mag));
       else url.searchParams.delete('mag');
+      if (aktualis && feladatGyartok(aktualis).length > 1) url.searchParams.set('gyarto', aktivGyarto(aktualis));
+      else url.searchParams.delete('gyarto');
       return url.toString();
     } catch (e) {
       return '';
@@ -134,8 +141,8 @@ export function indit(gyoker, beallitasok = {}) {
     mod = ujMod;
     if (mod === 'oktato' || !feladat.valtozok) mag = null;
     else mag = ujMagErtek !== undefined && ujMagErtek !== null ? ujMagErtek : ujMag();
-    fut = feladatInditas(tartalom, feladatValtozat(feladat, mag), mod, valtozatLink, sebessegKezelo, hibajelento);
-    if (valaszto) valaszto.igazit(feladat, mod);
+    fut = feladatInditas(tartalom, feladatValtozat(gyartoValtozat(feladat, aktivGyarto(feladat)), mag), mod, valtozatLink, sebessegKezelo, hibajelento);
+    if (valaszto) valaszto.igazit(feladat, mod, aktivGyarto(feladat));
     try {
       window.history.replaceState(null, '', valtozatLink());
     } catch (e) {
@@ -165,6 +172,13 @@ export function indit(gyoker, beallitasok = {}) {
       if (!mehet('Új változatot kérsz (más számokkal és nevekkel)? Az eddigi beállítások elvesznek.')) return;
       betolt(aktualis, mod);
     },
+    gyarto: (g) => {
+      if (g === aktivGyarto(aktualis)) return true;
+      if (!mehet(`${GYARTOK[g].nev} eszközökre váltasz? A feladat újraindul, az eddigi beállítások elvesznek.`)) return false;
+      gyarto = g;
+      betolt(aktualis, mod, mag);
+      return true;
+    },
   }) : null;
   if (valaszto) gyoker.append(valaszto.doboz);
   gyoker.append(tartalom);
@@ -178,6 +192,14 @@ export function indit(gyoker, beallitasok = {}) {
     },
     get mod() { return mod; },
     get mag() { return mag; },
+    get gyarto() { return aktivGyarto(aktualis); },
+    /** Gyártó váltása (a feladat újraindul). */
+    gyartoValt: (g) => {
+      if (GYARTOK[g]) {
+        gyarto = g;
+        betolt(aktualis, mod, mag);
+      }
+    },
     /** Mód váltása (a feladat újraindul). */
     modValt: (m, ujM) => {
       if (MODOK[m]) betolt(aktualis, m, ujM);
@@ -198,7 +220,8 @@ export function indit(gyoker, beallitasok = {}) {
  * A feladatválasztó: két legördülő (típus, feladat), a mód (Oktató / Gyakorló / Vizsga) és
  * Újrakezdés gomb. A visszahívások false-t adnak, ha a tanuló mégsem akart váltani.
  * @param {Object[]} lista
- * @param {{feladat: (f: Object) => boolean, mod: (m: string) => boolean, ujra: () => void, ujValtozat: () => void}} h
+ * @param {{feladat: (f: Object) => boolean, mod: (m: string) => boolean, ujra: () => void, ujValtozat: () => void,
+ *          gyarto: (g: string) => boolean}} h
  */
 function feladatValaszto(lista, h) {
   const doboz = elem('div', 'hsz-valaszto');
@@ -213,6 +236,14 @@ function feladatValaszto(lista, h) {
   };
   const tipusSel = mezo('Feladattípus');
   const feladatSel = mezo('Feladat');
+  // Gyártó: csak akkor látszik, ha a feladatnak több gyártói változata van (pl. Cisco és MikroTik).
+  const gyartoSel = mezo('Gyártó');
+  const gyartoMezo = gyartoSel.parentElement;
+  gyartoSel.title = 'Melyik gyártó eszközein (és parancssorában) oldod meg a feladatot';
+  let aktGyarto = null;
+  gyartoSel.addEventListener('change', () => {
+    if (!h.gyarto(gyartoSel.value)) gyartoSel.value = aktGyarto;
+  });
 
   // Mód: három gomb egy csoportban (egyszerre egy van lenyomva).
   const modMezo = elem('div', 'hsz-valaszto__mezo');
@@ -270,8 +301,14 @@ function feladatValaszto(lista, h) {
 
   return {
     doboz,
-    /** A választó beállítása az éppen futó feladatra és módra. */
-    igazit(f, mod) {
+    /** A választó beállítása az éppen futó feladatra, módra és gyártóra. */
+    igazit(f, mod, gy) {
+      const gyartok = feladatGyartok(f);
+      gyartoSel.textContent = '';
+      for (const g of gyartok) gyartoSel.append(new Option(GYARTOK[g] ? GYARTOK[g].nev : g, g));
+      gyartoSel.value = gy;
+      aktGyarto = gy;
+      gyartoMezo.hidden = gyartok.length < 2;
       for (const [kulcs, g] of Object.entries(gombok)) {
         g.setAttribute('aria-pressed', String(kulcs === mod));
         g.classList.toggle('hsz-modgomb--aktiv', kulcs === mod);
@@ -534,7 +571,7 @@ function feladatInditas(gyoker, feladat, mod, valtozatLink, sebesseg, hibajelent
     if (bemutato) bemutato.frissit();
   };
 
-  for (const { eszkoz, tipus } of f.elemek) {
+  for (const { eszkoz, tipus, nev } of f.elemek) {
     const ful = elem('button', 'hsz-ful');
     ful.type = 'button';
     ful.setAttribute('role', 'tab');
@@ -544,16 +581,21 @@ function feladatInditas(gyoker, feladat, mod, valtozatLink, sebesseg, hibajelent
     let n;
     if (tipus === 'switch' || tipus === 'router') {
       const doboz = elem('div', 'hsz-nezet');
-      const munkamenet = new Munkamenet({ szemelyiseg: szemelyiseg(eszkoz), eszkoz, ora });
+      // Hálózati kezelés (pl. SSH egy PC-ről a switch IP-címére): a feladat „kezeles” mezőjéből.
+      const kez = feladat.kezeles && feladat.kezeles[nev];
+      const munkamenet = munkamenetKeszit(eszkoz, ora, kez ? { mod: 'ssh', honnan: f.eszkoz(kez.honnan), ip: kez.ip } : undefined);
       const terminal = new Terminal(doboz, munkamenet, {
         parancsUtan: (sor) => {
-          utolsoParancs.set(eszkoz, sor);
+          // A RouterOS-szerű parancssor a parancs teljes alakját is megadja (pl. /interface bridge vlan print).
+          utolsoParancs.set(eszkoz, munkamenet.utolsoKanonikus || sor);
           jelzoFrissit(sor);
           // Késleltetve: a terminál csak ezután kezdi kiírni a kimenetet (pl. a pinget).
           if (bemutato) setTimeout(bemutato.frissit, 0);
         },
       });
       munkamenet.figyel(frissitMind);
+      // A prompt magától is változhat (pl. megszakad a hálózati kapcsolat, vagy Safe Mode).
+      munkamenet.figyel(() => { if (!terminal.foglalt) terminal.frissitPrompt(); });
       nezetHely.append(doboz);
       n = {
         doboz,
@@ -561,7 +603,7 @@ function feladatInditas(gyoker, feladat, mod, valtozatLink, sebesseg, hibajelent
         munkamenet,
         mutat: (l) => { doboz.hidden = !l; },
         cimFrissit: () => {
-          terminal.cim(`${eszkoz.hostname} – konzol`);
+          terminal.cim(munkamenet.fejlec ? munkamenet.fejlec() : `${eszkoz.hostname} – konzol`);
           ful.textContent = eszkoz.hostname;
         },
       };
@@ -621,7 +663,10 @@ function feladatInditas(gyoker, feladat, mod, valtozatLink, sebesseg, hibajelent
   }
 
   const lab = elem('div', 'hsz-lab');
-  const verzio = elem('span', '', `IOS-szerű parancssor · Haloszim v${VERZIO.replace(/\.0$/, '')}`);
+  // A feliraton a használt parancssor(ok): IOS-szerű és/vagy RouterOS-szerű.
+  const gyartokItt = [...new Set(f.elemek.filter((x) => x.tipus !== 'pc').map((x) => x.eszkoz.gyarto || 'cisco'))];
+  const felirat = (gyartokItt.length ? gyartokItt : ['cisco']).map((g) => GYARTOK[g].felirat).join(' · ');
+  const verzio = elem('span', '', `${felirat} · Haloszim v${VERZIO.replace(/\.0$/, '')}`);
   lab.append(verzio, jelzo);
   gyoker.append(lab);
 

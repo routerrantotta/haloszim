@@ -43,7 +43,7 @@ export class Terminal {
     this.lapozas = null;
 
     this.doboz = elem('section', 'hsz-terminal');
-    this.doboz.setAttribute('aria-label', 'IOS-szerű parancssor');
+    this.doboz.setAttribute('aria-label', munkamenet.felirat || 'IOS-szerű parancssor');
     this.fej = elem('div', 'hsz-terminal__fej');
     this.fejCim = elem('span', 'hsz-terminal__cim');
     this.fej.append(elem('span', 'hsz-terminal__pottyok'), this.fejCim);
@@ -70,6 +70,7 @@ export class Terminal {
       fel: this.gomb('↑', 'Előző parancs', () => this.tortenetLep(-1)),
       le: this.gomb('↓', 'Következő parancs', () => this.tortenetLep(1)),
       ctrlz: this.gomb('Ctrl+Z', 'Kilépés a konfigurációs módból', () => this.ctrlZ()),
+      ctrlx: this.gomb('Ctrl+X', 'Safe Mode be/ki (a változtatások visszavonhatók, ha megszakad a kapcsolat)', () => this.ctrlX()),
       tovabb: this.gomb('Tovább', 'Következő oldal (szóköz)', () => this.lapozasLep('oldal')),
       kilep: this.gomb('Kilépés', 'A lista vége (q)', () => this.lapozasLep('kilep')),
     };
@@ -158,6 +159,7 @@ export class Terminal {
       sugo: this.mm.sugoBillentyu === false,
       tab: this.mm.vanTab === false,
       ctrlz: this.mm.vanCtrlZ === false,
+      ctrlx: typeof this.mm.ctrlX !== 'function',
     };
     for (const [nev, g] of Object.entries(this.gombok)) {
       const lapozoGomb = nev === 'tovabb' || nev === 'kilep';
@@ -286,7 +288,7 @@ export class Terminal {
     } else if (k === 'Tab') {
       e.preventDefault();
       this.tab();
-    } else if (k === '?' && this.mm.sugoBillentyu !== false) {
+    } else if ((k === '?' && this.mm.sugoBillentyu !== false) || (k === 'F1' && this.mm.f1Sugo)) {
       e.preventDefault();
       this.sugo();
     } else if (k === 'ArrowUp' || (ctrl && (k === 'p' || k === 'P'))) {
@@ -298,6 +300,9 @@ export class Terminal {
     } else if (ctrl && (k === 'z' || k === 'Z')) {
       e.preventDefault();
       this.ctrlZ();
+    } else if (ctrl && (k === 'x' || k === 'X') && typeof this.mm.ctrlX === 'function') {
+      e.preventDefault();
+      this.ctrlX();
     } else if (ctrl && (k === 'a' || k === 'A')) {
       e.preventDefault();
       this.bevitel.setSelectionRange(0, 0);
@@ -365,6 +370,15 @@ export class Terminal {
     this.visszhang(prompt, szoveg + '^Z');
     const r = this.mm.ctrlZ();
     this.kiirMind(r.kimenet, false);
+  }
+
+  /** Ctrl+X – (RouterOS) Safe Mode be/ki; a beírás alatt álló sor megmarad. */
+  ctrlX() {
+    if (this.foglalt || typeof this.mm.ctrlX !== 'function') return;
+    const r = this.mm.ctrlX();
+    for (const sor of r.kimenet) this.kiirSor(sor);
+    this.frissitPrompt();
+    this.fokusz();
   }
 
   /** Előzmények: -1 = régebbi, +1 = újabb. */

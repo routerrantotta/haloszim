@@ -2,7 +2,7 @@
  * Közös segédfüggvények a tesztekhez: egy friss switch + munkamenet, és parancsfuttatás.
  */
 import { Munkamenet } from '../src/cli/terminal-munkamenet.js';
-import { ios, szemelyiseg } from '../src/gyartok/ios/index.js';
+import { ios } from '../src/gyartok/ios/index.js';
 import { ujSwitch2960 } from '../src/modell/switch.js';
 import { Ora } from '../src/mag/ido.js';
 
@@ -45,7 +45,9 @@ import '../feladatok/vtp-1.js';
 import '../feladatok/rip-1.js';
 import '../feladatok/ospf-1.js';
 import '../feladatok/ospf-2.js';
-import { feladatKeres, feladatBetolt } from '../src/feladat/betolto.js';
+import '../feladatok/mgmt-1.js';
+import { feladatKeres, feladatBetolt, gyartoValtozat } from '../src/feladat/betolto.js';
+import { munkamenetKeszit } from '../src/gyartok/index.js';
 import { feladatValtozat } from '../src/feladat/veletlen.js';
 import { ipBeallit } from '../src/mag/vegpont.js';
 
@@ -58,14 +60,16 @@ export function vlanFeladat() {
  * Bármelyik feladat hálózata a tesztekhez (ugyanazokkal a segédekkel).
  * mag: a véletlen változat száma (null = alapadatok, mint oktató módban); f.e = a változók értékei.
  */
-export function feladatTeszt(azon, mag = null) {
-  const f = feladatBetolt(feladatValtozat(feladatKeres(azon), mag), { kesleltetes: 1 });
+export function feladatTeszt(azon, mag = null, gyarto = 'cisco') {
+  const f = feladatBetolt(feladatValtozat(gyartoValtozat(feladatKeres(azon), gyarto), mag), { kesleltetes: 1 });
   f.e = f.feladat.ertekek;
   const munkamenetek = new Map();
   f.mm = (nev) => {
     if (!munkamenetek.has(nev)) {
-      const mm = new Munkamenet({ szemelyiseg: szemelyiseg(f.eszkoz(nev)), eszkoz: f.eszkoz(nev), ora: f.halozat.ora });
-      fut(mm, 'enable');
+      const e = f.eszkoz(nev);
+      const kez = f.feladat.kezeles && f.feladat.kezeles[nev];
+      const mm = munkamenetKeszit(e, f.halozat.ora, kez ? { mod: 'ssh', honnan: f.eszkoz(kez.honnan), ip: kez.ip } : undefined);
+      if (e.gyarto !== 'mikrotik') fut(mm, 'enable');
       munkamenetek.set(nev, mm);
     }
     return munkamenetek.get(nev);
