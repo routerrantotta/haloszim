@@ -8,7 +8,7 @@ import { ripTorol } from '../../../mag/rip.js';
 import { ipv6Normal } from '../../../mag/ipv6.js';
 import {
   showIpIntBrief, showIpv6IntBrief, showIpRoute, showIpv6Route, showIpProtocols, showIpv6Protocols,
-  showIpRipDatabase, showIpv6Rip, showIpv6RipDatabase, showIpArp, showRunningConfigRouter,
+  showIpRipDatabase, showIpv6Rip, showIpv6RipDatabase, showIpArp, showRunningConfigRouter, showInterfaces,
 } from '../kimenetek/router.js';
 import { SZO } from './alap.js';
 
@@ -33,6 +33,7 @@ const szurok = [
   ['connected', { szo: 'connected', sugo: 'Csak a közvetlenül kapcsolt hálózatok' }],
   ['static', { szo: 'static', sugo: 'Csak a statikus útvonalak' }],
   ['ospf', { szo: 'ospf', sugo: 'Csak az OSPF-ből tanult útvonalak' }],
+  ['eigrp', { szo: 'eigrp', sugo: 'Csak az EIGRP-ből tanult útvonalak' }],
 ];
 
 const showParancsok = [
@@ -47,6 +48,9 @@ const showParancsok = [
   lista(EXEC, [SHOW, IPV6, { szo: 'rip', sugo: 'RIPng-folyamatok és beállításaik' }], (r) => showIpv6Rip(r)),
   lista(EXEC, [SHOW, IPV6, { szo: 'rip', sugo: 'RIPng-információk' }, { szo: 'database', sugo: 'A RIPng adatbázisa' }], (r) => showIpv6RipDatabase(r)),
   lista(EXEC, [SHOW, IP, { szo: 'arp', sugo: 'Az ARP-tábla: IP-cím → MAC-cím' }], (r) => showIpArp(r)),
+  lista(EXEC, [SHOW, { szo: 'interfaces', sugo: 'Az interfészek részletesen (sávszélesség, késleltetés, MTU, számlálók)' }], (r) => showInterfaces(r)),
+  lista(EXEC, [SHOW, { szo: 'interfaces', sugo: 'Az interfészek részletesen' }, { param: 'interfesz', kulcs: 'interfesz', sugo: 'Az interfész neve' }],
+    (r, e) => showInterfaces(r, e.interfesz)),
 ];
 
 // ---------------------------------------------------------------------------

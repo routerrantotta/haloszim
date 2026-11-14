@@ -19,11 +19,14 @@ import { egyPing, szorasProba } from '../mag/vegpont.js';
 import { routerPing } from '../mag/router.js';
 import { bejegyzes } from '../mag/utvonal.js';
 import { ipSzam, ipSzoveg, osztalyos } from '../mag/ip.js';
-import { ipv6Szoveg } from '../mag/ipv6.js';
+import { ipv6Szoveg, ipv6Elemez as ipv6ElemezSzoveg } from '../mag/ipv6.js';
 import {
   ospfBeall, ospfAllapot, ospfTerulet, passzivE, szomszedSzerep, halozatTipus as ospfHalozatTipus, koltseg as ospfKoltseg,
   idokozok as ospfIdokozok,
 } from '../mag/ospf.js';
+import {
+  eigrpBeall, eigrpAllapot, eigrpPorton, eigrpSzomszedok, eigrpBejegyzes, passzivE as eigrpPasszivE,
+} from '../mag/eigrp.js';
 import { portKeres } from '../modell/switch.js';
 import { MT_CELOK } from './ellenorzo-mikrotik.js';
 import { esRag, nevelo } from '../magyar.js';
@@ -269,6 +272,93 @@ const ALLAPOT_CELOK = {
     if (I && I.tipus === 'BROADCAST') reszek.push(`szerep ${I.allapot}`);
     if (pb.hitelesites === 'md5') reszek.push('MD5');
     return { ok: true, megjegyzes: `${c.eszkoz} ${rovid(c.port)}: ${reszek.join(', ')}.` };
+  },
+
+  /**
+   * EIGRP-folyamat egy routeren: { eszkoz, csalad?: 4|6, as?, routerId?, interfeszek?, nemInterfeszek?,
+   * passziv?, autoSummary?, leallitva? }. A router ID a ténylegesen használt (nem csak a beírt) érték.
+   */
+  eigrp(f, c) {
+    const r = f.eszkoz(c.eszkoz);
+    const cs = c.csalad || 4;
+    const e = eigrpBeall(r, cs);
+    const nev = cs === 4 ? 'EIGRP' : 'EIGRP IPv6';
+    if (!e) {
+      if (c.nemInterfeszek && !c.interfeszek && !c.routerId) return { ok: true, megjegyzes: `${c.eszkoz}-en nem fut ${nev} – ahogy kell.` };
+      return { ok: false, megjegyzes: `${c.eszkoz}-en nem fut ${nev} (nincs „${cs === 4 ? 'router eigrp' : 'ipv6 router eigrp'}”).` };
+    }
+    const a = eigrpAllapot(r, cs);
+    const hibak = [];
+    if (c.as !== undefined && e.as !== c.as) hibak.push(`az AS-szám most ${e.as} (${c.as} kellene)`);
+    if (c.leallitva !== undefined && !!e.leallitva !== c.leallitva) {
+      hibak.push(c.leallitva ? 'a folyamat fut, pedig le kellene állítani' : 'a folyamat le van állítva (shutdown) – kell rá a „no shutdown”');
+    }
+    if (c.routerId) {
+      if (!a.fut) hibak.push('a folyamat nem fut');
+      else if (a.rid !== c.routerId) hibak.push(`a router ID most ${a.rid} (${c.routerId} kellene)`);
+    }
+    for (const n of c.interfeszek || []) {
+      const p = r.portok.find((x) => x.nev === n);
+      if (!eigrpPorton(r, p, cs)) hibak.push(`${rovid(n)}: nincs az ${nev}-ben`);
+    }
+    for (const n of c.nemInterfeszek || []) {
+      const p = r.portok.find((x) => x.nev === n);
+      if (eigrpPorton(r, p, cs)) hibak.push(`${rovid(n)}: fut rajta az ${nev}, pedig nem kellene`);
+    }
+    for (const n of c.passziv || []) if (!eigrpPasszivE(r, r.portok.find((p) => p.nev === n), cs)) hibak.push(`${rovid(n)} nem passzív`);
+    if (c.autoSummary !== undefined && !!e.autoSummary !== c.autoSummary) {
+      hibak.push(c.autoSummary ? 'az automatikus összevonás ki van kapcsolva' : 'az automatikus összevonás (auto-summary) még be van kapcsolva');
+    }
+    if (hibak.length) return { ok: false, megjegyzes: hibak.join('; ') + '.' };
+    const be = r.portok.filter((p) => eigrpPorton(r, p, cs)).map((p) => rovid(p.nev));
+    return { ok: true, megjegyzes: `${nev} AS ${e.as}, router ID ${a.rid || '–'}, interfészek: ${be.join(', ') || '–'}.` };
+  },
+
+  /** Egy EIGRP-szomszédság: { eszkoz, cim (a szomszéd címe), port?, csalad? } */
+  'eigrp-szomszed'(f, c) {
+    const r = f.eszkoz(c.eszkoz);
+    const cs = c.csalad || 4;
+    const nev = cs === 4 ? 'EIGRP' : 'EIGRP IPv6';
+    if (!eigrpAllapot(r, cs).fut) return { ok: false, megjegyzes: `${c.eszkoz}-en nem fut ${nev}.` };
+    const lista = eigrpSzomszedok(r, cs);
+    const cim = cs === 4 ? c.cim : ipv6Szoveg(ipv6ElemezSzoveg(c.cim));
+    const n = lista.find((x) => x.cim === cim && (!c.port || x.port === c.port));
+    if (!n) {
+      const vannak = lista.map((x) => `${x.cim} (${rovid(x.port)})`).join(', ') || 'senki';
+      return { ok: false, megjegyzes: `${c.eszkoz} nem látja szomszédként ${cim}-t. Most ezeket látja: ${vannak}.` };
+    }
+    return { ok: true, megjegyzes: `${c.eszkoz} – ${n.cim} (${rovid(n.port)}): szomszédság él.` };
+  },
+
+  /**
+   * Topológiabejegyzés: { eszkoz, halozat: '172.16.1.0/24', csalad?, fd?, successor? (a következő
+   * ugrás címe), fs?: true|false (van-e feasible successor), allapot?: 'P'|'A' }
+   */
+  'eigrp-topologia'(f, c) {
+    const r = f.eszkoz(c.eszkoz);
+    const cs = c.csalad || 4;
+    if (!eigrpAllapot(r, cs).fut) return { ok: false, megjegyzes: `${c.eszkoz}-en nem fut EIGRP.` };
+    const t = eigrpBejegyzes(r, cs, c.halozat);
+    if (!t) return { ok: false, megjegyzes: `${c.eszkoz} topológiatáblájában nincs ${c.halozat}.` };
+    const succ = t.forrasok.filter((x) => x.successor);
+    const fsek = t.forrasok.filter((x) => x.fs);
+    const hibak = [];
+    if (c.allapot && t.allapot !== c.allapot) hibak.push(`az állapota most ${t.allapot === 'A' ? 'Active' : 'Passive'}`);
+    if (c.fd !== undefined && t.fd !== c.fd) hibak.push(`az FD most ${t.fd} (${c.fd} kellene)`);
+    if (c.successor && !succ.some((x) => x.cim === c.successor)) {
+      hibak.push(`a successor most ${succ.map((x) => x.cim).join(', ') || 'nincs'} (${c.successor} kellene)`);
+    }
+    if (c.fs !== undefined && (fsek.length > 0) !== c.fs) {
+      hibak.push(c.fs
+        ? 'nincs feasible successora, pedig kellene lennie (AD < FD)'
+        : `van feasible successora (${fsek.map((x) => x.cim).join(', ')}), pedig nem szabadna lennie`);
+    }
+    if (hibak.length) return { ok: false, megjegyzes: `${c.eszkoz} – ${c.halozat}: ${hibak.join('; ')}.` };
+    return {
+      ok: true,
+      megjegyzes: `${c.eszkoz} – ${c.halozat}: FD ${t.fd}, successor ${succ.map((x) => x.cim).join(', ') || '–'}, `
+        + `feasible successor: ${fsek.length ? fsek.map((x) => `${x.cim} (AD ${x.ad})`).join(', ') : 'nincs'}.`,
+    };
   },
 
   /** IPv6-továbbítás be van-e kapcsolva. */

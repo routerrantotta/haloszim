@@ -130,6 +130,36 @@ Utánzott eszköz: **ISR 4331 jellegű router, IOS XE 16 jellegű kimenetek**.
 | `debug ip ospf adj` | `2 Way Communication to …`, `DR/BDR election`, `Elect BDR/DR …`, `Send/Rcv DBD …`, `NBR Negotiation Done. We are the MASTER/SLAVE`, `Nbr … has larger interface MTU`, `Exchange Done with …`, `Synchronized with …, state FULL`, `Mismatched Authentication type/Key …` | E | ellenőrizendő |
 | Válaszüzenetek | `% OSPF: Reload or use "clear ip ospf process" command, for this to take effect`; `% OSPF: Reference bandwidth is changed.` + `Please ensure …`; `Reset ALL OSPF processes? [no]:`; `OSPF: Key 1 already exists`; OSPFv3-ban ugyanez `% OSPFv3:` kezdettel, `Reset ALL OSPFv3 processes? [no]:` | F24 (az első kettő), E | a többi ellenőrizendő |
 
+### EIGRP (v0.11)
+
+Utánzott eszköz ugyanaz (ISR 4331 jellegű router, IOS 15 / IOS XE jellegű EIGRP-kimenetek).
+
+| Forrás | Hol | Mit igazol |
+|--------|-----|------------|
+| F37 | [Cisco – Troubleshoot EIGRP (118974)](https://www.cisco.com/c/en/us/support/docs/ip/enhanced-interior-gateway-routing-protocol-eigrp/118974-technote-eigrp-00.html) | `show ip eigrp neighbors` oszlopai (H, Address, Interface, Hold (sec), Uptime, SRTT (ms), RTO, Q Cnt, Seq Num) |
+| F38 | [learncisco – EIGRP ellenőrzése (ICND2)](https://www.learncisco.net/courses/icnd-2/implementing-an-eigrp-based-solution/verification-of-eigrp-configuration.html) | az IOS 15-ös fejlécek: `EIGRP-IPv4 Neighbors for AS(100)`, `EIGRP-IPv4 Interfaces for AS(100)` és annak oszlopai |
+| F39 | [networklessons – EIGRP K values formula](https://networklessons.com/eigrp/eigrp-k-values-formula) | a metrika képlete: 256 × (10^7/BW + késleltetés/10); gigabites interfész = 2816 |
+| F40 | [networklessons – EIGRP Neighbor and Topology Table](https://networklessons.com/eigrp/eigrp-neighbor-and-topology-table-explained) | `show ip eigrp topology`: `Codes: P - Passive, A - Active …`, `P hálózat, N successors, FD is …`, `via cím (FD/AD), interfész` |
+| F41 | Cisco Community: [topology table contents](https://community.cisco.com/t5/routing/topology-table-contents/m-p/4071766/highlight/true), [EIGRP route selection](https://community.cisco.com/t5/routing/eigrp-route-selection/m-p/5024511/highlight/true) | a részletes bejegyzés: `EIGRP-IPv4 Topology Entry for AS(x)/ID(y) for hálózat`, `State is Passive, Query origin flag is 1, N Successor(s), FD is …`, `Descriptor Blocks:`, `cím (interfész), from cím, Send flag is 0x0`, `Composite metric is (FD/AD), Route is Internal`, `Vector metric:` (Minimum bandwidth, Total delay, Reliability 255/255, Load 1/255, Minimum MTU, Hop count, Originating router) |
+| F42 | [CCNA3-tananyag (tükör) – EIGRP for IPv6](https://cisco.tu-sofia.bg/wp-content/uploads/courses/CCNA3/course/module7/7.4.2.3/7.4.2.3.html), [szomszédok](https://cisco.tu-sofia.bg/wp-content/uploads/courses/CCNA3/course/module7/7.4.3.1/7.4.3.1.html) | az IPv6-os folyamat gyárilag shutdown állapotban van (kell a `no shutdown`), a router ID kötelező, a szomszédokat link-local címmel azonosítja |
+| F43 | [Cisco – EIGRP for IPv6 konfigurációs példa (113267)](https://bxin.cisco.com/c/en/us/support/docs/ip/enhanced-interior-gateway-routing-protocol-eigrp/113267-eigrp-ipv6-00.html) | `ipv6 router eigrp 1` / `eigrp router-id` / `no shutdown`, és az interfészen `ipv6 eigrp 1` |
+| F45 | A felhasználó feladatlapja: „Szakmai szerda · 005 · EIGRP – gyakorlófeladat, AS 100” (Packet Tracer 9.0-ban mérve, 2026) | a topológia, a sávszélességek, a metrikaértékek (2 682 112, 2 170 112, 2816) és a feasible successor két esete; a PT-eltérések (clock rate, show ipv6 route eigrp, terminal length 0, all-links) |
+| F44 | [CCNA3-tananyag (tükör) – hitelesítés](https://cisco.tu-sofia.bg/wp-content/uploads/courses/CCNA3/course/module8/8.1.5.4/8.1.5.4.html), [Cisco Community – DUAL-5-NBRCHANGE](https://community.cisco.com/t5/routing/error-eigrp-message-ict-dual-5-nbrchange-eigrp-ipv4-1-neighbor/td-p/4772964) | a naplóüzenet alakja: `%DUAL-5-NBRCHANGE: EIGRP-IPv4 1: Neighbor 172.16.3.2 (Serial0/0/0) is up: new adjacency`, `… is down: holding time expired`, `… is down: interface down` |
+
+| Mit | Forma a szimulátorban | Források | Állapot |
+|-----|------------------------|----------|---------|
+| Metrika | 256 × (10 000 000 / legkisebb sávszélesség[kbit/s] + összes késleltetés[µs] / 10); gigabit BW 1 000 000 / DLY 10, soros BW 1544 / DLY 20 000, loopback BW 8 000 000 / DLY 5000 (2816, 2 170 112, 128 256 …) | F39, F41, a feladatlap (F45) | rendben |
+| `show ip eigrp neighbors` | `EIGRP-IPv4 Neighbors for AS(100)`, `H   Address … Hold Uptime   SRTT   RTO  Q  Seq` + a `(sec)` / `(ms)` / `Cnt Num` második fejsor | F37, F38 | rendben (SRTT, RTO, Q, Seq állandó értékek) |
+| `show ipv6 eigrp neighbors` | ugyanez, de a cím helyén `Link-local address:` és alatta a FE80::x cím | F42, E | ellenőrizendő (a behúzás) |
+| `show ip eigrp interfaces` | `EIGRP-IPv4 Interfaces for AS(100)`, oszlopok: Interface, Peers, Xmit Queue, PeerQ, Mean SRTT, Pacing Time, Multicast Flow Timer, Pending Routes; a passzív interfész nem szerepel | F38, E | a PeerQ-oszlop és az oszlopszélességek: ellenőrizendő |
+| `show ip eigrp topology` | `EIGRP-IPv4 Topology Table for AS(100)/ID(1.1.1.1)`, `Codes: P - Passive …`, `P hálózat, N successors, FD is …`, alatta `via cím (FD/AD), interfész`, kapcsolt hálózatnál `via Connected, interfész`, összevonásnál `via Summary (m/0), Null0`; csak a successor és a feasible successorok | F40, F41 | rendben |
+| `show ip eigrp topology <hálózat> <maszk>` | `EIGRP-IPv4 Topology Entry for AS(x)/ID(y) for hálózat`, `State is Passive, Query origin flag is 1, N Successor(s), FD is …`, `Descriptor Blocks:`, blokkonként `Composite metric is (FD/AD), Route is Internal` és a `Vector metric:` hét sora | F41 | rendben (a Reliability, Load és MTU állandó) |
+| `show ip protocols` (EIGRP) | `Routing Protocol is "eigrp 100"`, `EIGRP-IPv4 Protocol for AS(100)`, `Metric weight K1=1, K2=0, K3=1, K4=0, K5=0`, `Router-ID:`, `Topology : 0 (base)`, `Distance: internal 90 external 170`, `Automatic Summarization: enabled/disabled`, `Routing for Networks:`, `Passive Interface(s):`, `Routing Information Sources:` | F38, E | ellenőrizendő (a sorok sorrendje) |
+| `show ip route` EIGRP-sorai | `D   192.168.2.0/24 [90/2170112] via 10.0.12.2, 00:02:19, Serial0/1/0`; összevonásnál `D   172.16.0.0/16 is a summary, 00:00:29, Null0`; IPv6-ban `D   2001:DB8:ACAD:2::/64 [90/2170112]` + `via FE80::2, Serial0/1/0` | F41, E | rendben |
+| Naplóüzenetek | `%DUAL-5-NBRCHANGE: EIGRP-IPv4 100: Neighbor 10.0.12.2 (Serial0/1/0) is up: new adjacency`; `… is down: holding time expired` / `interface down` / `manually cleared`; IPv6-ban `EIGRP-IPv6 100:` | F44 | rendben (az IOS-ok egy részében `EIGRP-IPv4:(id) 100:` alak van) |
+| `show interfaces` (router, v0.11) | `IF is up, line protocol is up`, `Hardware is …`, `Internet address is …`, `MTU 1500 bytes, BW 1544 Kbit/sec, DLY 20000 usec,`, `reliability 255/255, txload 1/255, rxload 1/255`, `Encapsulation HDLC/ARPA`, sorok a számlálókkal | F41 (BW/DLY), E | a számlálók nullák – a kimenet végén `[Szimulátor]` megjegyzés jelzi |
+| EIGRP for IPv6 | `ipv6 router eigrp AS` (gyárilag `shutdown`), `eigrp router-id`, `no shutdown`, interfészen `ipv6 eigrp AS`; nincs network parancs | F42, F43 | rendben (IOS 15.2-től / CML-ben a folyamat már alapból fut – lásd az egyszerűsítéseket) |
+
 ## MikroTik – RouterOS 7 jellegű parancssor (v0.10)
 
 Utánzott eszköz: **CRS326-24G-2S+ jellegű switch** (ether1–ether24, sfp-sfpplus1–2), RouterOS 7, gyári (defconf)
@@ -196,6 +226,26 @@ a gyári bejelentkezési „logó” (ASCII-rajz) szándékosan NINCS a szimulá
   való „átvétel” (hijack) nincs meg.
 - A bridge-port INACTIVE jelzője csak a link hiányát (vagy a hiányzó bridge-et) mutatja.
 - A VLAN-táblában a tagged/untagged listába bármely interfész beírható (a valódi eszköz ellenőrzi, hogy bridge-port-e).
+
+## Szándékos egyszerűsítések (v0.11-től, EIGRP)
+
+- Egy routeren címcsaládonként egy EIGRP-folyamat lehet (`router eigrp AS`, `ipv6 router eigrp AS`); másik AS-számnál
+  a szimulátor szól. Nincs „named mode” (`router eigrp NÉV` + `address-family`).
+- **Az automatikus összevonás (auto-summary) gyárilag BE van kapcsolva.** A valódi IOS 15 / IOS XE verziókban ez már
+  alapból ki van kapcsolva, a Packet Tracerben (és a régebbi IOS-ekben) viszont be – a feladat (a felhasználó
+  EIGRP-feladatlapja, PT 9.0-ban mérve) erre a viselkedésre épül, ezért itt a PT-t követjük. A magyarázat kiírja az eltérést.
+- Az IPv6-os folyamat leállított (shutdown) állapotban jön létre: kell rá a `no shutdown`. Ez a klasszikus viselkedés
+  (F42, F43); IOS 15.2-től és a Cisco CML-ben a folyamat már alapból fut.
+- A megbízható szállítás (RTP) egyszerűsített: az Update, Query és Reply után nyugta (Ack) megy, de nincs újraküldés,
+  SRTT- és RTO-mérés (a show kimenetekben állandó értékek), és nincs „retry limit exceeded”.
+- A Query-t fogadó router a saját táblájából válaszol, és nem megy maga is Active állapotba (egy háromszög alakú
+  hálózatban ez nem szükséges); nincs „stuck in active” (SIA), a szimulátor 60 másodperc után elérhetetlennek veszi
+  a hálózatot, ha nem jön minden Reply.
+- Nincs variance (egyenlőtlen terhelésmegosztás), offset-list, `metric weights`, EIGRP-stub, kézi összegzés
+  (`ip summary-address eigrp`), hitelesítés és redistribute. A K-értékek rögzítettek: K1 = K3 = 1.
+- A Hello 5, a Hold 15 másodperc minden interfészen (a valódi eszköz a lassú, többpontos vonalakon 60/180-at használ).
+- Az auto-summary által keletkező saját összevont útvonal a Null0-ra megy, és az oda kerülő csomagokat a router
+  eldobja (a valódi eszköz is így tesz; ettől lesz „fekete lyuk” a nem összefüggő címzésnél).
 
 ## Szándékos egyszerűsítések (v0.9-től, OSPF)
 

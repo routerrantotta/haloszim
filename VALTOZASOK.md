@@ -2,6 +2,37 @@
 
 A legújabb van felül.
 
+## v0.11 – 2026-11-14 – EIGRP: metrika, successor és feasible successor, DUAL, auto-summary, EIGRP for IPv6
+
+- **Új protokoll: EIGRP** (src/mag/eigrp.js) IPv4-re (`router eigrp AS`) és IPv6-ra (`ipv6 router eigrp AS`):
+  szomszédfelderítés Hello csomagokkal (224.0.0.10 / FF02::A, Hello 5 / Hold 15 mp), a szomszédság csak egyező
+  AS-szám és K-értékek mellett jön létre (`%DUAL-5-NBRCHANGE` naplóüzenetek); összetett metrika az alapértelmezett
+  K-értékekkel: **256 × (10 000 000 / legkisebb sávszélesség + összes késleltetés / 10)**; topológiatábla a
+  successorral, a feasible successorokkal és az FD/AD számpárral; **DUAL**: feasible successorral azonnali
+  átváltás (az útvonal nem is tűnik el a táblából), nélküle Active állapot, Query és Reply után újraépülő útvonal;
+  split horizon; **automatikus összevonás (auto-summary)** az osztályhatáron, a saját összevont útvonal a Null0-ra
+  (ettől lesz „fekete lyuk” a nem összefüggő címzésnél); passzív interfész; adminisztratív távolság 90.
+- **Új feladat: EIGRP (IPv4 és IPv6)** – a „Szakmai szerda · 005 · EIGRP” feladatlap alapján. Három router
+  háromszögben, soros vonalakkal: két gyors (BW 1544) és egy lassú (BW 64), mindegyik mögött egy LAN és egy
+  loopback. A tanuló elindítja az EIGRP-t wildcard maszkos `network` parancsokkal, kikapcsolja az összevonást
+  (előtte látja, miért kell), passzívvá teszi a LAN-okat, kiszámolja és ellenőrzi a metrikát, megkeresi, melyik
+  hálózathoz van feasible successor és melyikhez nincs (AD < FD, szigorúan!), kipróbálja a hibatűrést
+  (`shutdown` – az uptime oszlopban látszik a különbség), végül beállítja az EIGRP for IPv6-ot is
+  (`no shutdown`, `ipv6 eigrp AS` az interfészeken). 33 lépéses bemutató, 30 cél, véletlen AS-szám és LAN-címek.
+- **Új parancsok (IOS):** `router eigrp` / `ipv6 router eigrp` (új almódok), `eigrp router-id`, `network` wildcard
+  maszkkal és anélkül, `passive-interface [default]`, `auto-summary` / `no auto-summary`, `shutdown` / `no shutdown`,
+  interfészen `ipv6 eigrp AS` és `delay`; `show ip|ipv6 eigrp neighbors | topology [<hálózat> <maszk>] | interfaces`,
+  `show ip route eigrp`, `clear ip|ipv6 eigrp neighbors`, `debug eigrp packets | neighbors`, `debug ip|ipv6 eigrp`.
+- **Új kimenet: `show interfaces`** a routeren (eddig „még nincs meg” volt) – a sávszélesség (BW) és a késleltetés
+  (DLY) miatt is fontos: az EIGRP ezekből számol metrikát. A forgalomszámlálók nullák (ezt egy `[Szimulátor]` sor jelzi).
+- **A rajzon:** az EIGRP-csomagok lila pöttyök, a jelmagyarázat is kiegészült; a pötty buborékja megmutatja a
+  csomag típusát (Hello, Update, Query, Reply, Ack) és a benne lévő hálózatokat.
+- **Új céltípusok az ellenőrzőben:** `eigrp` (folyamat, router ID, interfészek, passzív, auto-summary, shutdown),
+  `eigrp-szomszed`, `eigrp-topologia` (FD, successor, van-e feasible successor).
+- A `bandwidth` és az új `delay` parancs után a protokollok újraszámolják a metrikát.
+- 196 teszt (új: eigrp.test.js, 14 teszt; a bemutató és a feladatformai tesztek az új feladatra is futnak);
+  böngészőben (file://) ellenőrizve, telefonszélességen sincs vízszintes görgetés.
+
 ## v0.10 – 2026-11-08 – MikroTik: RouterOS-szerű parancssor, gyártóváltó, menedzsment-VLAN és Safe Mode
 
 - **Új gyártó: MikroTik.** CRS326-24G-2S+ jellegű switch (ether1–ether24, sfp-sfpplus1–2, saját rajz), RouterOS 7

@@ -16,6 +16,9 @@ import {
   ripAdatbazis, ripForrasok, ripKovetkezo, ripPortok, ripSzamlalok, RIPNG_IDOZITOK,
 } from '../../../mag/rip.js';
 import { ipProtocolsOspf, ipv6ProtocolsOspf } from './ospf.js';
+import { ipProtocolsEigrp, ipv6ProtocolsEigrp, eigrpKonfigSorok } from './eigrp.js';
+import { savszelesseg } from '../../../mag/ospf.js';
+import { keseses } from '../../../mag/eigrp.js';
 
 /** Eltelt idő hh:mm:ss alakban (a routing táblában a RIP-útvonal kora). */
 export function kor(ms) {
@@ -76,6 +79,8 @@ const KODOK4 = [
 /** Egy útvonal első sora (a hálózat után) és a további utak sorai. */
 function utSorok(r, e, eleje) {
   if (e.kod === 'C' || e.kod === 'L') return [`${eleje} is directly connected, ${e.utak[0].port}`];
+  // Az auto-summary miatt keletkező saját összevont útvonal a Null0-ra megy.
+  if (e.osszegzes) return [`${eleje} is a summary, ${kor(most(r) - e.utak[0].ido)}, Null0`];
   if (e.lehetLe) {
     const u = e.utak[0];
     return [`${eleje} is possibly down, routing via ${ipSzoveg(u.kovetkezo)}, ${u.port}`];
@@ -86,7 +91,7 @@ function utSorok(r, e, eleje) {
     if (e.kod === 'S' && u.kovetkezo === null) resz = `is directly connected, ${u.port}`;
     else {
       resz = `[${e.ad}/${e.metrika}] via ${ipSzoveg(u.kovetkezo)}`;
-      if (e.kod === 'R' || e.kod === 'O') resz += `, ${kor(most(r) - u.ido)}`;
+      if (e.kod === 'R' || e.kod === 'O' || e.kod === 'D') resz += `, ${kor(most(r) - u.ido)}`;
       if (u.port) resz += `, ${u.port}`;
     }
     if (i === 0) sorok.push(`${eleje} ${resz}`);
@@ -115,7 +120,8 @@ export function showIpRoute(r, szuro = null) {
   s.push('');
   const teljes = tabla4(r);
   const kell = (e) => !szuro || (szuro === 'rip' && e.kod === 'R') || (szuro === 'static' && e.kod === 'S')
-    || (szuro === 'ospf' && e.kod === 'O') || (szuro === 'connected' && (e.kod === 'C' || e.kod === 'L'));
+    || (szuro === 'ospf' && e.kod === 'O') || (szuro === 'eigrp' && e.kod === 'D')
+    || (szuro === 'connected' && (e.kod === 'C' || e.kod === 'L'));
   // Csoportok osztályos hálózat szerint (a 0.0.0.0/0 külön, legelöl).
   const csoportok = new Map();
   for (const e of teljes) {
@@ -152,7 +158,8 @@ export function showIpRoute(r, szuro = null) {
 export function showIpv6Route(r, szuro = null) {
   const t = tabla6(r);
   const kell = (e) => !szuro || (szuro === 'rip' && e.kod === 'R') || (szuro === 'static' && e.kod === 'S')
-    || (szuro === 'ospf' && e.kod === 'O') || (szuro === 'connected' && (e.kod === 'C' || e.kod === 'L'));
+    || (szuro === 'ospf' && e.kod === 'O') || (szuro === 'eigrp' && e.kod === 'D')
+    || (szuro === 'connected' && (e.kod === 'C' || e.kod === 'L'));
   const latszik = t.filter(kell);
   const null0 = !szuro || szuro === 'connected';
   const s = [`IPv6 Routing Table - default - ${t.length + 1} entries`,
@@ -183,6 +190,7 @@ export function showIpv6Route(r, szuro = null) {
 
 export function showIpProtocols(r) {
   const s = ['*** IP Routing is NSF aware ***', ''];
+  s.push(...ipProtocolsEigrp(r));
   s.push(...ipProtocolsOspf(r));
   const rip = r.rip;
   if (!rip) return s;
@@ -221,6 +229,7 @@ export function showIpProtocols(r) {
 export function showIpv6Protocols(r) {
   const s = ['IPv6 Routing Protocol is "connected"', 'IPv6 Routing Protocol is "application"', 'IPv6 Routing Protocol is "ND"'];
   if (r.statikus6.length) s.push('IPv6 Routing Protocol is "static"');
+  s.push(...ipv6ProtocolsEigrp(r));
   s.push(...ipv6ProtocolsOspf(r));
   for (const nev of Object.keys(r.ripng)) {
     s.push(`IPv6 Routing Protocol is "rip ${nev}"`, '  Interfaces:');
@@ -334,6 +343,52 @@ export function showIpArp(r) {
 }
 
 // ---------------------------------------------------------------------------
+// show interfaces
+// ---------------------------------------------------------------------------
+
+const HARDVER = {
+  GigabitEthernet: 'Hardware is ISR4331-3x1GE',
+  Serial: 'Hardware is NIM-2T',
+  Loopback: 'Hardware is Loopback',
+};
+
+/**
+ * show interfaces [<interfész>] – a sávszélesség (BW) és a késleltetés (DLY) miatt is fontos:
+ * ezekből számol az EIGRP metrikát. A számlálók a szimulátorban nullák (nincs forgalomszámlálás).
+ */
+export function showInterfaces(r, nev = null) {
+  const portok = nev ? r.portok.filter((p) => p.nev === nev) : r.portok;
+  const s = [];
+  for (const p of portok) {
+    const fent = portFent(p);
+    s.push(`${p.nev} is ${p.leallitva ? 'administratively down' : fent ? 'up' : 'down'}, line protocol is ${fent ? 'up' : 'down'}`);
+    s.push(`  ${HARDVER[p.tipus] || 'Hardware is unknown'}${p.tipus === 'GigabitEthernet' ? `, address is ${macPontos(p.mac)} (bia ${macPontos(p.mac)})` : ''}`);
+    if (p.leiras) s.push(`  Description: ${p.leiras}`);
+    s.push(p.ip ? `  Internet address is ${p.ip}/${prefixHossz(p.maszk)}` : '  Internet protocol processing disabled');
+    s.push(`  MTU ${p.mtu || 1500} bytes, BW ${savszelesseg(p)} Kbit/sec, DLY ${keseses(p)} usec,`);
+    s.push('     reliability 255/255, txload 1/255, rxload 1/255');
+    if (p.tipus === 'Serial') {
+      s.push('  Encapsulation HDLC, loopback not set', '  Keepalive set (10 sec)');
+      if (p.orajel) s.push(`  Clock rate is ${p.orajel} bps (DCE)`);
+    } else if (p.tipus === 'Loopback') {
+      s.push('  Encapsulation LOOPBACK, loopback not set', '  Keepalive not supported');
+    } else {
+      s.push('  Encapsulation ARPA, loopback not set', '  Keepalive not supported',
+        '  Full Duplex, 1000Mbps, link type is auto, media type is RJ45');
+    }
+    s.push('  ARP type: ARPA, ARP Timeout 04:00:00', '  Last input never, output never, output hang never',
+      '  Last clearing of "show interface" counters never',
+      '  Input queue: 0/375/0/0 (size/max/drops/flushes); Total output drops: 0',
+      '  Queueing strategy: fifo', '  Output queue: 0/40 (size/max)',
+      '  5 minute input rate 0 bits/sec, 0 packets/sec', '  5 minute output rate 0 bits/sec, 0 packets/sec',
+      '     0 packets input, 0 bytes, 0 no buffer', '     0 packets output, 0 bytes, 0 underruns',
+      '  [Szimulátor] A forgalomszámlálók itt nem működnek – a BW és a DLY érték viszont valódi (ebből számol az EIGRP).');
+  }
+  if (!s.length) s.push('                                   ^', '% Invalid input detected at \'^\' marker.');
+  return s;
+}
+
+// ---------------------------------------------------------------------------
 // show running-config
 // ---------------------------------------------------------------------------
 
@@ -347,6 +402,7 @@ export function routerKonfiguracio(r) {
     s.push(`interface ${p.nev}`);
     if (p.leiras) s.push(` description ${p.leiras}`);
     if (p.savszel) s.push(` bandwidth ${p.savszel}`);
+    if (p.keses) s.push(` delay ${Math.round(p.keses / 10)}`);
     s.push(p.ip ? ` ip address ${p.ip} ${p.maszk}` : ' no ip address');
     if (p.mtu) s.push(` ip mtu ${p.mtu}`);
     s.push(...ospfInterfeszSorok(p.ospf, 'ip'));
@@ -358,12 +414,14 @@ export function routerKonfiguracio(r) {
     if (p.ipv6Be) s.push(' ipv6 enable');
     if (p.mtu6) s.push(` ipv6 mtu ${p.mtu6}`);
     s.push(...ospfInterfeszSorok(p.ospf6, 'ipv6'));
+    if (p.eigrp6) s.push(` ipv6 eigrp ${p.eigrp6}`);
     if (p.ripng) {
       s.push(` ipv6 rip ${p.ripng} enable`);
       if (p.ripngAlap) s.push(` ipv6 rip ${p.ripng} default-information ${p.ripngAlap}`);
     }
     s.push('!');
   }
+  if (r.eigrp) s.push(...eigrpKonfigSorok(r.eigrp, 'router eigrp', 4));
   if (r.ospf) s.push(...ospfFolyamatSorok(r.ospf, 'router ospf'));
   if (r.rip) {
     const rip = r.rip;
@@ -388,6 +446,7 @@ export function routerKonfiguracio(r) {
     s.push(`ipv6 route ${st.prefix}${st.interfesz ? ` ${st.interfesz}` : ''}${st.kovetkezo ? ` ${st.kovetkezo}` : ''}`);
   }
   for (const nev of Object.keys(r.ripng)) s.push(`ipv6 router rip ${nev}`);
+  if (r.eigrp6) s.push(...eigrpKonfigSorok(r.eigrp6, 'ipv6 router eigrp', 6));
   if (r.ospf6) s.push(...ospfFolyamatSorok(r.ospf6, 'ipv6 router ospf'));
   s.push('!', '!', '!', 'control-plane', '!', '!', 'line con 0', ' transport input none', ' stopbits 1',
     'line aux 0', ' stopbits 1', 'line vty 0 4', ' login', '!', '!', 'end');

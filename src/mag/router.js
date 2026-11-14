@@ -24,12 +24,13 @@ import { ipSzam, ipSzoveg, prefixHossz, halozatSzam } from './ip.js';
 import {
   ipv6Elemez, ipv6Normal, ipv6Szoveg, ipv6EgyHalozat, linkLocalE, csoportcimE, solicitedNode, ipv6CsoportMac,
 } from './ipv6.js';
-import { keres4, keres6, portFent, portLinkLocal, ipv6Engedelyezve } from './utvonal.js';
+import { keres4, keres6, portFent, portLinkLocal, ipv6Engedelyezve, NULL0 } from './utvonal.js';
 import { ripFogad4, ripFogad6 } from './rip.js';
 import { ospfFogad } from './ospf.js';
+import { eigrpFogad } from './eigrp.js';
 
-/** A routernek szóló IPv4-csoportcímek: RIPv2, OSPF (minden router, DR-ek). */
-const CSOPORT4 = ['224.0.0.9', '224.0.0.5', '224.0.0.6'];
+/** A routernek szóló IPv4-csoportcímek: RIPv2, OSPF (minden router, DR-ek), EIGRP. */
+const CSOPORT4 = ['224.0.0.9', '224.0.0.5', '224.0.0.6', '224.0.0.10'];
 
 /** A router által indított csomagok TTL-je (IOS: 255). */
 export const ROUTER_TTL = 255;
@@ -163,7 +164,7 @@ function ndTanul(h, r, p, cim, mac) {
  */
 export function routerKuld4(h, r, celIp, adat, { forrasIp, ttl = ROUTER_TTL } = {}) {
   const ut = keres4(r, ipSzam(celIp));
-  if (!ut) return false;
+  if (!ut || ut.port === NULL0) return false;
   const p = port(r, ut.port);
   return kuld4Porton(h, r, p, ipSzoveg(ut.kovetkezo), { forrasIp: forrasIp || p.ip, celIp, ttl, keses: 0, ...adat });
 }
@@ -172,7 +173,7 @@ export function routerKuld4(h, r, celIp, adat, { forrasIp, ttl = ROUTER_TTL } = 
 export function routerKuld6(h, r, cel, adat, { forras, hop = 64 } = {}) {
   const c = ipv6Elemez(cel);
   const ut = keres6(r, c);
-  if (!ut) return false;
+  if (!ut || ut.port === NULL0) return false;
   const p = port(r, ut.port);
   const src = forras || (linkLocalE(c) ? ipv6Szoveg(portLinkLocal(p)) : portForras6(p));
   return kuld6Porton(h, r, p, ipv6Szoveg(ut.kovetkezo), { forras: src, cel, hop, keses: 0, ...adat });
@@ -242,13 +243,18 @@ function arpFogad(h, r, p, arp) {
 function ipv4Fogad(h, r, p, cs, keret) {
   if (!p.ip) return; // IP-cím nélküli porton a router nem dolgoz fel IPv4-et
   if (cs.celIp === '255.255.255.255' || CSOPORT4.includes(cs.celIp) || sajat4(r, cs.celIp)) return helyi4(h, r, p, cs, keret);
-  if (cs.protokoll === 'ospf') return; // az OSPF-csomagok nem mennek tovább (TTL 1)
+  if (cs.protokoll === 'ospf' || cs.protokoll === 'eigrp') return; // ezek a csomagok nem mennek tovább
   // Továbbítás
   const ttl = cs.ttl - 1;
   if (ttl <= 0) return icmpHiba4(h, r, p, cs, 'ido-lejart');
   const ut = keres4(r, ipSzam(cs.celIp));
   if (!ut) {
     h.eldob(r, p, { tipus: 'ipv4', adat: cs }, `${r.hostname}: nincs útvonal ide: ${cs.celIp} – a router eldobta a csomagot.`);
+    return icmpHiba4(h, r, p, cs, 'elerhetetlen');
+  }
+  if (ut.port === NULL0) {
+    h.eldob(r, p, { tipus: 'ipv4', adat: cs }, `${r.hostname}: a(z) ${cs.celIp} címre csak az összevont (auto-summary) útvonal illik, `
+      + 'az pedig a Null0 interfészre megy – a router eldobta a csomagot.');
     return icmpHiba4(h, r, p, cs, 'elerhetetlen');
   }
   const ki = port(r, ut.port);
@@ -273,6 +279,7 @@ function helyi4(h, r, p, cs, keret) {
   }
   if (cs.protokoll === 'udp' && cs.udp.port === 520) ripFogad4(h, r, p, cs);
   if (cs.protokoll === 'ospf') ospfFogad(h, r, p, cs, 4, keret.forrasMac);
+  if (cs.protokoll === 'eigrp') eigrpFogad(h, r, p, cs, 4, keret.forrasMac);
 }
 
 function ipv6Fogad(h, r, p, keret) {
@@ -301,6 +308,10 @@ function ipv6Fogad(h, r, p, keret) {
     h.eldob(r, p, { tipus: 'ipv6', adat: cs }, `${r.hostname}: nincs útvonal ide: ${cs.cel} – a router eldobta a csomagot.`);
     return icmpHiba6(h, r, p, cs, 'elerhetetlen');
   }
+  if (ut.port === NULL0) {
+    h.eldob(r, p, { tipus: 'ipv6', adat: cs }, `${r.hostname}: a(z) ${cs.cel} címre csak összevont útvonal illik (Null0) – a router eldobta a csomagot.`);
+    return icmpHiba6(h, r, p, cs, 'elerhetetlen');
+  }
   const ki = port(r, ut.port);
   const kov = ipv6Szoveg(ut.kovetkezo);
   if (!kuld6Porton(h, r, ki, kov, { ...cs, hop })) {
@@ -325,6 +336,7 @@ function helyi6(h, r, p, cs, keret) {
   }
   if (cs.protokoll === 'udp' && cs.udp.port === 521) ripFogad6(h, r, p, cs);
   if (cs.protokoll === 'ospf') ospfFogad(h, r, p, cs, 6, keret.forrasMac);
+  if (cs.protokoll === 'eigrp') eigrpFogad(h, r, p, cs, 6, keret.forrasMac);
 }
 
 // ---------------------------------------------------------------------------

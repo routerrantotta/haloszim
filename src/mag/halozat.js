@@ -21,6 +21,7 @@ import { vtpTrunkValtozas } from './vtp.js';
 import { routerFogad, szomszedTorol } from './router.js';
 import { ripPortValtozott } from './rip.js';
 import { ospfPortValtozott } from './ospf.js';
+import { eigrpPortValtozott } from './eigrp.js';
 
 /** Ennyi idő után jön a „link up” üzenet a bekapcsolt porton (ms). */
 export const LINK_FEL_IDO = 1000;
@@ -163,6 +164,7 @@ export class Halozat {
         }
         ripPortValtozott(this, eszkoz, port);
         ospfPortValtozott(this, eszkoz);
+        eigrpPortValtozott(this, eszkoz);
       }
       this.esemeny({ tipus: 'allapot' });
       return;
@@ -181,6 +183,7 @@ export class Halozat {
             szomszedTorol(v.eszkoz, v.port.nev);
             ripPortValtozott(this, v.eszkoz, v.port);
             ospfPortValtozott(this, v.eszkoz);
+            eigrpPortValtozott(this, v.eszkoz);
           }
           // A túloldalon (ahol nem kapcsolták le) a fizikai link is leesik.
           if (!v.port.leallitva) this.naplo(v.eszkoz, `%LINK-3-UPDOWN: Interface ${v.port.nev}, changed state to down`);
@@ -210,6 +213,7 @@ export class Halozat {
           if (v.eszkoz.tipus !== 'router') continue;
           ripPortValtozott(this, v.eszkoz, v.port);
           ospfPortValtozott(this, v.eszkoz);
+          eigrpPortValtozott(this, v.eszkoz);
         }
         this.esemeny({ tipus: 'allapot' });
       }));

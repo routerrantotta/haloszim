@@ -12,9 +12,10 @@ import { ujCrs326 } from '../modell/mikrotik.js';
 import { ujPc } from '../modell/pc.js';
 import { ipBeallit } from '../mag/vegpont.js';
 import { vtpIdozitoIndit } from '../mag/vtp.js';
-import { ujRouter4331, routerPort, loopbackLetrehoz, ujOspf } from '../modell/router.js';
+import { ujRouter4331, routerPort, loopbackLetrehoz, ujOspf, ujEigrp } from '../modell/router.js';
 import { ripIndit, ripValtozott } from '../mag/rip.js';
 import { ospfIndit, ospfValtozott } from '../mag/ospf.js';
+import { eigrpIndit, eigrpValtozott } from '../mag/eigrp.js';
 import { ipv6PrefixElemez, ipv6Normal } from '../mag/ipv6.js';
 
 /** A betöltött feladatok listája (a feladatfájlok töltik fel). */
@@ -118,10 +119,12 @@ export function feladatBetolt(feladat, beallitasok = {}) {
   vtpIdozitoIndit(halozat);
   ripIndit(halozat);
   ospfIndit(halozat);
+  eigrpIndit(halozat);
   for (const e of halozat.eszkozok) {
     if (e.tipus !== 'router') continue;
     ripValtozott(e, { keres: true });
     ospfValtozott(e);
+    eigrpValtozott(e);
   }
   return {
     feladat,
@@ -143,7 +146,9 @@ export function feladatBetolt(feladat, beallitasok = {}) {
  *     ipv6Routing: true,
  *     ospf: { folyamat, routerId, halozatok, … }, ospf6: { … }   – kész OSPF-folyamat (modell/router.js ujOspf)
  *   }
- * Portonként még: ospf: { hello: 5, … }, ospf6: { … } (lásd ujOspfPort), mtu, mtu6, leiras.
+ * Portonként még: ospf: { hello: 5, … }, ospf6: { … } (lásd ujOspfPort), mtu, mtu6, leiras,
+ * savszel (bandwidth kbit/s), orajel (clock rate), keses (delay µs), eigrp6 (az EIGRP IPv6 AS-száma).
+ * A routeren: eigrp: { as, halozatok: [{cim, wildcard}], autoSummary … }, eigrp6: { as, leallitva: false }.
  * A felsorolt portok bekapcsolódnak (no shutdown), hacsak nincs „be: false”.
  */
 function routerBeallit(r, b) {
@@ -164,6 +169,10 @@ function routerBeallit(r, b) {
     if (pb.linkLocal) p.linkLocal = ipv6Normal(pb.linkLocal);
     if (pb.ospf) Object.assign(p.ospf, pb.ospf);
     if (pb.ospf6) Object.assign(p.ospf6, pb.ospf6);
+    if (pb.savszel) p.savszel = pb.savszel;
+    if (pb.orajel) p.orajel = pb.orajel;
+    if (pb.keses) p.keses = pb.keses;
+    if (pb.eigrp6) p.eigrp6 = pb.eigrp6;
     if (pb.mtu) p.mtu = pb.mtu;
     if (pb.mtu6) p.mtu6 = pb.mtu6;
     if (pb.leiras) p.leiras = pb.leiras;
@@ -175,4 +184,6 @@ function routerBeallit(r, b) {
   if (b.ipv6Routing) r.ipv6Routing = true;
   if (b.ospf) r.ospf = { ...ujOspf(b.ospf.folyamat || 1), ...b.ospf };
   if (b.ospf6) r.ospf6 = { ...ujOspf(b.ospf6.folyamat || 1), ...b.ospf6 };
+  if (b.eigrp) r.eigrp = { ...ujEigrp(b.eigrp.as || 1, 4), ...b.eigrp };
+  if (b.eigrp6) r.eigrp6 = { ...ujEigrp(b.eigrp6.as || 1, 6), ...b.eigrp6 };
 }

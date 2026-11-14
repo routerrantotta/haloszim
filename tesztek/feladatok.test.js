@@ -10,7 +10,8 @@ import { lepesAlak, idoSzoveg, MODOK } from '../src/nezet/panel.js';
 import { feladatValtozat } from '../src/feladat/veletlen.js';
 
 const CELTIPUSOK = ['vlan', 'vlan-nincs', 'access-port', 'trunk', 'pc-ip', 'vtp', 'vtp-szinkron', 'ping', 'szoras',
-  'rip', 'ripng', 'ipv6-routing', 'utvonal', 'ospf', 'ospf-szomszed', 'ospf-interfesz', 'kezelo-ip'];
+  'rip', 'ripng', 'ipv6-routing', 'utvonal', 'ospf', 'ospf-szomszed', 'ospf-interfesz', 'kezelo-ip',
+  'eigrp', 'eigrp-szomszed', 'eigrp-topologia'];
 
 // Minden feladat minden gyártói változata (pl. a vlan-1 Cisco és MikroTik változata is).
 const valtozatok = feladatLista().flatMap((f) => feladatGyartok(f).map((g) => ({ ...gyartoValtozat(f, g), azon: `${f.azon} (${g})` })));

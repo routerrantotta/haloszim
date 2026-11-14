@@ -18,6 +18,7 @@ import { SZO } from './alap.js';
 import { routerPort, loopbackLetrehoz, ujRip } from '../../../modell/router.js';
 import { ripValtozott } from '../../../mag/rip.js';
 import { ospfValtozott } from '../../../mag/ospf.js';
+import { eigrpValtozott } from '../../../mag/eigrp.js';
 import {
   ipSzam, ipSzoveg, ervenyesMaszk, prefixHossz, halozatSzam, osztalyos, maszkSzam,
 } from '../../../mag/ip.js';
@@ -37,10 +38,11 @@ function portjai(ctx) {
   return ctx.kontextus.portok.map((n) => routerPort(ctx.eszkoz, n)).filter(Boolean);
 }
 
-/** Változás után: a RIP kihirdeti, az OSPF igazodik (cím, interfész, statikus útvonal), a rajz frissül. */
+/** Változás után: a RIP kihirdeti, az OSPF és az EIGRP igazodik (cím, interfész, útvonal), a rajz frissül. */
 function valtozott(ctx, b) {
   ripValtozott(ctx.eszkoz, b);
   ospfValtozott(ctx.eszkoz);
+  eigrpValtozott(ctx.eszkoz);
   if (ctx.eszkoz.halozat) ctx.eszkoz.halozat.esemeny({ tipus: 'allapot' });
 }
 
@@ -270,6 +272,7 @@ const interfeszParancsokR = [
       { param: 'szam', kulcs: 'n', min: 1, max: 10000000, nev: '<1-10000000>', sugo: 'Sávszélesség kbit/s-ban' }],
     vegrehajt(ctx, { n }) {
       for (const p of portjai(ctx)) p.savszel = n;
+      valtozott(ctx);
     },
   },
   {
@@ -277,6 +280,7 @@ const interfeszParancsokR = [
     szavak: [SZO.no, { szo: 'bandwidth', sugo: 'A sávszélesség visszaállítása az alapértékre' }],
     vegrehajt(ctx) {
       for (const p of portjai(ctx)) delete p.savszel;
+      valtozott(ctx);
     },
   },
 ];

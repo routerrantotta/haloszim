@@ -11,6 +11,8 @@
  *   konfig-rtr         Router(config-rtr)#      (ipv6 router rip NÉV – a RIPng-folyamat beállításai)
  *   konfig-ospf        Router(config-router)#   (router ospf N – ugyanaz a prompt, mint a RIP-nél, de más parancsok)
  *   konfig-ospf6       Router(config-rtr)#      (ipv6 router ospf N – az OSPFv3-folyamat beállításai)
+ *   konfig-eigrp       Router(config-router)#   (router eigrp AS – az EIGRP-folyamat beállításai)
+ *   konfig-eigrp6      Router(config-rtr)#      (ipv6 router eigrp AS – az EIGRP IPv6-folyamata)
  *
  * Mezők:
  *   prompt(hostname)  – a prompt szövege
@@ -75,6 +77,20 @@ export const MODOK = {
     sugoFejlec: 'Router configuration commands:',
   },
   'konfig-ospf6': {
+    prompt: (h) => `${h}(config-rtr)#`,
+    konfig: true,
+    visszaesik: 'konfig',
+    tortenet: 'konfig',
+    sugoFejlec: 'Router configuration commands:',
+  },
+  'konfig-eigrp': {
+    prompt: (h) => `${h}(config-router)#`,
+    konfig: true,
+    visszaesik: 'konfig',
+    tortenet: 'konfig',
+    sugoFejlec: 'Router configuration commands:',
+  },
+  'konfig-eigrp6': {
     prompt: (h) => `${h}(config-rtr)#`,
     konfig: true,
     visszaesik: 'konfig',

@@ -34,6 +34,8 @@ export const LOOPBACK_MAX = 99;
  * @property {''|'originate'|'only'} ripngAlap – alapértelmezett útvonal hirdetése RIPng-ben
  * @property {number} [savszel]    – bandwidth (kbit/s), ha kézzel állították
  * @property {number} [orajel]     – clock rate (soros porton)
+ * @property {number} [keses]      – delay (µs), ha kézzel állították (a „delay” parancs × 10)
+ * @property {number|null} eigrp6  – melyik EIGRP-folyamat (AS) fut rajta IPv6-on (null = egyik sem)
  * @property {OspfPort} ospf       – az interfész OSPFv2-beállításai (ip ospf …)
  * @property {OspfPort} ospf6      – az interfész OSPFv3-beállításai (ipv6 ospf …)
  * @property {number|null} mtu     – ip mtu (null = alapérték)
@@ -75,6 +77,7 @@ function ujPort(hostname, tipus, szam) {
     ipv6Be: false,
     ripng: '',
     ripngAlap: '',
+    eigrp6: null,
     ospf: ujOspfPort(),
     ospf6: ujOspfPort(),
     mtu: null,
@@ -124,6 +127,38 @@ export function ujOspf(folyamat) {
 }
 
 /**
+ * @typedef {Object} EigrpBeallitas – egy EIGRP-folyamat (router eigrp AS / ipv6 router eigrp AS)
+ * @property {number} as             – az autonóm rendszer száma (a szomszédokon ugyanennyi kell)
+ * @property {string} routerId       – eigrp router-id ('' = automatikus)
+ * @property {{cim: string, wildcard: string|null}[]} halozatok – network … [wildcard] (csak IPv4)
+ * @property {string[]} passziv      – passzív interfészek
+ * @property {boolean} passzivAlap   – passive-interface default
+ * @property {string[]} nemPassziv   – no passive-interface … (passive-interface default mellett)
+ * @property {boolean} autoSummary   – automatikus összevonás az osztályhatáron
+ * @property {boolean} leallitva     – shutdown (az IPv6-folyamat gyárilag leállított állapotban indul)
+ * @property {number} maxUtak        – maximum-paths (alapból 4)
+ */
+
+/**
+ * Új EIGRP-folyamat a gyári értékekkel.
+ * @param {number} as
+ * @param {4|6} csalad – az IPv6-folyamat gyárilag leállított (kell rá a „no shutdown”)
+ */
+export function ujEigrp(as, csalad = 4) {
+  return {
+    as,
+    routerId: '',
+    halozatok: [],
+    passziv: [],
+    passzivAlap: false,
+    nemPassziv: [],
+    autoSummary: true,
+    leallitva: csalad === 6,
+    maxUtak: 4,
+  };
+}
+
+/**
  * Új, gyári állapotú router.
  * @param {{hostname?: string}} [b]
  */
@@ -154,8 +189,15 @@ export function ujRouter4331(b = {}) {
     ospf: null,
     /** @type {OspfBeallitas|null} ipv6 router ospf N */
     ospf6: null,
-    /** debug ip rip, debug ipv6 rip, debug ip ospf hello/adj, debug ipv6 ospf hello/adj */
-    debug: { rip: false, ripng: false, ospfHello: false, ospfAdj: false, ospf6Hello: false, ospf6Adj: false },
+    /** @type {EigrpBeallitas|null} router eigrp AS */
+    eigrp: null,
+    /** @type {EigrpBeallitas|null} ipv6 router eigrp AS */
+    eigrp6: null,
+    /** debug ip rip, debug ipv6 rip, debug ip|ipv6 ospf hello/adj, debug eigrp packets/neighbors, debug ip eigrp */
+    debug: {
+      rip: false, ripng: false, ospfHello: false, ospfAdj: false, ospf6Hello: false, ospf6Adj: false,
+      eigrp: false, eigrpCsomag: false, eigrpSzomszed: false,
+    },
   };
 }
 

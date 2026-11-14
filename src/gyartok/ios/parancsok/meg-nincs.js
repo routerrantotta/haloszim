@@ -46,14 +46,14 @@ export const megNincsParancsok = megNincsBol(LISTA);
 
 /** A router még hiányzó parancsai. */
 export const routerMegNincsParancsok = megNincsBol({
-  felhasznalo: ['connect', 'disconnect', 'ssh', 'telnet', 'terminal', 'show interfaces', 'show version', 'show clock', 'show cdp',
-    'show ipv6 neighbors', 'show ip eigrp'],
+  felhasznalo: ['connect', 'disconnect', 'ssh', 'telnet', 'terminal', 'show version', 'show clock', 'show cdp',
+    'show ipv6 neighbors'],
   priv: ['clock', 'connect', 'copy', 'delete', 'dir', 'disconnect', 'erase', 'more', 'reload', 'setup', 'ssh', 'telnet', 'terminal',
-    'show interfaces', 'show version', 'show clock', 'show cdp', 'show startup-config', 'show ipv6 neighbors',
-    'show ip eigrp', 'debug ip icmp', 'debug ip ospf events', 'debug ip ospf packet', 'clear arp-cache', 'clear ip ospf counters'],
+    'show version', 'show clock', 'show cdp', 'show startup-config', 'show ipv6 neighbors',
+    'debug ip icmp', 'debug ip ospf events', 'debug ip ospf packet', 'clear arp-cache', 'clear ip ospf counters'],
   konfig: ['aaa', 'access-list', 'banner', 'boot', 'cdp', 'clock', 'crypto', 'enable', 'line', 'logging', 'ntp', 'service',
     'snmp-server', 'username', 'ip dhcp', 'ip domain-name', 'ip nat', 'ip ssh', 'ip access-list', 'ip name-server',
-    'router eigrp', 'router bgp', 'ipv6 dhcp', 'ipv6 access-list'],
+    'router bgp', 'ipv6 dhcp', 'ipv6 access-list'],
   'konfig-if': ['cdp', 'duplex', 'speed', 'encapsulation', 'ip nat', 'ip helper-address',
     'ip access-group', 'ip summary-address', 'ipv6 nd', 'ip ospf retransmit-interval', 'ip ospf transmit-delay',
     'ipv6 ospf retransmit-interval', 'ipv6 ospf transmit-delay'],
@@ -61,4 +61,8 @@ export const routerMegNincsParancsok = megNincsBol({
   'konfig-rtr': ['distance', 'maximum-paths', 'redistribute', 'split-horizon', 'poison-reverse', 'timers'],
   'konfig-ospf': ['area', 'distance', 'distribute-list', 'log-adjacency-changes', 'neighbor', 'redistribute', 'summary-address', 'timers'],
   'konfig-ospf6': ['area', 'distance', 'log-adjacency-changes', 'redistribute', 'summary-prefix', 'timers'],
+  'konfig-eigrp': ['distance', 'distribute-list', 'eigrp stub', 'eigrp log-neighbor-changes', 'maximum-paths',
+    'metric', 'neighbor', 'offset-list', 'redistribute', 'variance', 'traffic-share'],
+  'konfig-eigrp6': ['distance', 'distribute-list', 'eigrp stub', 'eigrp log-neighbor-changes', 'maximum-paths',
+    'metric', 'neighbor', 'redistribute', 'variance'],
 });

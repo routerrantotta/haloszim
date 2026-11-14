@@ -45,6 +45,7 @@ import '../feladatok/vtp-1.js';
 import '../feladatok/rip-1.js';
 import '../feladatok/ospf-1.js';
 import '../feladatok/ospf-2.js';
+import '../feladatok/eigrp-1.js';
 import '../feladatok/mgmt-1.js';
 import { feladatKeres, feladatBetolt, gyartoValtozat } from '../src/feladat/betolto.js';
 import { munkamenetKeszit } from '../src/gyartok/index.js';

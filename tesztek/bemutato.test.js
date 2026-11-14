@@ -67,7 +67,8 @@ function vegigjatszik(azon, mag, gyarto = 'cisco') {
         // A PC IP-címének átírása (a hálózati kezelés lépéseihez) az ipBeallit-tal megy, nem itt.
       }
       // Routereknél a RIP 30 másodperces frissítését, OSPF-nél a 40 másodperces Wait- és Dead-időt is ki kell várni.
-      f.lep(!vanRouter ? (gyarto === 'mikrotik' || f.feladat.gyarto === 'mikrotik' ? 20000 : 10000) : azon.startsWith('ospf') ? 60000 : 40000);
+      f.lep(!vanRouter ? (gyarto === 'mikrotik' || f.feladat.gyarto === 'mikrotik' ? 20000 : 10000)
+        : azon.startsWith('ospf') ? 60000 : azon.startsWith('eigrp') ? 30000 : 40000);
     } else if (l.hol === 'eszkoz') {
       valasztott = l.eszkoz;
     } else if (l.hol === 'ellenorzes') {
@@ -92,7 +93,7 @@ function vegigjatszik(azon, mag, gyarto = 'cisco') {
   return lepesSzam;
 }
 
-for (const azon of ['vlan-1', 'vtp-1', 'rip-1', 'ospf-1', 'ospf-2', 'mgmt-1']) {
+for (const azon of ['vlan-1', 'vtp-1', 'rip-1', 'ospf-1', 'ospf-2', 'mgmt-1', 'eigrp-1']) {
   test(`${azon}: a bemutató végigjátszható (alapadatok és véletlen változatok)`, () => {
     for (const mag of [null, 5, 777, 31337]) assert.ok(vegigjatszik(azon, mag) > 10);
   });

@@ -8,9 +8,12 @@
  * Az animáció a hálózat eseményeiből jön (mag/halozat.js): minden „keret” eseménynél egy
  * pötty végigcsúszik a kábelen. Színek: ARP = narancs, ping (ICMP) = fekete-sárga, VTP = fehér rombusz;
  * a trunkon a 802.1Q-címke (VLAN-szám) a pötty fölött látszik. Eldobott keret: ✕ jel.
+ * A forgalomirányító protokollok színe: RIP = zöld, OSPF = kék, EIGRP = lila.
  */
 
 import { uzemmod } from '../mag/kapcsolas.js';
+import { ipSzoveg } from '../mag/ip.js';
+import { ipv6Szoveg } from '../mag/ipv6.js';
 import { hidPortja } from '../mag/hid.js';
 import { hidKeres } from '../modell/mikrotik.js';
 
@@ -135,6 +138,7 @@ export class Topologia {
       + '<span><i class="hsz-potty hsz-potty--icmp"></i>ping (ICMP)</span>'
       + (this.vanRouter ? '<span data-fajta="rip" hidden><i class="hsz-potty hsz-potty--rip"></i>RIP / RIPng</span>' : '')
       + (this.vanRouter ? '<span data-fajta="ospf" hidden><i class="hsz-potty hsz-potty--ospf"></i>OSPF</span>' : '')
+      + (this.vanRouter ? '<span data-fajta="eigrp" hidden><i class="hsz-potty hsz-potty--eigrp"></i>EIGRP</span>' : '')
       + (this.vanVtp ? '<span><i class="hsz-potty hsz-potty--vtp"></i>VTP-hirdetés</span>' : '')
       + (this.vanSwitch ? '<span><b class="hsz-cimke-minta">10</b>802.1Q-címke (VLAN)</span>' : '')
       + '<span><b class="hsz-x-minta">✕</b>eldobott keret</span>'
@@ -398,7 +402,7 @@ export class Topologia {
     const elore = kr.k.a.eszkoz === e.honnan.eszkoz && kr.k.a.port === e.honnan.port;
     const fajta = csomagFajta(e.keret);
     // A protokoll jelmagyarázata az első csomagjánál jelenik meg (RIP-es feladatban nem kell az OSPF, és fordítva).
-    if (fajta === 'rip' || fajta === 'ospf') {
+    if (fajta === 'rip' || fajta === 'ospf' || fajta === 'eigrp') {
       const jel = this.doboz.querySelector(`.hsz-jelmagyarazat [data-fajta="${fajta}"]`);
       if (jel && jel.hidden) jel.hidden = false;
     }
@@ -463,12 +467,13 @@ export class Topologia {
   }
 }
 
-/** A csomag színe a rajzon: arp (ARP és IPv6 ND), rip (RIP, RIPng), ospf, vtp, icmp (minden más). */
+/** A csomag színe a rajzon: arp (ARP és IPv6 ND), rip (RIP, RIPng), ospf, eigrp, vtp, icmp (minden más). */
 function csomagFajta(k) {
   if (k.tipus === 'arp' || k.tipus === 'vtp') return k.tipus;
   const a = k.adat || {};
   if (a.protokoll === 'udp') return 'rip';
   if (a.protokoll === 'ospf') return 'ospf';
+  if (a.protokoll === 'eigrp') return 'eigrp';
   if (a.protokoll === 'icmpv6' && (a.icmp.tipus === 'ns' || a.icmp.tipus === 'na')) return 'arp';
   return 'icmp';
 }
@@ -498,10 +503,31 @@ function ospfLeiras(a) {
   return `${v} ${OSPF_NEV[o.tipus] || o.tipus} (${o.rid}): ${ut}`;
 }
 
+const EIGRP_NEV = {
+  hello: 'Hello', update: 'Update (útvonalak)', query: 'Query (kérdés: tudja valaki az utat?)',
+  reply: 'Reply (válasz a kérdésre)', ack: 'Ack (nyugta)',
+};
+
+/** Egy EIGRP-csomag leírása. */
+function eigrpLeiras(a) {
+  const e = a.eigrp;
+  const ut = `${a.forrasIp || a.forras} → ${a.celIp || a.cel}`;
+  const v = a.forrasIp ? 'EIGRP' : 'EIGRP IPv6';
+  const fej = `${v} ${EIGRP_NEV[e.tipus] || e.tipus} (AS ${e.as}, ${e.rid}): ${ut}`;
+  if (e.tipus === 'hello') return `${fej}, Hold ${e.hold} mp, K-értékek ${e.k.join('/')}`;
+  if (!e.bejegyzesek) return fej;
+  const cim = (b) => (a.forrasIp ? `${ipSzoveg(b.halozat)}/${b.hossz}` : `${ipv6Szoveg(b.halozat)}/${b.hossz}`);
+  const lista = e.bejegyzesek.slice(0, 5)
+    .map((b) => `${cim(b)}${b.torles ? ' (elérhetetlen)' : ` (BW ${b.savszel}, DLY ${b.keses})`}`)
+    .join(', ');
+  return `${fej}, ${e.bejegyzesek.length} hálózat: ${lista}${e.bejegyzesek.length > 5 ? ' …' : ''}`;
+}
+
 /** A csomag rövid leírása (a pötty buboréka). */
 function csomagLeiras(k) {
   const a = k.adat || {};
   if (a.protokoll === 'ospf') return ospfLeiras(a);
+  if (a.protokoll === 'eigrp') return eigrpLeiras(a);
   if (k.tipus === 'ipv4' && a.protokoll === 'udp') {
     const r = a.udp.adat;
     if (r.parancs === 'keres') return `RIP-kérés: ${a.forrasIp} → ${a.celIp} (küldjétek el a táblátokat!)`;
